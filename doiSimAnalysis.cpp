@@ -10,6 +10,7 @@
 #include "TH2F.h"
 #include "TH1F.h"
 #include "TChain.h"
+#include "TCanvas.h"
 #include <iostream>
 #include <fstream>
 #include <string>
@@ -24,6 +25,10 @@ int main (int argc, char** argv)
     std::cout << "Adding file " << argv[i] << std::endl;
     tree->Add(argv[i]);
   }
+  
+  std::string baseFileName = argv[1];
+  std::string baseOutFile = "spot_" + baseFileName.substr(0,baseFileName.length()-5);
+  std::string baseOutFileRoot = baseOutFile + ".root";
   
   int nCrystalsX = 1;
   int nCrystalsY = 2;
@@ -165,6 +170,17 @@ int main (int argc, char** argv)
   CryX->SetTitle("DOI bench - beam profile");
   CryX->GetYaxis()->SetTitle("N");
   
+  TH1F *CryY = new TH1F("CryY","CryY",100,-8,8);
+  CryY->GetXaxis()->SetTitle("Crystal Length [mm]");
+  CryY->SetTitle("DOI bench - beam profile");
+  CryY->GetYaxis()->SetTitle("N");
+  
+  TH1F *CryZ = new TH1F("CryZ","CryZ",100,-8,8);
+  CryZ->GetXaxis()->SetTitle("Crystal Length [mm]");
+  CryZ->SetTitle("DOI bench - beam profile");
+  CryZ->GetYaxis()->SetTitle("N");
+  
+  
   for(int i = 0; i < nEntries ; i++)
   {  
     tree->GetEvent(i);
@@ -174,9 +190,9 @@ int main (int argc, char** argv)
     Double_t RealZ = 0;
     Double_t endep = 0;
     
-    if(TagTotalEnergyDeposited > 0.3)
+    if(TagTotalEnergyDeposited > 0.5)
     {
-      if(CryTotalEnergyDeposited > 0.3)
+      if(CryTotalEnergyDeposited > 0.5)
       {
 	for(int j = 0; j < pPosXEnDep[1]->size(); j++)
 	{
@@ -192,6 +208,8 @@ int main (int argc, char** argv)
 	  RealZ += (pPosZEnDep[1]->at(j) * pCryEnergyDeposited[1]->at(j))/CryTotalEnergyDeposited;
 	}
 	CryX->Fill(RealX);
+	CryY->Fill(RealY);
+	CryZ->Fill(RealZ);
       }
     } 
     
@@ -208,10 +226,24 @@ int main (int argc, char** argv)
     
   }
   
-  TFile* fOut = new TFile("spot.root","recreate");
+//   TCanvas *C_CryX = new TCanvas("C_CryX","",800,600);
+//   C_CryX->cd();
+//   CryX->Draw();
+//   C_CryX->Print("spotX.gif");
+//   TCanvas *C_CryY = new TCanvas("C_CryY","",800,600);
+//   C_CryY->cd();
+//   CryY->Draw();
+//   C_CryY->Print("spotY.gif");
+//   TCanvas *C_CryZ = new TCanvas("C_CryZ","",800,600);
+//   C_CryZ->cd();
+//   CryZ->Draw();
+//   C_CryZ->Print("spotZ.gif");
+  
+  TFile* fOut = new TFile(baseOutFileRoot.c_str(),"recreate");
   
   CryX->Write();
-  
+  CryY->Write();
+//   CryZ->Write();
   
   return 0;
 }
