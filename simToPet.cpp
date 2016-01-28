@@ -13,6 +13,8 @@
 #include <fstream>
 #include <string>
 #include <sstream>
+#include "TObjArray.h"
+#include "TObject.h"
 
 int main (int argc, char** argv)
 {
@@ -26,40 +28,89 @@ int main (int argc, char** argv)
     tree->Add(argv[i]);
   }
   
+  // find the number of channels directly from the tchain file
+  // before creating the variables
+  // first, get the list of leaves
+  TObjArray *leavescopy = tree->GetListOfLeaves();
+  int nLeaves = leavescopy->GetEntries();
+  std::vector<std::string> leavesName;
+  // fill a vector with the leaves names
+//   std::cout << nLeaves << std::endl;
+  for(int i = 0 ; i < nLeaves ; i++)
+  {
+//     std::cout << i << std::endl;
+    leavesName.push_back(leavescopy->At(i)->GetName());
+  }
+  // count the entries that start with "ch"
+  int numOfCh = 0;
+  int numOfCry = 0;
+  std::string det_prefix("detector");
+  std::string cry_prefix("cry");
+  for(int i = 0 ; i < nLeaves ; i++)
+  {
+//     leavesName.push_back(leavescopy->At(i)->GetName());
+    if (!leavesName[i].compare(0, det_prefix.size(), det_prefix))
+      numOfCh++;
+    if (!leavesName[i].compare(0, cry_prefix.size(), cry_prefix))
+      numOfCry++;
+    
+  }
+  
+  //the string "cry" appears 4 times per crystal..
+  numOfCry = numOfCry / 4;
+  
+  std::cout << numOfCh << std::endl;
+  std::cout << numOfCry << std::endl;
   
   
-  
-  long int Seed;
+  Long64_t Seed;
   int Run;
   int Event;
   float totalEnergyDeposited;
   int NumOptPhotons;
   int NumCherenkovPhotons;
   
-  std::vector<float> CryEnergyDeposited[64]; 
-  std::vector<float> *pCryEnergyDeposited[64];
-  std::vector<float> PosXEnDep[64]; 
-  std::vector<float> *pPosXEnDep[64];
-  std::vector<float> PosYEnDep[64]; 
-  std::vector<float> *pPosYEnDep[64];
-  std::vector<float> PosZEnDep[64]; 
-  std::vector<float> *pPosZEnDep[64];
-  short RunDetectorHit[16];
+  std::vector<float> *CryEnergyDeposited; 
+  std::vector<float> **pCryEnergyDeposited;
+  std::vector<float> *PosXEnDep; 
+  std::vector<float> **pPosXEnDep;
+  std::vector<float> *PosYEnDep; 
+  std::vector<float> **pPosYEnDep;
+  std::vector<float> *PosZEnDep; 
+  std::vector<float> **pPosZEnDep;
+  
+//   DetectorHit         = new Short_t             [numOfCh];
+  CryEnergyDeposited  = new std::vector<float>  [numOfCry];
+  pCryEnergyDeposited = new std::vector<float>* [numOfCry];
+  PosXEnDep           = new std::vector<float>  [numOfCry];
+  pPosXEnDep          = new std::vector<float>* [numOfCry];
+  PosYEnDep           = new std::vector<float>  [numOfCry];
+  pPosYEnDep          = new std::vector<float>* [numOfCry];
+  PosZEnDep           = new std::vector<float>  [numOfCry];
+  pPosZEnDep          = new std::vector<float>* [numOfCry];
+  
+//   short RunDetectorHit[16];
   
   
-  std::vector<float> *pEdep[64];
-  std::vector<float> *px[64];
-  std::vector<float> *py[64];
-  std::vector<float> *pz[64];
+  std::vector<float> **pEdep;
+  std::vector<float> **px;
+  std::vector<float> **py;
+  std::vector<float> **pz;
   
-  for (int i = 0 ; i < 64 ; i++)
+  pEdep = new std::vector<float>* [numOfCry];
+  px    = new std::vector<float>* [numOfCry];
+  py    = new std::vector<float>* [numOfCry];
+  pz    = new std::vector<float>* [numOfCry];
+  
+  for (int i = 0 ; i < numOfCry ; i++)
   {
     pEdep[i] = 0; 
     px[i] = 0;
     py[i] = 0;
     pz[i] = 0;
   }
-  Short_t  detector[16];
+  Short_t  *detector;
+  detector = new Short_t [numOfCh];
   
   tree->SetBranchAddress("Seed",&Seed);
   tree->SetBranchAddress("Run",&Run);
@@ -68,7 +119,7 @@ int main (int argc, char** argv)
   tree->SetBranchAddress("NumOptPhotons",&NumOptPhotons);
   tree->SetBranchAddress("NumCherenkovPhotons",&NumCherenkovPhotons);
   
-  for (int i = 0 ; i < 64 ; i++)
+  for (int i = 0 ; i < numOfCry ; i++)
   {
     std::stringstream snames;
     snames << "cry" << i;
@@ -83,7 +134,7 @@ int main (int argc, char** argv)
     snames<< "cry" << i << "PosZEnDep";
     tree->SetBranchAddress(snames.str().c_str(),&pz[i]);
   }
-  for (int i = 0 ; i < 16 ; i++)
+  for (int i = 0 ; i < numOfCh ; i++)
   {
     std::stringstream snames;
     snames << "detector" << i;
@@ -97,7 +148,7 @@ int main (int argc, char** argv)
   //output ttree
   
   long long int DeltaTimeTag,ExtendedTimeTag;
-  Short_t charge[32];
+  Short_t charge[32]; //adc type is always 32 channels
   Float_t RealX,RealY,RealZ;
   
   TTree* t1 = new TTree("adc","adc");
@@ -129,7 +180,7 @@ int main (int argc, char** argv)
     ExtendedTimeTag = 1e-9;
     DeltaTimeTag = 1e-9;
     
-    for(int i = 0; i < 16 ; i++)
+    for(int i = 0; i < numOfCh ; i++)
     {
       //convert to ADC channels, as if it was data from a digitizer
       //mppc gain = 1.25e6
@@ -141,7 +192,7 @@ int main (int argc, char** argv)
     RealX = RealY = RealZ = 0;
     
     // calculate a weigthed energy deposition in x,y,z
-    for(int i = 0; i < 64 ; i++) //first total energy deposited
+    for(int i = 0; i < numOfCry ; i++) //first total energy deposited
     {
       for(int j = 0; j < px[i]->size(); j++)
       {
@@ -171,7 +222,7 @@ int main (int argc, char** argv)
     
     
   }
-  
+  std::cout << std::endl;
   std::string outFile = "Tree_OUT.root";
   TFile* fOut = new TFile(outFile.c_str(),"recreate");
   
