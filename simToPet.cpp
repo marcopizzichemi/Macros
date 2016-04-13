@@ -1,7 +1,7 @@
 //simple program to translate sim output to "adc" format
 
 // compile with 
-// g++ -o simToPet simToPet.cpp `root-config --cflags --glibs`
+// g++ -o ../build/simToPet simToPet.cpp `root-config --cflags --glibs`
 // syntax
 // simToPet `ls out*`
 
@@ -146,10 +146,11 @@ int main (int argc, char** argv)
   
   
   //output ttree
-  
   long long int DeltaTimeTag,ExtendedTimeTag;
   Short_t charge[32]; //adc type is always 32 channels
   Float_t RealX,RealY,RealZ;
+  Short_t CrystalsHit;
+  Short_t NumbOfInteractions;
   
   TTree* t1 = new TTree("adc","adc");
   
@@ -168,6 +169,8 @@ int main (int argc, char** argv)
   t1->Branch("RealX",&RealX,"RealX/F"); 
   t1->Branch("RealY",&RealY,"RealY/F"); 
   t1->Branch("RealZ",&RealZ,"RealZ/F"); 
+  t1->Branch("CrystalsHit",&CrystalsHit,"CrystalsHit/S"); 
+  t1->Branch("NumbOfInteractions",&NumbOfInteractions,"NumbOfInteractions/S"); 
   
   long int counter = 0;
   int nEntries = tree->GetEntries();
@@ -179,6 +182,10 @@ int main (int argc, char** argv)
     
     ExtendedTimeTag = 1e-9;
     DeltaTimeTag = 1e-9;
+    
+    NumbOfInteractions = 0;
+    CrystalsHit = 0;
+    
     
     for(int i = 0; i < numOfCh ; i++)
     {
@@ -194,6 +201,8 @@ int main (int argc, char** argv)
     // calculate a weigthed energy deposition in x,y,z
     for(int i = 0; i < numOfCry ; i++) //first total energy deposited
     {
+      NumbOfInteractions += px[i]->size();
+      if(px[i]->size()) CrystalsHit++;
       for(int j = 0; j < px[i]->size(); j++)
       {
 	RealX += (px[i]->at(j) * pEdep[i]->at(j))/totalEnergyDeposited;
@@ -208,7 +217,10 @@ int main (int argc, char** argv)
       }
     }
     
-    t1->Fill();
+    if(NumbOfInteractions > 0) // discard events with no energy deposition (they would never trigger the detectors anyway..)
+    {
+      t1->Fill();
+    }
     
     counter++;
     
