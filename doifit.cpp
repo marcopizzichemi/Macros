@@ -36,12 +36,16 @@ struct Crystal_t
 int main (int argc, char** argv)
 {
   std::vector<std::string> file;
-//   file.push_back("./z0/doiData.txt");
+  file.push_back("./z0/doiData.txt");
   file.push_back("./z1/doiData.txt");
   file.push_back("./z2/doiData.txt");
   file.push_back("./z3/doiData.txt");
   file.push_back("./z4/doiData.txt");
-  
+  file.push_back("./z5/doiData.txt");
+  file.push_back("./z6/doiData.txt");
+  file.push_back("./z7/doiData.txt");
+  file.push_back("./z8/doiData.txt");
+  file.push_back("./z9/doiData.txt");
   
 //   std::vector<double> z;
 //   z.push_back(13.6);
