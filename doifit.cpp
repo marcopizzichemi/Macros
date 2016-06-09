@@ -149,12 +149,13 @@ int main (int argc, char** argv)
   for(int j = 7 ; j > -1 ; j--)
   {
     calib << Crystal[j].x[0] << "\t" 
-        << Crystal[j].y[0] << "\t" 
-	<< Crystal[j].m << "\t"
-	<< Crystal[j].q << "\t"
-	<< Crystal[j].doires << "\t"
-	<< Crystal[j].avgs;
-    for(int i = 0 ; i < Crystal[j].w.size(); i++) calib << Crystal[j].w[i] << "\t"<< Crystal[j].s[i] << "\t";
+          << Crystal[j].y[0] << "\t" 
+	  << Crystal[j].m << "\t"
+	  << Crystal[j].q << "\t"
+	  << Crystal[j].doires << "\t"
+	  << Crystal[j].avgs << "\t";
+    for(int i = 0 ; i < Crystal[j].w.size(); i++) 
+      calib << Crystal[j].w[i] << "\t"<< Crystal[j].s[i] << "\t" <<  Crystal[j].sqrt_nentries[i] << "\t";
     calib << std::endl;
   }
   calib.close();

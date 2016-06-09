@@ -27,7 +27,7 @@
 #include <THStack.h>
 #include <TLegend.h>
 #include <TStyle.h>
-
+#include <TMath.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -44,10 +44,19 @@ struct inputDoi_t
   double avgs;
   double w[pointsFromDoi];
   double sw[pointsFromDoi];
+  double sqrt_nentries[pointsFromDoi];
   double z[pointsFromDoi];
   double sz[pointsFromDoi];
   
 };
+
+struct inputZ_t
+{
+  int i;
+  int j;
+  double z[pointsFromDoi];
+};
+
 
 double z[pointsFromDoi] = {10.8,8,5.2,2.4};
 double sz[pointsFromDoi] = {0.5,0.5,0.5,0.5};
@@ -57,9 +66,9 @@ double sz[pointsFromDoi] = {0.5,0.5,0.5,0.5};
 
 int main(int argc, char * argv[])
 {
-  if(argc < 3)
+  if(argc < 4)
   {
-    std::cout << "USAGE:\t\t modulePlot moduleCalibration.root doiTagPoints.txt [isBackgroudRun]" << std::endl;
+    std::cout << "USAGE:\t\t modulePlot moduleCalibration.root doiTagPoints.txt zPositions.txt [isBackgroudRun]" << std::endl;
     std::cout << std::endl;
     return 1;
   }
@@ -73,17 +82,53 @@ int main(int argc, char * argv[])
   std::ifstream fDoiTag;
   fDoiTag.open(argv[2],std::ios::in);
   
+  std::ifstream fZPos;
+  fZPos.open(argv[3],std::ios::in);
+  
+  
 //   std::ifstream fDoiResFile;
 //   fDoiResFile.open(argv[3],std::ios::in);
   
   //see if this is a backgroudRun or not. If it is, no en res and light output calculations
   bool isBackgroudRun = 0;
-  if(argc > 3)
-    isBackgroudRun = atoi(argv[3]);
+  if(argc > 4)
+    isBackgroudRun = atoi(argv[4]);
   
   std::vector<inputDoi_t> inputDoi;
+  std::vector<inputZ_t> inputZ;
+  while(!fZPos.eof())
+  {
+    int a,b;
+    inputZ_t tempInput;
+    
+    fZPos >> tempInput.i >> tempInput.j;
+    for(int k = 0 ; k < pointsFromDoi ; k++)
+    {
+      fZPos >> tempInput.z[k];
+    }
+    
+    if(!fZPos.eof())
+    {
+      inputZ.push_back(tempInput);
+    }
+  }
   
-  double TagOffset = 2; // offset of tag derived by analisys of tagging bench. TEMPORARY
+  //DEBUG  
+//   for(int i = 0 ; i < inputZ.size() ; i++)
+//   {
+//     std::cout << inputZ[i].i << " " << inputZ[i].j;
+//     for(int k = 0 ; k < pointsFromDoi ; k++)
+//     {
+//       std::cout << " " << inputZ[i].z[k];
+//     }
+//     
+//     std::cout << std::endl;
+//   }
+// 
+//   std::cout << std::endl;
+//   std::cout << std::endl;
+
+//   double TagOffset = 2; // offset of tag derived by analisys of tagging bench. NOT USED ANYMORE
   //until we properly characterize the alignment of the tagging setup and modify the z positions at source, we use this temporary evaluation of the offset between the aligment of the x-y-z stage scale that we thought was correct and the one that we derive from the fine analisys of the tagging setup
   
   while(!fDoiTag.eof())
@@ -94,14 +139,29 @@ int main(int argc, char * argv[])
     
     fDoiTag >> tempInput.i >> tempInput.j >>tempInput.m >> tempInput.q >> tempInput.doires >> tempInput.avgs;
     
-    tempInput.q = tempInput.q + TagOffset; //until we properly characterize the alignment of the tagging setup and modify the z positions at source, we use this temporary evaluation of the offset between the aligment of the x-y-z stage scale that we thought was correct and the one that we derive from the fine analisys of the tagging setup
+    tempInput.q = tempInput.q /*+ TagOffset*/; //until we properly characterize the alignment of the tagging setup and modify the z positions at source, we use this temporary evaluation of the offset between the aligment of the x-y-z stage scale that we thought was correct and the one that we derive from the fine analisys of the tagging setup
     
     for(int k = 0 ; k < pointsFromDoi ; k++)
     {
-      fDoiTag >> tempInput.w[k] >> tempInput.sw[k];  
-      tempInput.z[k] = z[k] + TagOffset; //until we properly characterize the alignment of the tagging setup and modify the z positions at source, we use this temporary evaluation of the offset between the aligment of the x-y-z stage scale that we thought was correct and the one that we derive from the fine analisys of the tagging setup
-      tempInput.sz[k] = sz[k];
+      fDoiTag >> tempInput.w[k] >> tempInput.sw[k] >> tempInput.sqrt_nentries[k];  
+      //tempInput.z[k] = z[k] + TagOffset; //until we properly characterize the alignment of the tagging setup and modify the z positions at source, we use this temporary evaluation of the offset between the aligment of the x-y-z stage scale that we thought was correct and the one that we derive from the fine analisys of the tagging setup
+      //tempInput.sz[k] = sz[k];
     }
+    
+    
+    for(int k = 0; k < inputZ.size(); k++)
+    {
+      if(tempInput.i == inputZ[k].i && tempInput.j == inputZ[k].j)
+      {
+	for(int h = 0 ; h < pointsFromDoi ; h++)
+        {
+	  tempInput.z[h]  = inputZ[k].z[h];
+	  tempInput.sz[h] = sz[h];
+	}
+      }
+    }
+    
+    
     if(!fDoiTag.eof())
     {
       inputDoi.push_back(tempInput);
@@ -113,13 +173,15 @@ int main(int argc, char * argv[])
 //   for(int i = 0 ; i < inputDoi.size() ; i++)
 //   {
 //     std::cout << inputDoi[i].i << " " << inputDoi[i].j << " " << inputDoi[i].m << " " << inputDoi[i].q << " ";
-//     for(int k = 0 ; k < 5 ; k++)
+//     for(int k = 0 ; k < pointsFromDoi ; k++)
 //     {
 //       std::cout << inputDoi[i].w[k] << " " << inputDoi[i].sw[k] << " ";
+//       std::cout << inputDoi[i].z[k] << " " << inputDoi[i].sz[k] << " ";
 //     }
+//     
 //     std::cout << std::endl;
 //   }
-// 
+
   
   
   
@@ -130,13 +192,67 @@ int main(int argc, char * argv[])
     mkdir("./plots/", 0700);
   }
   
+//   for(int i = 0 ; i < 8 ; i++)
+//   {
+//     for(int j = 0 ; j < 8 ; j++)
+//     {
+//       if(i > 1 && i < 6 && j > 1 && j < 6)
+//       {
+// 	for(int k = 0; k < inputDoi.size(); k++)
+// 	{
+// 	  int ik = inputDoi[k].i;
+// 	  int jk = inputDoi[k].j;
+// 	  if(i == ik && j == jk)
+// 	  {
+  
+  //simple histogram of measured sigma w
+  TH1F* sigmaWdoi = new TH1F("sigmaWdoi","Distribution of measured sigma w",50,0.01,0.03);
+  for(int i = 0; i < inputDoi.size();i++)
+  {
+    for(int k =0 ; k < pointsFromDoi ; k++)
+    {
+//       std::cout << inputDoi[i].sw[k] * inputDoi[i].sqrt_nentries[k] << std::endl;
+//       if(i > 1 && i < 6 && j > 1 && j < 6)
+//       {
+        sigmaWdoi->Fill(inputDoi[i].sw[k] * inputDoi[i].sqrt_nentries[k]);
+//       }
+    }
+  }
+  fOut->cd();
+  sigmaWdoi->Write();
+  
+  //simple histogram of measured sigma w - central 
+  TH1F* sigmaWdoiCentral = new TH1F("sigmaWdoiCentral","Central Crystals - Distribution of measured sigma w",50,0.01,0.03);
+  for(int i = 0 ; i < 8 ; i++)
+  {
+    for(int j = 0 ; j < 8 ; j++)
+    {
+      if(i > 1 && i < 6 && j > 1 && j < 6)
+      {
+	for(int k = 0; k < inputDoi.size(); k++)
+	{
+	  int ik = inputDoi[k].i;
+	  int jk = inputDoi[k].j;
+	  if(i == ik && j == jk)
+	  {
+	    for(int ik =0 ; ik < pointsFromDoi ; ik++)
+            {
+	      sigmaWdoiCentral->Fill(inputDoi[k].sw[ik] * inputDoi[k].sqrt_nentries[ik]);
+            }
+	  }
+	}
+      }
+    }
+  }
+  fOut->cd();
+  sigmaWdoiCentral->Write();
+  
   
   //-----------------------------//
   //      En Res Corrected
   //-----------------------------//
   
-  
-  isBackgroudRun = true;//FIXME now hardcoded to true since this program is meant to analyze just the doi calibration
+//   isBackgroudRun = true;//FIXME now hardcoded to true since this program is meant to analyze just the doi calibration
   if(!isBackgroudRun)
   {
     TCanvas *c;/* = (TCanvas*) gDirectory->Get("Energy res FWHM vs. i,j");*/
@@ -150,6 +266,8 @@ int main(int argc, char * argv[])
     double stdEN_corr = 0;
     double sumLO = 0;
     double stdLO = 0;
+    
+    f->cd("Module 0.0");
     
     c = (TCanvas*) gDirectory->Get("Corrected Energy res FWHM vs. i,j");
     
@@ -241,6 +359,7 @@ int main(int argc, char * argv[])
     //-----------------------------//
     //         Photopeaks
     //-----------------------------//
+    f->cd("Module 0.0");
     TCanvas *c2 = (TCanvas*) gDirectory->Get("Photopeak positions vs. i,j");
     
     spectrum2d = (TH2F*)c2->GetPrimitive("Photopeak positions vs. i,j");
@@ -361,7 +480,7 @@ int main(int argc, char * argv[])
   
 //   int points = 0;
   TH2F* diff2d = new TH2F("diff2d","diff2d",8,0,8,8,0,8);
-  std::vector<double> xcorr,ycorr;
+  std::vector<double> xcorr,ycorr,xcorrCentral,ycorrCentral;
   
   for(int iModule = 0; iModule < nmodulex ; iModule++)
   {
@@ -420,7 +539,7 @@ int main(int argc, char * argv[])
 		  TF1 *lineTag = new TF1("lineTag","[0]*x + [1]",0,1);
 		  lineTag->SetParameter(0,inputDoi[k].m);
 		  lineTag->SetParameter(1,inputDoi[k].q);
-		  points->Fit(lineTag);
+		  points->Fit(lineTag,"Q");
 		  
 		  lineTag->SetLineColor(2);
 		  double totalDelta = 0;
@@ -436,33 +555,40 @@ int main(int argc, char * argv[])
 		  diff2d->Fill(i,j,totalDelta/pointsFromDoi);
 		  TCanvas* C_new = new TCanvas(stream.str().c_str(),stream.str().c_str(),1200,800);
 		  
-		  double crystaLenght = 15.0;
+		  double crystaLenght = 15.0; //FIXME hardcoded!
 		  double minBound = -1;
 		  double maxBound = -1;
-		  for(int step = 0 ; step < 10000 ; step ++)
-		  {
-		    if(minBound == -1)
-		    {
-		      if(calibGraph->Eval((crystaLenght/10000)*step) < 14)
-		      {  
-			minBound = (crystaLenght/10000)*step;
-			
-		      }
-		        
-		    }
-		    if(maxBound == -1)
-		    {
-		      if(calibGraph->Eval((crystaLenght/10000)*step) < 1)
-			 maxBound = (crystaLenght/10000)*step;
-		    }
-		  }
-		  std::cout << minBound << " " << maxBound << std::endl;
+// 		  for(int step = 0 ; step < 10000 ; step ++)
+// 		  {
+// 		    if(minBound == -1)
+// 		    {
+// 		      if(calibGraph->Eval((crystaLenght/10000)*step) < 14)
+// 		      {  
+// 			minBound = (crystaLenght/10000)*step;
+// 			
+// 		      }
+// 		        
+// 		    }
+// 		    if(maxBound == -1)
+// 		    {
+// 		      if(calibGraph->Eval((crystaLenght/10000)*step) < 1)
+// 			 maxBound = (crystaLenght/10000)*step;
+// 		    }
+// 		  }
+		  minBound = inputDoi[k].w[0];
+		  maxBound = inputDoi[k].w[pointsFromDoi-1];
+// 		  std::cout << minBound << " " << maxBound << std::endl;
 		  TF1 *lineFitSigma = new TF1("lineFitSigma","[0]*x + [1]",minBound,maxBound);
 		  lineFitSigma->SetLineColor(4);
 		  
 		  calibGraph->Draw("AL");
 		  calibGraph->Fit(lineFitSigma,"RQ");
+		  points->SetMarkerColor(4);
+                  points->SetMarkerSize(1.2);
+                  points->SetMarkerStyle(21);
 		  points->Draw("P same");
+		  fOut->cd();
+                  C_new->Write();
 		  lineTag->Draw("same");
 		  lineFitSigma->Draw("same");
 // 		  legend = new TLegend(0.5,0.62,0.893,0.89,"");
@@ -476,6 +602,11 @@ int main(int argc, char * argv[])
 		  outTagFile << i << "\t" << j << "\t" << lineTag->GetParameter(0) << "\t" << lineFitSigma->GetParameter(0) << std::endl;
 		  xcorr.push_back(lineTag->GetParameter(0));
 		  ycorr.push_back(lineFitSigma->GetParameter(0));
+		  if(i > 1 && i < 6 && j > 1 && j < 6)
+		  {
+		    xcorrCentral.push_back(lineTag->GetParameter(0));
+		    ycorrCentral.push_back(lineFitSigma->GetParameter(0));
+		  }
 		  
 // 		  correlationPlot->SetPoint(points,lineTag->GetParameter(0),lineFitSigma->GetParameter(0));
 // 		  points++;
@@ -485,10 +616,6 @@ int main(int argc, char * argv[])
                   C_new->Write();
 		}
 	      }
-	      
-	      
-	      
-	      
 	    }
 	  }
 	}
@@ -506,6 +633,16 @@ int main(int argc, char * argv[])
   TH1F* histoDoiFromCalibration = new TH1F("histoDoiFromCalibration","histoDoiFromCalibration",50,0,10);
   TH1F* histoDoiTag_central = new TH1F("histoDoiTag_central","histoDoiTag_central",50,0,10);
   TH1F* histoDoiFromCalibration_central = new TH1F("histoDoiFromCalibration_central","histoDoiFromCalibration_central",50,0,10);
+  
+  TH2F *DoiResolutionVsIJ = new TH2F("DOI res FWHM vs. i,j","",nmppcx*ncrystalsx,0,nmppcx*ncrystalsx,nmppcy*ncrystalsy,0,nmppcy*ncrystalsy);
+  DoiResolutionVsIJ->GetXaxis()->SetTitle("i (U axis)");
+  DoiResolutionVsIJ->GetYaxis()->SetTitle("j (V axis)");
+  DoiResolutionVsIJ->GetZaxis()->SetTitle("DOI Resolution FWHM [mm]");
+  DoiResolutionVsIJ->GetXaxis()->SetTitleOffset(1.8);
+  DoiResolutionVsIJ->GetYaxis()->SetTitleOffset(1.8);
+  DoiResolutionVsIJ->GetZaxis()->SetTitleOffset(2.2);
+  DoiResolutionVsIJ->GetZaxis()->SetRangeUser(0,10);
+  
   std::vector<double> doiFromTag;
   std::vector<double> doiFromCalibration;
   std::vector<double> doiFromTag_central;
@@ -540,10 +677,12 @@ int main(int argc, char * argv[])
 	{
 	  histoDoiTag->Fill(inputDoi[k].doires);
 	  doiFromTag.push_back(inputDoi[k].doires);
+	  DoiResolutionVsIJ->Fill(i,j,inputDoi[k].doires);
 	}
       }
       histoDoiFromCalibration->Fill(AverageDOI->GetBinContent(i+1,j+1));
       doiFromCalibration.push_back(AverageDOI->GetBinContent(i+1,j+1));
+      
     } 
   }
   
@@ -554,6 +693,12 @@ int main(int argc, char * argv[])
   histoDoiFromCalibration_central->Write();
   
   
+  TCanvas* C_DoiResolutionVsIJ = new TCanvas("C_DoiResolutionVsIJ","C_DoiResolutionVsIJ",800,800);
+  C_DoiResolutionVsIJ->SetName(DoiResolutionVsIJ->GetName());
+  C_DoiResolutionVsIJ->cd();
+  DoiResolutionVsIJ->Draw("LEGO2");
+  C_DoiResolutionVsIJ->SetLeftMargin(0.15);
+  C_DoiResolutionVsIJ->Write();
   
   TCanvas* C_correlationDoiRes = new TCanvas("C_correlationDoiRes","C_correlationDoiRes",1200,800);
   TGraph *correlationDoiRes = new TGraph(doiFromCalibration.size(),&doiFromTag[0],&doiFromCalibration[0]);
@@ -600,10 +745,65 @@ int main(int argc, char * argv[])
   correlationPlot->GetXaxis()->SetTitle("Tagging Bench m coeff.");
   correlationPlot->GetYaxis()->SetTitle("Cumulative plot m coeff.");
   correlationPlot->Draw("A*");
+//   TF1* corr1line = new TF1("corr1line","x");
+//   corr1line->Draw("same");
   std::cout << "Correlation = " << correlationPlot->GetCorrelationFactor() << std::endl;
   C_correlationPlot->Print("./plots/correlation.png");
   fOut->cd();
   C_correlationPlot->Write();
+  
+  TGraph *correlationPlotCentral = new TGraph(xcorrCentral.size(),&xcorrCentral[0],&ycorrCentral[0]);
+  TCanvas* C_correlationPlotCentral = new TCanvas("C_correlationPlotCentral","C_correlationPlotCentral",1200,800);
+  C_correlationPlotCentral->cd();
+  correlationPlotCentral->SetTitle("Central Crystals - Correlation Plot");
+  correlationPlotCentral->GetXaxis()->SetTitle("Tagging Bench m coeff.");
+  correlationPlotCentral->GetYaxis()->SetTitle("Cumulative plot m coeff.");
+  correlationPlotCentral->Draw("A*");
+//   TF1* corr1lineCentral = new TF1("corr1lineCentral","x");
+//   corr1lineCentral->Draw("same");
+  std::cout << "Correlation = " << correlationPlotCentral->GetCorrelationFactor() << std::endl;
+  C_correlationPlotCentral->Print("./plots/correlationCentral.png");
+  fOut->cd();
+  C_correlationPlotCentral->Write();
+  
+  
+  TH1F* doiResFixedSigma = new TH1F("doiResFixedSigma","doiResFixedSigma",50,0,10);
+  TH1F* mHisto = new TH1F("mHisto","mHisto",30,30,120);
+  for(int i = 0 ; i < ycorr.size() ; i++)
+  {
+    doiResFixedSigma->Fill(std::abs(ycorr[i])*sigmaWdoi->GetMean()*2.355);
+    mHisto->Fill(std::abs(ycorr[i]));
+  }
+  fOut->cd();
+  mHisto->Write();
+  doiResFixedSigma->Write();
+  
+  
+  TH1F* doiResFixedSigma_central = new TH1F("doiResFixedSigma_central","doiResFixedSigma_central",50,0,10);
+  TH1F* mHisto_central = new TH1F("mHisto_central","mHisto_central",30,30,120);
+  for(int i = 0 ; i < ycorrCentral.size() ; i++)
+  {
+    doiResFixedSigma_central->Fill(std::abs(ycorrCentral[i])*sigmaWdoiCentral->GetMean()*2.355);
+    mHisto_central->Fill(std::abs(ycorrCentral[i]));
+  }
+  fOut->cd();
+  mHisto_central->Write();
+  doiResFixedSigma_central->Write();
+  
+  
+  std::cout << "Average m(ALL) = " << mHisto->GetMean() << " +/- " << mHisto->GetMeanError() << std::endl; 
+  std::cout << "Average m(CENTRAL) = " << mHisto_central->GetMean() << " +/- " << mHisto_central->GetMeanError()  << std::endl; 
+  
+  std::cout << "Average sigmaW(ALL) = " << sigmaWdoi->GetMean() << " +/- " << sigmaWdoi->GetMeanError() <<  std::endl; 
+  std::cout << "Average sigmaW(CENTRAL) = " << sigmaWdoiCentral->GetMean() << " +/- " << sigmaWdoiCentral->GetMeanError() << std::endl; 
+  
+  std::cout << "Average DOI Res FWHM [mm] - from DOI TAG, ALL = " << histoDoiTag->GetMean()<< " +/- " << histoDoiTag->GetMeanError()  << std::endl; 
+  std::cout << "Average DOI Res FWHM [mm] - from DOI TAG, CENTRAL = "<< histoDoiTag_central->GetMean()<< " +/- " << histoDoiTag_central->GetMeanError()  << std::endl; 
+  
+  std::cout << "Average DOI Res FWHM [mm] - from CALIBRATION, ALL = " << mHisto->GetMean() * sigmaWdoi->GetMean() * 2.355 << " +/- " <<  mHisto->GetMean() * sigmaWdoi->GetMean() * 2.355 *TMath::Sqrt(TMath::Power((mHisto->GetMeanError()/mHisto->GetMean()),2) + TMath::Power((sigmaWdoi->GetMeanError()/sigmaWdoi->GetMean()),2) ) << std::endl; 
+  std::cout << "Average DOI Res FWHM [mm] - from CALIBRATION, CENTRAL = "<< mHisto_central->GetMean() * sigmaWdoiCentral->GetMean() * 2.355<< " +/- " <<  mHisto_central->GetMean() * sigmaWdoiCentral->GetMean() * 2.355 *TMath::Sqrt(TMath::Power((mHisto_central->GetMeanError()/mHisto_central->GetMean()),2) + TMath::Power((sigmaWdoiCentral->GetMeanError()/sigmaWdoiCentral->GetMean()),2) )   << std::endl; 
+  
+  
   
   TCanvas* C_diff2d = new TCanvas("C_diff2d","C_diff2d",800,800);
   C_diff2d->cd();
