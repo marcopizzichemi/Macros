@@ -32,43 +32,95 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-const int pointsFromDoi = 4;
 
-struct inputDoi_t
+//structure of input points from doi tag bench
+//class of input points from doi tag bench
+class inputDoi_t
 {
+public:
   int i;
   int j;
   double m;
   double q;
   double doires;
   double avgs;
-  double w[pointsFromDoi];
-  double sw[pointsFromDoi];
-  double sqrt_nentries[pointsFromDoi];
-  double z[pointsFromDoi];
-  double sz[pointsFromDoi];
+  std::vector<double> w;
+  std::vector<double> sw;
+  std::vector<double> sqrt_nentries;
+  std::vector<double> z;
+  std::vector<double> sz;  
+  
+  int pointsFromDoi;
+  inputDoi_t(int a){ pointsFromDoi = a;};
+  void clear()
+  {
+    w.clear();
+    sw.clear();
+    sqrt_nentries.clear();
+    z.clear();
+    sz.clear();
+  };
+  
+  friend std::istream& operator>>(std::istream& input, inputDoi_t& s)
+  {
+    input >> s.i; 
+    input >> s.j;           
+    input >> s.m; 
+    input >> s.q;    
+    input >> s.doires; 
+    input >> s.avgs;
+    for(int p = 0; p < s.pointsFromDoi; p++)
+    {
+      double wValue,swValue,sqrtValue;
+      input >> wValue >> swValue >> sqrtValue; /*>> zValue >> szValue*/
+      s.w.push_back(wValue);
+      s.sw.push_back(swValue);
+      s.sqrt_nentries.push_back(sqrtValue);
+//       s.z.push_back(zValue);
+//       s.sz.push_back(szValue);
+    }
+    return input;
+  }
+};                   
+
+// class of real z positions of tag points (after check of alignment)
+class inputZ_t      
+{                    
+public:
+  int pointsFromDoi;
+  int i;             
+  int j;             
+  std::vector<double> z;
+  inputZ_t(int a){ pointsFromDoi = a;};
+  void clear(){z.clear();};
+ 
+  friend std::istream& operator>>(std::istream& input, inputZ_t& s)
+  {
+    input >> s.i; //read i
+    input >> s.j;           //read 
+    for(int p = 0; p < s.pointsFromDoi; p++)
+    {
+      double zValue;
+      input >> zValue;
+      s.z.push_back(zValue);
+    }
+    return input;
+  }
   
 };
 
-struct inputZ_t
-{
-  int i;
-  int j;
-  double z[pointsFromDoi];
-};
 
-
-double z[pointsFromDoi] = {10.8,8,5.2,2.4};
-double sz[pointsFromDoi] = {0.5,0.5,0.5,0.5};
+// double z[pointsFromDoi] = {10.8,8,5.2,2.4};
+// double sz[pointsFromDoi] = {0.5,0.5,0.5,0.5};
 
 // double z[pointsFromDoi] = {13.6,10.8,8,5.2,2.4};
 // double sz[pointsFromDoi] = {0.5,0.5,0.5,0.5,0.5};
 
-int main(int argc, char * argv[])
+int main(int argc, char **argv)
 {
-  if(argc < 4)
+  if(argc < 5)
   {
-    std::cout << "USAGE:\t\t modulePlot moduleCalibration.root doiTagPoints.txt zPositions.txt [isBackgroudRun]" << std::endl;
+    std::cout << "USAGE:\t\t modulePlot moduleCalibration.root doiTagPoints.txt zPositions.txt pointsFromDoi [isBackgroudRun]" << std::endl;
     std::cout << std::endl;
     return 1;
   }
@@ -88,99 +140,137 @@ int main(int argc, char * argv[])
   
 //   std::ifstream fDoiResFile;
 //   fDoiResFile.open(argv[3],std::ios::in);
+  int pointsFromDoi = 5;
+  if(argc > 4)
+    pointsFromDoi = atoi(argv[4]);
   
   //see if this is a backgroudRun or not. If it is, no en res and light output calculations
   bool isBackgroudRun = 0;
-  if(argc > 4)
-    isBackgroudRun = atoi(argv[4]);
+  if(argc > 5)
+    isBackgroudRun = atoi(argv[5]);
   
   std::vector<inputDoi_t> inputDoi;
   std::vector<inputZ_t> inputZ;
-  while(!fZPos.eof())
-  {
-    int a,b;
-    inputZ_t tempInput;
-    
-    fZPos >> tempInput.i >> tempInput.j;
-    for(int k = 0 ; k < pointsFromDoi ; k++)
-    {
-      fZPos >> tempInput.z[k];
-    }
-    
-    if(!fZPos.eof())
-    {
-      inputZ.push_back(tempInput);
-    }
-  }
-  
-  //DEBUG  
-//   for(int i = 0 ; i < inputZ.size() ; i++)
+//   while(!fZPos.eof()) //file z_positions_etc
 //   {
-//     std::cout << inputZ[i].i << " " << inputZ[i].j;
+//     int a,b;
+//     inputZ_t tempInput;
+//     
+//     fZPos >> tempInput.i >> tempInput.j;
 //     for(int k = 0 ; k < pointsFromDoi ; k++)
 //     {
-//       std::cout << " " << inputZ[i].z[k];
+//       double value;
+//       fZPos >> value;
+//       tempInput.z.push_back(value);
 //     }
 //     
-//     std::cout << std::endl;
+//     if(!fZPos.eof())
+//     {
+//       inputZ.push_back(tempInput);
+//     }
 //   }
-// 
-//   std::cout << std::endl;
-//   std::cout << std::endl;
+  
+  inputZ_t tempInput(pointsFromDoi);
+  while(fZPos >> tempInput)
+  {
+    inputZ.push_back(tempInput);
+    tempInput.clear();
+  }
+  
+  
+  //DEBUG  
+  for(int i = 0 ; i < inputZ.size() ; i++)
+  {
+    std::cout << inputZ[i].i << " " << inputZ[i].j;
+    for(int k = 0 ; k < pointsFromDoi ; k++)
+    {
+      std::cout << " " << inputZ[i].z[k];
+    }
+    
+    std::cout << std::endl;
+  }
+
+  std::cout << std::endl;
+  std::cout << std::endl;
 
 //   double TagOffset = 2; // offset of tag derived by analisys of tagging bench. NOT USED ANYMORE
   //until we properly characterize the alignment of the tagging setup and modify the z positions at source, we use this temporary evaluation of the offset between the aligment of the x-y-z stage scale that we thought was correct and the one that we derive from the fine analisys of the tagging setup
   
-  while(!fDoiTag.eof())
+//   while(!fDoiTag.eof()) //file calibration_params_etc.. One line per crystal
+//   {
+//     int a,b;
+//     inputDoi_t tempInput;
+//     
+//     
+//     fDoiTag >> tempInput.i >> tempInput.j >>tempInput.m >> tempInput.q >> tempInput.doires >> tempInput.avgs;
+//     
+// //     tempInput.q = tempInput.q /*+ TagOffset*/; //until we properly characterize the alignment of the tagging setup and modify the z positions at source, we use this temporary evaluation of the offset between the aligment of the x-y-z stage scale that we thought was correct and the one that we derive from the fine analisys of the tagging setup
+//     
+//     for(int k = 0 ; k < pointsFromDoi ; k++)
+//     {
+//       double w,sw,sqrt_nentries;
+//       fDoiTag >> w >> sw >> sqrt_nentries;  
+//       tempInput.w.push_back(w);
+//       tempInput.sw.push_back(sw);
+//       tempInput.sqrt_nentries.push_back(sqrt_nentries);
+//       //tempInput.z[k] = z[k] + TagOffset; //until we properly characterize the alignment of the tagging setup and modify the z positions at source, we use this temporary evaluation of the offset between the aligment of the x-y-z stage scale that we thought was correct and the one that we derive from the fine analisys of the tagging setup
+//       //tempInput.sz[k] = sz[k];
+//     }
+//     
+//     
+//     for(int k = 0; k < inputZ.size(); k++)
+//     {
+//       if(tempInput.i == inputZ[k].i && tempInput.j == inputZ[k].j)
+//       {
+// 	for(int h = 0 ; h < pointsFromDoi ; h++)
+//         {
+// 	  tempInput.z.push_back(inputZ[k].z[h]);
+// 	  tempInput.sz.push_back(0.2); //FIXME what is the correct value?
+// 	}
+//       }
+//     }
+//     
+//     
+//     if(!fDoiTag.eof())
+//     {
+//       inputDoi.push_back(tempInput);
+//     }
+//   }
+  
+  
+  inputDoi_t tempInputDoi(pointsFromDoi);
+  while(fDoiTag >> tempInputDoi)
   {
-    int a,b;
-    inputDoi_t tempInput;
-    
-    
-    fDoiTag >> tempInput.i >> tempInput.j >>tempInput.m >> tempInput.q >> tempInput.doires >> tempInput.avgs;
-    
-    tempInput.q = tempInput.q /*+ TagOffset*/; //until we properly characterize the alignment of the tagging setup and modify the z positions at source, we use this temporary evaluation of the offset between the aligment of the x-y-z stage scale that we thought was correct and the one that we derive from the fine analisys of the tagging setup
-    
-    for(int k = 0 ; k < pointsFromDoi ; k++)
-    {
-      fDoiTag >> tempInput.w[k] >> tempInput.sw[k] >> tempInput.sqrt_nentries[k];  
-      //tempInput.z[k] = z[k] + TagOffset; //until we properly characterize the alignment of the tagging setup and modify the z positions at source, we use this temporary evaluation of the offset between the aligment of the x-y-z stage scale that we thought was correct and the one that we derive from the fine analisys of the tagging setup
-      //tempInput.sz[k] = sz[k];
-    }
-    
-    
     for(int k = 0; k < inputZ.size(); k++)
     {
-      if(tempInput.i == inputZ[k].i && tempInput.j == inputZ[k].j)
+      if(tempInputDoi.i == inputZ[k].i && tempInputDoi.j == inputZ[k].j)
       {
 	for(int h = 0 ; h < pointsFromDoi ; h++)
-        {
-	  tempInput.z[h]  = inputZ[k].z[h];
-	  tempInput.sz[h] = sz[h];
+	{
+	  tempInputDoi.z.push_back(inputZ[k].z[h]);
+	  tempInputDoi.sz.push_back(0.2); //FIXME what is the correct value?
 	}
       }
     }
-    
-    
-    if(!fDoiTag.eof())
-    {
-      inputDoi.push_back(tempInput);
-    }
+    inputDoi.push_back(tempInputDoi);
+    tempInputDoi.clear();
   }
+  
+  
   fDoiTag.close();
   
 // DEBUG
-//   for(int i = 0 ; i < inputDoi.size() ; i++)
-//   {
-//     std::cout << inputDoi[i].i << " " << inputDoi[i].j << " " << inputDoi[i].m << " " << inputDoi[i].q << " ";
-//     for(int k = 0 ; k < pointsFromDoi ; k++)
-//     {
-//       std::cout << inputDoi[i].w[k] << " " << inputDoi[i].sw[k] << " ";
-//       std::cout << inputDoi[i].z[k] << " " << inputDoi[i].sz[k] << " ";
-//     }
-//     
-//     std::cout << std::endl;
-//   }
+  for(int i = 0 ; i < inputDoi.size() ; i++)
+  {
+    std::cout << inputDoi[i].i << " " << inputDoi[i].j << " " << inputDoi[i].m << " " << inputDoi[i].q << " ";
+    for(int k = 0 ; k < pointsFromDoi ; k++)
+    {
+      std::cout << inputDoi[i].w[k] << " " << inputDoi[i].sw[k] << " ";
+      std::cout << inputDoi[i].z[k] << " " << inputDoi[i].sz[k] << " ";
+    }
+    
+    std::cout << std::endl;
+  }
 
   
   
@@ -535,11 +625,11 @@ int main(int argc, char * argv[])
 		int j = inputDoi[k].j;
 		if(iCrystal == i && jCrystal == j)
 		{
-		  TGraphErrors *points = new TGraphErrors(pointsFromDoi,inputDoi[k].w,inputDoi[k].z,inputDoi[k].sw,inputDoi[k].sz);
+		  TGraphErrors *points = new TGraphErrors(pointsFromDoi,&inputDoi[k].w[0],&inputDoi[k].z[0],&inputDoi[k].sw[0],&inputDoi[k].sz[0]);
 		  TF1 *lineTag = new TF1("lineTag","[0]*x + [1]",0,1);
 		  lineTag->SetParameter(0,inputDoi[k].m);
 		  lineTag->SetParameter(1,inputDoi[k].q);
-		  points->Fit(lineTag,"Q");
+		  points->Fit(lineTag,"QN");
 		  
 		  lineTag->SetLineColor(2);
 		  double totalDelta = 0;
@@ -582,15 +672,15 @@ int main(int argc, char * argv[])
 		  lineFitSigma->SetLineColor(4);
 		  
 		  calibGraph->Draw("AL");
-		  calibGraph->Fit(lineFitSigma,"RQ");
+		  calibGraph->Fit(lineFitSigma,"RNQ");
 		  points->SetMarkerColor(4);
                   points->SetMarkerSize(1.2);
                   points->SetMarkerStyle(21);
 		  points->Draw("P same");
 		  fOut->cd();
                   C_new->Write();
-		  lineTag->Draw("same");
-		  lineFitSigma->Draw("same");
+		  //lineTag->Draw("same");
+		  //lineFitSigma->Draw("same");
 // 		  legend = new TLegend(0.5,0.62,0.893,0.89,"");
 // 		  legend->SetFillStyle(0);
 // 		  legend->AddEntry(points,"Measured point","f");
@@ -612,8 +702,8 @@ int main(int argc, char * argv[])
 // 		  points++;
 // 		  outTagFile << i << "\t" << j << "\t" << inputDoi[k].m << "\t" << lineFitSigma->GetParameter(0) << std::endl;
 		  C_new->Print(fileName.str().c_str());
-		  fOut->cd();
-                  C_new->Write();
+// 		  fOut->cd();
+//                   C_new->Write();
 		}
 	      }
 	    }

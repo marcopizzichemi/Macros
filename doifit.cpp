@@ -33,19 +33,59 @@ struct Crystal_t
 } Crystal[8];
 
 
+class point_t
+{
+public:
+  int x;
+  int y;
+  double w;
+  double z;
+  double s;
+  double sqrt_nentries;
+  
+//   void clear()
+//   {
+//     w.clear();
+//     sw.clear();
+//     sqrt_nentries.clear();
+//     z.clear();
+//     sz.clear();
+//   };
+  
+  friend std::istream& operator>>(std::istream& input, point_t& s)
+  {
+    input >> s.x; 
+    input >> s.y;           
+    input >> s.w; 
+    input >> s.z;    
+    input >> s.s; 
+    input >> s.sqrt_nentries;
+    return input;
+  }
+  
+};
+
 int main (int argc, char** argv)
 {
   std::vector<std::string> file;
-  file.push_back("./z0/doiData.txt");
-  file.push_back("./z1/doiData.txt");
-  file.push_back("./z2/doiData.txt");
-  file.push_back("./z3/doiData.txt");
-  file.push_back("./z4/doiData.txt");
-  file.push_back("./z5/doiData.txt");
-  file.push_back("./z6/doiData.txt");
-  file.push_back("./z7/doiData.txt");
-  file.push_back("./z8/doiData.txt");
-  file.push_back("./z9/doiData.txt");
+  for(int i = 1 ; i < argc ; i++)
+  {
+    std::stringstream inputStream;
+    inputStream << "./" <<  argv[i] << "/doiData.txt";
+    file.push_back(inputStream.str());
+  }
+  
+  
+//   file.push_back("./z0/doiData.txt");
+//   file.push_back("./z1/doiData.txt");
+//   file.push_back("./z2/doiData.txt");
+//   file.push_back("./z3/doiData.txt");
+//   file.push_back("./z4/doiData.txt");
+//   file.push_back("./z5/doiData.txt");
+//   file.push_back("./z6/doiData.txt");
+//   file.push_back("./z7/doiData.txt");
+//   file.push_back("./z8/doiData.txt");
+//   file.push_back("./z9/doiData.txt");
   
 //   std::vector<double> z;
 //   z.push_back(13.6);
@@ -61,15 +101,16 @@ int main (int argc, char** argv)
   {
     data[i].open(file[i].c_str());
     int counter = 0;
-    while(!data[i].eof())
+    point_t pointData;
+    while(data[i] >> pointData)
     {
-      data[i] >> x >> y >> w >> z >> s >> sqrt_nentries;
-      Crystal[counter].x.push_back(x);
-      Crystal[counter].y.push_back(y);
-      Crystal[counter].w.push_back(w);
-      Crystal[counter].z.push_back(z);
-      Crystal[counter].s.push_back(s);
-      Crystal[counter].sqrt_nentries.push_back(sqrt_nentries);
+//       data[i] >> x >> y >> w >> z >> s >> sqrt_nentries;
+      Crystal[counter].x.push_back(pointData.x);
+      Crystal[counter].y.push_back(pointData.y);
+      Crystal[counter].w.push_back(pointData.w);
+      Crystal[counter].z.push_back(pointData.z);
+      Crystal[counter].s.push_back(pointData.s);
+      Crystal[counter].sqrt_nentries.push_back(pointData.sqrt_nentries);
       counter++;
     }
   }
