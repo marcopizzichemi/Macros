@@ -33,7 +33,6 @@
 #include <unistd.h>
 
 
-//structure of input points from doi tag bench
 //class of input points from doi tag bench
 class inputDoi_t
 {
