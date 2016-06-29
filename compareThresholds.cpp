@@ -1,4 +1,4 @@
-// g++ -o ../build/compareCalibrations compareCalibrations.cpp `root-config --cflags --glibs` 
+// g++ -o ../build/compareThresholds compareThresholds.cpp `root-config --cflags --glibs` 
 // -Wl,--no-as-needed -lHist -lCore -lMathCore
 
 #include <stdio.h>
@@ -131,7 +131,7 @@ int main(int argc, char **argv)
 {
   if(argc < 6)
   {
-    std::cout << "USAGE:\t\t compareCalibrations calibration_params.txt zPositions.txt pointsFromDoi moduleCalibrationFile1.root title1 [moduleCalibrationFile2.root title2] ... [moduleCalibrationFileN.root titleN]" << std::endl;
+    std::cout << "USAGE:\t\t compareThresholds calibration_params.txt zPositions.txt pointsFromDoi moduleCalibrationFile1.root title1 [moduleCalibrationFile2.root title2] ... [moduleCalibrationFileN.root titleN]" << std::endl;
     std::cout << std::endl;
     return 1;
   }
@@ -159,14 +159,7 @@ int main(int argc, char **argv)
     dataset.push_back(a);
     color++;
   }
-  //   std::cout << "aaa" << std::endl;
-  //   data_t a("/home/marco/Universita/NewClearPEM/Experiments/HardDepo2/calibration_paper/background_good/Run_2016_13_04_11_37_39/nearChannels.root","background",2);
-  //   data_t b("/home/marco/Universita/NewClearPEM/Experiments/HardDepo2/calibration_paper/lateral/Run_2016_05_04_08_48_47/nearChannels.root","lateral",3);
-  //   data_t c("/home/marco/Universita/NewClearPEM/Experiments/HardDepo2/calibration_paper/top/Run_2016_05_04_11_59_20/nearChannels.root","top",4);
-  //   
-  //   dataset.push_back(a);
-  //   dataset.push_back(b);
-  //   dataset.push_back(c);
+  
   
   std::vector<TFile*> file;
   for(int i = 0 ; i < dataset.size(); i++)
@@ -176,24 +169,7 @@ int main(int argc, char **argv)
   }
   
   
-  //   while(!fZPos.eof()) //file z_positions_etc
-  //   {
-  //     int a,b;
-  //     inputZ_t tempInput(pointsFromDoi);
-  //     
-  //     fZPos >> tempInput.i >> tempInput.j;
-  //     for(int k = 0 ; k < pointsFromDoi ; k++)
-  //     {
-  //       double value;
-  //       fZPos >> value;
-  //       tempInput.z.push_back(value);
-  //     }
-  //     
-  // //     if(!fZPos.eof())
-  // //     {
-  //       inputZ.push_back(tempInput);
-  // //     }
-  //   }
+  
   inputZ_t tempInput(pointsFromDoi);
   while(fZPos >> tempInput)
   {
@@ -201,49 +177,7 @@ int main(int argc, char **argv)
     tempInput.clear();
   }
   
-  //   double TagOffset = 1.4;
-  //   while(!fDoiTag.eof()) //file calibration_params_etc.. One line per crystal
-  //   {
-  //     int a,b;
-  //     inputDoi_t tempInput;
-  //     
-  //     
-  //     fDoiTag >> tempInput.i >> tempInput.j >>tempInput.m >> tempInput.q >> tempInput.doires >> tempInput.avgs;
-  //     
-  //     //     tempInput.q = tempInput.q /*+ TagOffset*/; //until we properly characterize the alignment of the tagging setup and modify the z positions at source, we use this temporary evaluation of the offset between the aligment of the x-y-z stage scale that we thought was correct and the one that we derive from the fine analisys of the tagging setup
-  //     
-  //     for(int k = 0 ; k < pointsFromDoi ; k++)
-  //     {
-  //       double w,sw,sqrt_nentries;
-  //       fDoiTag >> w >> sw >> sqrt_nentries;  
-  //       tempInput.w.push_back(w);
-  //       tempInput.sw.push_back(sw);
-  //       tempInput.sqrt_nentries.push_back(sqrt_nentries);
-  //       //tempInput.z[k] = z[k] + TagOffset; //until we properly characterize the alignment of the tagging setup and modify the z positions at source, we use this temporary evaluation of the offset between the aligment of the x-y-z stage scale that we thought was correct and the one that we derive from the fine analisys of the tagging setup
-  //       //tempInput.sz[k] = sz[k];
-  //     }
-  //     
-  //     
-  //     for(int k = 0; k < inputZ.size(); k++)
-  //     {
-  //       if(tempInput.i == inputZ[k].i && tempInput.j == inputZ[k].j)
-  //       {
-  // 	for(int h = 0 ; h < pointsFromDoi ; h++)
-  // 	{
-  // 	  tempInput.z.push_back(inputZ[k].z[h]);
-  // 	  tempInput.sz.push_back(0.2); //FIXME what is the correct value?
-  // 	}
-  //       }
-  //     }
-  //     
-  //     
-  //     if(!fDoiTag.eof())
-  //     {
-  //       inputDoi.push_back(tempInput);
-  //     }
-  //   }
-  
-  //   
+   
   
   inputDoi_t tempInputDoi(pointsFromDoi);
   while(fDoiTag >> tempInputDoi)
@@ -268,27 +202,27 @@ int main(int argc, char **argv)
   
   
   
-  //DEBUG
-  std::cout << "InputZ -------------" << std::endl;
-  for(int i = 0; i < inputZ.size(); i++)
-  {
-    std::cout << inputZ[i].i << " " << inputZ[i].j << " ";
-    for(int j = 0 ; j < inputZ[i].z.size(); j++)
-      std::cout << inputZ[i].z[j] << " ";
-    std::cout << std::endl;
-  }
-  std::cout << "-------------" << std::endl;
-  std::cout << std::endl;
-  std::cout << "InputDoi ------------" << std::endl;
-  for(int i = 0; i < inputDoi.size(); i++)
-  {
-    std::cout << inputDoi[i].i << " " << inputDoi[i].j << " " << inputDoi[i].m << " " << inputDoi[i].q << " " << inputDoi[i].doires << " " << inputDoi[i].avgs << " ";
-    for(int j = 0 ; j < inputDoi[i].z.size(); j++)
-      std::cout << inputDoi[i].w[j] << " "<< inputDoi[i].sw[j] << " " << inputDoi[i].sqrt_nentries[j] << " "<< inputDoi[i].z[j] << " " << inputDoi[i].sz[j] << " ";
-    std::cout << std::endl;
-  }
-  std::cout << "-------------" << std::endl;
-  //----DEBUG
+//   //DEBUG
+//   std::cout << "InputZ -------------" << std::endl;
+//   for(int i = 0; i < inputZ.size(); i++)
+//   {
+//     std::cout << inputZ[i].i << " " << inputZ[i].j << " ";
+//     for(int j = 0 ; j < inputZ[i].z.size(); j++)
+//       std::cout << inputZ[i].z[j] << " ";
+//     std::cout << std::endl;
+//   }
+//   std::cout << "-------------" << std::endl;
+//   std::cout << std::endl;
+//   std::cout << "InputDoi ------------" << std::endl;
+//   for(int i = 0; i < inputDoi.size(); i++)
+//   {
+//     std::cout << inputDoi[i].i << " " << inputDoi[i].j << " " << inputDoi[i].m << " " << inputDoi[i].q << " " << inputDoi[i].doires << " " << inputDoi[i].avgs << " ";
+//     for(int j = 0 ; j < inputDoi[i].z.size(); j++)
+//       std::cout << inputDoi[i].w[j] << " "<< inputDoi[i].sw[j] << " " << inputDoi[i].sqrt_nentries[j] << " "<< inputDoi[i].z[j] << " " << inputDoi[i].sz[j] << " ";
+//     std::cout << std::endl;
+//   }
+//   std::cout << "-------------" << std::endl;
+//   //----DEBUG
   
   //output file
   std::stringstream fOutName;
@@ -314,12 +248,7 @@ int main(int argc, char **argv)
   //all 64 curves - prepare canvases
   //   int nCurves = nmodulex*nmoduley*nmppcx*nmppcy*ncrystalsx*ncrystalsy;
   int nCurves = inputDoi.size();
-  //   std::vector<TCanvas *> C_curves;
-  //   std::vector<TMultiGraph *> curves;
-  //   for(int i = 0 ; i < nCurves ; i++)
-  //   {
-  //     
-  //   }
+  
   
   //doi precision
   std::vector<TH1F*> histDoiPrecision;
@@ -387,7 +316,7 @@ int main(int argc, char **argv)
 		int j = inputDoi[k].j;
 		if(iCrystal == i && jCrystal == j)
 		{
-		  std::cout << i << " " << j << " " << crystalNumber<< std::endl;
+// 		  std::cout << i << " " << j << " " << crystalNumber<< std::endl;
 		  //prepare the temp canvas and multigraph
 		  std::stringstream title;
 		  title << "Curves - Crystal " << crystalNumber;
@@ -407,6 +336,9 @@ int main(int argc, char **argv)
 	      }
 	      // 	      std::cout << "aaaaaaa" << std::endl;
 	      //if no points where found, stop
+	      
+// 	      TGraph *Nentries = new TGraph();
+	      
 	      if(points != NULL)
 	      {
 		//draw the curves
@@ -422,6 +354,7 @@ int main(int argc, char **argv)
 		  if(dir_exists)
 		  {
 		    //take the graph
+		    double meanError = 0;
 		    std::stringstream stream;
 		    stream << "Calibration Plot - Crystal " << crystalNumber;
 		    C_graph = (TCanvas*) gDirectory->Get(stream.str().c_str());
@@ -440,6 +373,7 @@ int main(int argc, char **argv)
 		      {
 			histDoiPrecision_central[i]->Fill(calibGraph->Eval(xPoint)-yPoint);
 		      }
+		      meanError += (calibGraph->Eval(xPoint)-yPoint) / pointsFromDoi;
 		      // 		    totalDelta += calibGraph->Eval(xPoint) - yPoint;
 		      // 		    histLinePrecision->Fill(lineTag->Eval(xPoint)-yPoint);
 		    }
@@ -464,7 +398,7 @@ int main(int argc, char **argv)
 			  maxBound = (crystaLenght/10000)*step;
 		      }
 		    }
-		    std::cout << minBound << " " << maxBound << std::endl;
+// 		    std::cout << minBound << " " << maxBound << std::endl;
 		    TF1 *lineFitSigma = new TF1("lineFitSigma","[0]*x + [1]",minBound,maxBound);
 		    // 		  lineFitSigma->SetLineColor(4);
 		    // 		  calibGraph->Draw("AL");
@@ -477,18 +411,37 @@ int main(int argc, char **argv)
 		    mg->Add(calibGraph,"L");
 		    legend->AddEntry(calibGraph,dataset[i].title.c_str(),"l");
 		    
-		    //numb of events
-// 		    stream.str("");
-// 		    stream << "Charge Spectrum Corrected - Crystal " << crystalNumber;
-// 		    TCanvas *C_canvas;
-// 		    TH1F* histo;
-// 		    C_canvas = (TCanvas*) gDirectory->Get(stream.str().c_str());
-// 		    if(C_graph) 
-// 		      histo = (TH1F*) C_graph->GetPrimitive(stream.str().c_str());
-// 		    if(histo)
-// 		    {
-// 		      
-// 		    }
+// 		    numb of events
+// 		    Nentries = new TGraph();
+		    
+		    stream.str("");
+		    stream << "Charge Spectrum Corrected - Crystal " << crystalNumber;
+		    TCanvas *C_canvas;
+		    TH1F* histo;
+		    TH1F* histoHg;
+		    TF1* fGauss;
+		    C_canvas = (TCanvas*) gDirectory->Get(stream.str().c_str());
+		    stream.str("");
+		    if(C_canvas)
+		    {
+// 		      std::cout << "in" << std::endl;
+		      stream << "Charge Spectrum Corrected - Crystal " << crystalNumber;
+		      histo = (TH1F*) C_canvas->GetPrimitive(stream.str().c_str());
+		      stream.str("");
+		      stream << "Hg Charge Spectrum Correctd - Crystal " << crystalNumber;
+		      histoHg = (TH1F*) C_canvas->GetPrimitive(stream.str().c_str());
+		      stream.str("");
+		      stream << "gauss_corr - Crystal " << crystalNumber << " - MPPC "<< letter[jMppc] << number[iMppc];
+		      fGauss = (TF1*) C_canvas->GetPrimitive(stream.str().c_str());
+		      stream.str("");
+		      
+		    }
+		    
+		    if(histo && histoHg && fGauss)
+		    {
+// 		      Nentries->SetPoint(i,i,histo->GetEntries());
+		      std::cout << i << " " <<   histo->GetEntries() << " " << histoHg->GetEntries() << " " << (fGauss->GetParameter(2)*2.355)/(fGauss->GetParameter(1)) << " " << fGauss->GetParameter(1) << " " << fGauss->Integral(fGauss->GetParameter(1)- 2.0*fGauss->GetParameter(2),fGauss->GetParameter(1)+ 2.0*fGauss->GetParameter(2)) << " " << meanError << std::endl;
+		    }
 		    //numb of events in p.e. peak
 		    
 		    //energy res
@@ -500,7 +453,9 @@ int main(int argc, char **argv)
 		  }
 		  
 		}
+		
 		fOut->cd();
+// 		if(Nentries) Nentries->Write(); 
 		temp->cd();
 		// 		std::cout << directory.str() << std::endl;
 		// 		gPad->Update();
@@ -521,13 +476,13 @@ int main(int argc, char **argv)
 		
 		
 		//comparisons part
-		for(int i = 0 ; i < dataset.size() - 1; i++)
-		{  
-		  for(int j = i+1 ; j < dataset.size(); j++)
-		  {
-		    std::cout << dataset[i].title << " - " << dataset[j].title << std::endl;
-		  }
-		}
+// 		for(int i = 0 ; i < dataset.size() - 1; i++)
+// 		{  
+// 		  for(int j = i+1 ; j < dataset.size(); j++)
+// 		  {
+// 		    std::cout << dataset[i].title << " - " << dataset[j].title << std::endl;
+// 		  }
+// 		}
 		
 		// 		curveNumber++;
 	      }
@@ -547,7 +502,7 @@ int main(int argc, char **argv)
   //     
   
   
-  TGraph *mean = new TGraph();
+//   TGraph *mean = new TGraph();
   
   fOut->cd();
   for(int i = 0 ; i < dataset.size() ; i++)
@@ -555,9 +510,9 @@ int main(int argc, char **argv)
     
     histDoiPrecision[i]->Write();  
     histDoiPrecision_central[i]->Write();
-    mean->SetPoint(i,i,histDoiPrecision_central[i]->GetMean());
+//     mean->SetPoint(i,i,histDoiPrecision_central[i]->GetMean());
   }
-  mean->Write();
+//   mean->Write();
   
   TCanvas *C_allHisto = new TCanvas("Precision Comparison","Precision Comparison",1200,800);
   TLegend* legend;

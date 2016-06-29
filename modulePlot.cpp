@@ -120,7 +120,7 @@ int main(int argc, char **argv)
 {
   if(argc < 5)
   {
-    std::cout << "USAGE:\t\t modulePlot moduleCalibration.root doiTagPoints.txt zPositions.txt pointsFromDoi [isBackgroudRun]" << std::endl;
+    std::cout << "USAGE:\t\t modulePlot moduleCalibration.root doiTagPoints.txt zPositions.txt pointsFromDoi [isBackgroudRun] [outputFileName]" << std::endl;
     std::cout << std::endl;
     return 1;
   }
@@ -129,7 +129,7 @@ int main(int argc, char **argv)
   TFile *f = new TFile(argv[1]);
   f->cd("Module 0.0");
   
-  TFile *fOut = new TFile("output.root","RECREATE");
+  
   //file with doi tag m, q and points per crystal
   std::ifstream fDoiTag;
   fDoiTag.open(argv[2],std::ios::in);
@@ -148,6 +148,11 @@ int main(int argc, char **argv)
   bool isBackgroudRun = 0;
   if(argc > 5)
     isBackgroudRun = atoi(argv[5]);
+  
+  TString outputFileName = "output.root";
+  if(argc > 6)
+    outputFileName = argv[6];
+  TFile *fOut = new TFile(outputFileName,"RECREATE");
   
   std::vector<inputDoi_t> inputDoi;
   std::vector<inputZ_t> inputZ;
@@ -179,19 +184,19 @@ int main(int argc, char **argv)
   
   
   //DEBUG  
-  for(int i = 0 ; i < inputZ.size() ; i++)
-  {
-    std::cout << inputZ[i].i << " " << inputZ[i].j;
-    for(int k = 0 ; k < pointsFromDoi ; k++)
-    {
-      std::cout << " " << inputZ[i].z[k];
-    }
-    
-    std::cout << std::endl;
-  }
-
-  std::cout << std::endl;
-  std::cout << std::endl;
+//   for(int i = 0 ; i < inputZ.size() ; i++)
+//   {
+//     std::cout << inputZ[i].i << " " << inputZ[i].j;
+//     for(int k = 0 ; k < pointsFromDoi ; k++)
+//     {
+//       std::cout << " " << inputZ[i].z[k];
+//     }
+//     
+//     std::cout << std::endl;
+//   }
+// 
+//   std::cout << std::endl;
+//   std::cout << std::endl;
 
 //   double TagOffset = 2; // offset of tag derived by analisys of tagging bench. NOT USED ANYMORE
   //until we properly characterize the alignment of the tagging setup and modify the z positions at source, we use this temporary evaluation of the offset between the aligment of the x-y-z stage scale that we thought was correct and the one that we derive from the fine analisys of the tagging setup
@@ -260,27 +265,27 @@ int main(int argc, char **argv)
   fDoiTag.close();
   
 // DEBUG
-  for(int i = 0 ; i < inputDoi.size() ; i++)
-  {
-    std::cout << inputDoi[i].i << " " << inputDoi[i].j << " " << inputDoi[i].m << " " << inputDoi[i].q << " ";
-    for(int k = 0 ; k < pointsFromDoi ; k++)
-    {
-      std::cout << inputDoi[i].w[k] << " " << inputDoi[i].sw[k] << " ";
-      std::cout << inputDoi[i].z[k] << " " << inputDoi[i].sz[k] << " ";
-    }
-    
-    std::cout << std::endl;
-  }
+//   for(int i = 0 ; i < inputDoi.size() ; i++)
+//   {
+//     std::cout << inputDoi[i].i << " " << inputDoi[i].j << " " << inputDoi[i].m << " " << inputDoi[i].q << " ";
+//     for(int k = 0 ; k < pointsFromDoi ; k++)
+//     {
+//       std::cout << inputDoi[i].w[k] << " " << inputDoi[i].sw[k] << " ";
+//       std::cout << inputDoi[i].z[k] << " " << inputDoi[i].sz[k] << " ";
+//     }
+//     
+//     std::cout << std::endl;
+//   }
 
   
   
   
   
-  struct stat st = {0};
-
-  if (stat("./plots/", &st) == -1) {
-    mkdir("./plots/", 0700);
-  }
+//   struct stat st = {0};
+// 
+//   if (stat("./plots/", &st) == -1) {
+//     mkdir("./plots/", 0700);
+//   }
   
 //   for(int i = 0 ; i < 8 ; i++)
 //   {
@@ -343,206 +348,206 @@ int main(int argc, char **argv)
   //-----------------------------//
   
 //   isBackgroudRun = true;//FIXME now hardcoded to true since this program is meant to analyze just the doi calibration
-  if(!isBackgroudRun)
-  {
-    TCanvas *c;/* = (TCanvas*) gDirectory->Get("Energy res FWHM vs. i,j");*/
-    TCanvas *cc;
-    TH2F *spectrum2d;
-    TH1F* all;
-    TH1F* central;
-    THStack* hs;
-    TLegend* legend;
-    double sumEN_corr = 0;
-    double stdEN_corr = 0;
-    double sumLO = 0;
-    double stdLO = 0;
-    
-    f->cd("Module 0.0");
-    
-    c = (TCanvas*) gDirectory->Get("Corrected Energy res FWHM vs. i,j");
-    
-    spectrum2d = new TH2F();
-    spectrum2d = (TH2F*)c->GetPrimitive("Corrected Energy res FWHM vs. i,j");
-    all = new TH1F("Corrected Energy res FWHM","",250,0,0.5);
-    all->GetXaxis()->SetTitle("Corrected Energy Resolution FWHM");
-    all->SetName("Corrected Energy Resolution FWHM");
-    //   all->GetYaxis()->SetTitle("N");
-    all->SetStats(0);
-    central = new TH1F("central","",250,0,0.5);
-    //   all->GetYaxis()->SetTitle("N");
-    central->SetStats(0);
-    central->SetFillStyle(3001);
-    central->SetFillColor(kRed);
-    
-    for(int i = 0 ; i < 8 ; i++)
-    {
-      for(int j = 0 ; j < 8 ; j++)
-      {
-	if(i > 1 && i < 6 && j > 1 && j < 6)
-	{
-	  central->Fill(spectrum2d->GetBinContent(i+1,j+1));
-	  sumEN_corr += spectrum2d->GetBinContent(i+1,j+1);
-	}
-	all->Fill(spectrum2d->GetBinContent(i+1,j+1));
-      } 
-    }
-    hs = new THStack("hs","");
-    double averageEN_corr = sumEN_corr/16 ;
-    
-    for(int i = 0 ; i < 8 ; i++)
-    {
-      for(int j = 0 ; j < 8 ; j++)
-      {
-	if(i > 1 && i < 6 && j > 1 && j < 6)
-	{
-	  stdEN_corr += (1.0/16.0)*sqrt(pow(spectrum2d->GetBinContent(i+1,j+1)-averageEN_corr,2));
-	}
-      }
-    }
-    cc = new TCanvas("cc","",1200,800);
-    all->SetFillStyle(3001);
-    all->SetFillColor(kBlue);
-    cc->cd();
-    hs->Add(all);
-    hs->Add(central);
-    //   all->Draw();
-    //   central->Draw("same");
-    legend = new TLegend(0.5,0.62,0.893,0.89,"");
-    legend->SetFillStyle(0);
-    legend->AddEntry(all,"All channels","f");
-    legend->AddEntry(central,"Central channels","f");
-    hs->Draw("nostack");
-    hs->GetXaxis()->SetTitle("Energy Resolution FWHM");
-    hs->GetXaxis()->SetTitleOffset(1);
-    hs->GetXaxis()->SetTitleSize(0.045);
-    hs->GetXaxis()->SetLabelSize(0.045);
-    hs->GetYaxis()->SetLabelSize(0.045);
-    legend->Draw();
-    
-    spectrum2d->GetYaxis()->SetTitleOffset(1.8);
-    spectrum2d->GetXaxis()->SetTitleOffset(1.5);
-    spectrum2d->GetZaxis()->SetTitleOffset(1.7);
-    spectrum2d->GetXaxis()->SetLabelSize(0.045);
-    spectrum2d->GetYaxis()->SetLabelSize(0.045);
-    spectrum2d->GetZaxis()->SetLabelSize(0.045);
-    spectrum2d->GetYaxis()->SetTitleSize(0.045);
-    spectrum2d->GetXaxis()->SetTitleSize(0.045);
-    spectrum2d->GetZaxis()->SetTitleSize(0.045);
-    spectrum2d->GetXaxis()->SetNdivisions(8,2,0, kTRUE);
-    spectrum2d->GetYaxis()->SetNdivisions(8,2,0, kTRUE);
-    
-    TCanvas *cenergyResolution2DCorrected = new TCanvas("cenergyResolution2DCorrected","cenergyResolution2DCorrected",800,800);
-    cenergyResolution2DCorrected->SetLeftMargin(0.16);
-    spectrum2d->Draw("LEGO2");
-    cenergyResolution2DCorrected->Print("./plots/energyResolution2DCorrected.png");
-    cc->Print("./plots/energyResolutionCorrected.png");
-    fOut->cd();
-    cc->Write();
-    delete spectrum2d;
-    delete all;
-    delete central;
-    delete hs;
-    delete cc;
-    delete legend;
-    
-    
-    //-----------------------------//
-    //         Photopeaks
-    //-----------------------------//
-    f->cd("Module 0.0");
-    TCanvas *c2 = (TCanvas*) gDirectory->Get("Photopeak positions vs. i,j");
-    
-    spectrum2d = (TH2F*)c2->GetPrimitive("Photopeak positions vs. i,j");
-    all = new TH1F("all","",100,0,12000);
-    all->GetXaxis()->SetTitle("Photopeak Position [ADC Channels]");
-    //all->GetXaxis()->SetLabelSize(0.5);
-    all->SetName("511 KeV Photopeak Position");
-    //   all->GetYaxis()->SetTitle("N");
-    all->SetStats(0);
-    central = new TH1F("central","",100,0,12000);
-    //   all->GetYaxis()->SetTitle("N");
-    central->SetStats(0);
-    central->SetFillStyle(3001);
-    central->SetFillColor(kRed);
-    
-    for(int i = 0 ; i < 8 ; i++)
-    {
-      for(int j = 0 ; j < 8 ; j++)
-      {
-	if(i > 1 && i < 6 && j > 1 && j < 6)
-	{
-	  central->Fill(spectrum2d->GetBinContent(i+1,j+1));
-	  sumLO += spectrum2d->GetBinContent(i+1,j+1);
-	}
-	all->Fill(spectrum2d->GetBinContent(i+1,j+1));
-      } 
-    }
-    hs = new THStack("hs","");
-    double averageLO = sumLO/16 ;
-    
-    for(int i = 0 ; i < 8 ; i++)
-    {
-      for(int j = 0 ; j < 8 ; j++)
-      {
-	if(i > 1 && i < 6 && j > 1 && j < 6)
-	{
-	  stdLO += (1.0/16.0)*sqrt(pow(spectrum2d->GetBinContent(i+1,j+1)-averageLO,2));
-	}
-      }
-    }
-    
-    cc = new TCanvas("cc","",1200,800);
-    all->SetFillStyle(3001);
-    all->SetFillColor(kBlue);
-    cc->cd();
-    hs->Add(all);
-    hs->Add(central);
-    //   all->Draw();
-    //   central->Draw("same");
-    legend = new TLegend(0.15,0.62,0.54,0.89,"");
-    legend->SetFillStyle(0);
-    legend->AddEntry(all,"All channels","f");
-    legend->AddEntry(central,"Central channels","f");
-    hs->Draw("nostack");
-    hs->GetXaxis()->SetTitle("ADC Channels");
-    hs->GetXaxis()->SetTitleOffset(1);
-    hs->GetXaxis()->SetTitleSize(0.045);
-    hs->GetXaxis()->SetLabelSize(0.045);
-    hs->GetYaxis()->SetLabelSize(0.045);
-    //hs->GetXaxis()->SetTickSize(0.08);
-    legend->Draw();
-    
-    spectrum2d->GetYaxis()->SetTitleOffset(1.8);
-    spectrum2d->GetXaxis()->SetTitleOffset(1.5);
-    spectrum2d->GetZaxis()->SetTitleOffset(2.1);
-    spectrum2d->GetXaxis()->SetLabelSize(0.045);
-    spectrum2d->GetYaxis()->SetLabelSize(0.045);
-    spectrum2d->GetZaxis()->SetLabelSize(0.045);
-    spectrum2d->GetYaxis()->SetTitleSize(0.045);
-    spectrum2d->GetXaxis()->SetTitleSize(0.045);
-    spectrum2d->GetZaxis()->SetTitleSize(0.045);
-    spectrum2d->GetXaxis()->SetNdivisions(8,2,0, kTRUE);
-    spectrum2d->GetYaxis()->SetNdivisions(8,2,0, kTRUE);
-    
-    TCanvas *clightOutput2D = new TCanvas("clightOutput2D","clightOutput2D",800,800);
-    clightOutput2D->SetLeftMargin(0.18);
-    spectrum2d->Draw("LEGO2");   
-    clightOutput2D->Print("./plots/lightOutput2D.png");
-    cc->Print("./plots/lightOutput.png");
-    fOut->cd();
-    cc->Write();
-    delete spectrum2d;
-    delete all;
-    delete central;
-    delete hs;
-    delete cc;
-    delete c2;
-    delete legend;
-    
-    
-    std::cout << "En. Res Corrected Central Channels [FWHM] = " << sumEN_corr/16 << " +/- " << stdEN_corr << std::endl;
-    std::cout << "Light Output Central Channels [ADC Ch.] = " << sumLO/16 << " +/- " << stdLO << std::endl;
-  }
+//   if(!isBackgroudRun)
+//   {
+//     TCanvas *c;/* = (TCanvas*) gDirectory->Get("Energy res FWHM vs. i,j");*/
+//     TCanvas *cc;
+//     TH2F *spectrum2d;
+//     TH1F* all;
+//     TH1F* central;
+//     THStack* hs;
+//     TLegend* legend;
+//     double sumEN_corr = 0;
+//     double stdEN_corr = 0;
+//     double sumLO = 0;
+//     double stdLO = 0;
+//     
+//     f->cd("Module 0.0");
+//     
+//     c = (TCanvas*) gDirectory->Get("Corrected Energy res FWHM vs. i,j");
+//     
+//     spectrum2d = new TH2F();
+//     spectrum2d = (TH2F*)c->GetPrimitive("Corrected Energy res FWHM vs. i,j");
+//     all = new TH1F("Corrected Energy res FWHM","",250,0,0.5);
+//     all->GetXaxis()->SetTitle("Corrected Energy Resolution FWHM");
+//     all->SetName("Corrected Energy Resolution FWHM");
+//     //   all->GetYaxis()->SetTitle("N");
+//     all->SetStats(0);
+//     central = new TH1F("central","",250,0,0.5);
+//     //   all->GetYaxis()->SetTitle("N");
+//     central->SetStats(0);
+//     central->SetFillStyle(3001);
+//     central->SetFillColor(kRed);
+//     
+//     for(int i = 0 ; i < 8 ; i++)
+//     {
+//       for(int j = 0 ; j < 8 ; j++)
+//       {
+// 	if(i > 1 && i < 6 && j > 1 && j < 6)
+// 	{
+// 	  central->Fill(spectrum2d->GetBinContent(i+1,j+1));
+// 	  sumEN_corr += spectrum2d->GetBinContent(i+1,j+1);
+// 	}
+// 	all->Fill(spectrum2d->GetBinContent(i+1,j+1));
+//       } 
+//     }
+//     hs = new THStack("hs","");
+//     double averageEN_corr = sumEN_corr/16 ;
+//     
+//     for(int i = 0 ; i < 8 ; i++)
+//     {
+//       for(int j = 0 ; j < 8 ; j++)
+//       {
+// 	if(i > 1 && i < 6 && j > 1 && j < 6)
+// 	{
+// 	  stdEN_corr += (1.0/16.0)*sqrt(pow(spectrum2d->GetBinContent(i+1,j+1)-averageEN_corr,2));
+// 	}
+//       }
+//     }
+//     cc = new TCanvas("cc","",1200,800);
+//     all->SetFillStyle(3001);
+//     all->SetFillColor(kBlue);
+//     cc->cd();
+//     hs->Add(all);
+//     hs->Add(central);
+//     //   all->Draw();
+//     //   central->Draw("same");
+//     legend = new TLegend(0.5,0.62,0.893,0.89,"");
+//     legend->SetFillStyle(0);
+//     legend->AddEntry(all,"All channels","f");
+//     legend->AddEntry(central,"Central channels","f");
+//     hs->Draw("nostack");
+//     hs->GetXaxis()->SetTitle("Energy Resolution FWHM");
+//     hs->GetXaxis()->SetTitleOffset(1);
+//     hs->GetXaxis()->SetTitleSize(0.045);
+//     hs->GetXaxis()->SetLabelSize(0.045);
+//     hs->GetYaxis()->SetLabelSize(0.045);
+//     legend->Draw();
+//     
+//     spectrum2d->GetYaxis()->SetTitleOffset(1.8);
+//     spectrum2d->GetXaxis()->SetTitleOffset(1.5);
+//     spectrum2d->GetZaxis()->SetTitleOffset(1.7);
+//     spectrum2d->GetXaxis()->SetLabelSize(0.045);
+//     spectrum2d->GetYaxis()->SetLabelSize(0.045);
+//     spectrum2d->GetZaxis()->SetLabelSize(0.045);
+//     spectrum2d->GetYaxis()->SetTitleSize(0.045);
+//     spectrum2d->GetXaxis()->SetTitleSize(0.045);
+//     spectrum2d->GetZaxis()->SetTitleSize(0.045);
+//     spectrum2d->GetXaxis()->SetNdivisions(8,2,0, kTRUE);
+//     spectrum2d->GetYaxis()->SetNdivisions(8,2,0, kTRUE);
+//     
+//     TCanvas *cenergyResolution2DCorrected = new TCanvas("cenergyResolution2DCorrected","cenergyResolution2DCorrected",800,800);
+//     cenergyResolution2DCorrected->SetLeftMargin(0.16);
+//     spectrum2d->Draw("LEGO2");
+// //     cenergyResolution2DCorrected->Print("./plots/energyResolution2DCorrected.png");
+// //     cc->Print("./plots/energyResolutionCorrected.png");
+//     fOut->cd();
+//     cc->Write();
+//     delete spectrum2d;
+//     delete all;
+//     delete central;
+//     delete hs;
+//     delete cc;
+//     delete legend;
+//     
+//     
+//     //-----------------------------//
+//     //         Photopeaks
+//     //-----------------------------//
+//     f->cd("Module 0.0");
+//     TCanvas *c2 = (TCanvas*) gDirectory->Get("Photopeak positions vs. i,j");
+//     
+//     spectrum2d = (TH2F*)c2->GetPrimitive("Photopeak positions vs. i,j");
+//     all = new TH1F("all","",100,0,12000);
+//     all->GetXaxis()->SetTitle("Photopeak Position [ADC Channels]");
+//     //all->GetXaxis()->SetLabelSize(0.5);
+//     all->SetName("511 KeV Photopeak Position");
+//     //   all->GetYaxis()->SetTitle("N");
+//     all->SetStats(0);
+//     central = new TH1F("central","",100,0,12000);
+//     //   all->GetYaxis()->SetTitle("N");
+//     central->SetStats(0);
+//     central->SetFillStyle(3001);
+//     central->SetFillColor(kRed);
+//     
+//     for(int i = 0 ; i < 8 ; i++)
+//     {
+//       for(int j = 0 ; j < 8 ; j++)
+//       {
+// 	if(i > 1 && i < 6 && j > 1 && j < 6)
+// 	{
+// 	  central->Fill(spectrum2d->GetBinContent(i+1,j+1));
+// 	  sumLO += spectrum2d->GetBinContent(i+1,j+1);
+// 	}
+// 	all->Fill(spectrum2d->GetBinContent(i+1,j+1));
+//       } 
+//     }
+//     hs = new THStack("hs","");
+//     double averageLO = sumLO/16 ;
+//     
+//     for(int i = 0 ; i < 8 ; i++)
+//     {
+//       for(int j = 0 ; j < 8 ; j++)
+//       {
+// 	if(i > 1 && i < 6 && j > 1 && j < 6)
+// 	{
+// 	  stdLO += (1.0/16.0)*sqrt(pow(spectrum2d->GetBinContent(i+1,j+1)-averageLO,2));
+// 	}
+//       }
+//     }
+//     
+//     cc = new TCanvas("cc","",1200,800);
+//     all->SetFillStyle(3001);
+//     all->SetFillColor(kBlue);
+//     cc->cd();
+//     hs->Add(all);
+//     hs->Add(central);
+//     //   all->Draw();
+//     //   central->Draw("same");
+//     legend = new TLegend(0.15,0.62,0.54,0.89,"");
+//     legend->SetFillStyle(0);
+//     legend->AddEntry(all,"All channels","f");
+//     legend->AddEntry(central,"Central channels","f");
+//     hs->Draw("nostack");
+//     hs->GetXaxis()->SetTitle("ADC Channels");
+//     hs->GetXaxis()->SetTitleOffset(1);
+//     hs->GetXaxis()->SetTitleSize(0.045);
+//     hs->GetXaxis()->SetLabelSize(0.045);
+//     hs->GetYaxis()->SetLabelSize(0.045);
+//     //hs->GetXaxis()->SetTickSize(0.08);
+//     legend->Draw();
+//     
+//     spectrum2d->GetYaxis()->SetTitleOffset(1.8);
+//     spectrum2d->GetXaxis()->SetTitleOffset(1.5);
+//     spectrum2d->GetZaxis()->SetTitleOffset(2.1);
+//     spectrum2d->GetXaxis()->SetLabelSize(0.045);
+//     spectrum2d->GetYaxis()->SetLabelSize(0.045);
+//     spectrum2d->GetZaxis()->SetLabelSize(0.045);
+//     spectrum2d->GetYaxis()->SetTitleSize(0.045);
+//     spectrum2d->GetXaxis()->SetTitleSize(0.045);
+//     spectrum2d->GetZaxis()->SetTitleSize(0.045);
+//     spectrum2d->GetXaxis()->SetNdivisions(8,2,0, kTRUE);
+//     spectrum2d->GetYaxis()->SetNdivisions(8,2,0, kTRUE);
+//     
+//     TCanvas *clightOutput2D = new TCanvas("clightOutput2D","clightOutput2D",800,800);
+//     clightOutput2D->SetLeftMargin(0.18);
+//     spectrum2d->Draw("LEGO2");   
+// //     clightOutput2D->Print("./plots/lightOutput2D.png");
+// //     cc->Print("./plots/lightOutput.png");
+//     fOut->cd();
+//     cc->Write();
+//     delete spectrum2d;
+//     delete all;
+//     delete central;
+//     delete hs;
+//     delete cc;
+//     delete c2;
+//     delete legend;
+//     
+//     
+//     std::cout << "En. Res Corrected Central Channels [FWHM] = " << sumEN_corr/16 << " +/- " << stdEN_corr << std::endl;
+//     std::cout << "Light Output Central Channels [ADC Ch.] = " << sumLO/16 << " +/- " << stdLO << std::endl;
+//   }
   
   
   //DOI plots
@@ -564,8 +569,8 @@ int main(int argc, char **argv)
   TH1F *histDoiPrecision = new TH1F("histDoiPrecision","histDoiPrecision",40,-5,5);
   TH1F *histLinePrecision = new TH1F("histLinePrecision","histLinePrecision",100,-5,5);
   
-  std::ofstream outTagFile;
-  outTagFile.open("test.dat",std::ios::out);
+//   std::ofstream outTagFile;
+//   outTagFile.open("test.dat",std::ios::out);
   
   
 //   int points = 0;
@@ -576,13 +581,10 @@ int main(int argc, char **argv)
   {
     for(int jModule = 0; jModule < nmoduley ; jModule++)
     {
-      
       for(int iMppc = 0; iMppc < nmppcx ; iMppc++)
       {
 	for(int jMppc = 0; jMppc < nmppcy ; jMppc++)
 	{
-	  
-          
 	  for(int iCry = 0; iCry < ncrystalsx ; iCry++)
 	  {
 	    for(int jCry = 0; jCry < ncrystalsy ; jCry++)
@@ -592,119 +594,104 @@ int main(int argc, char **argv)
 	      int crystalNumber = (cryI*ncrystalsx*nmppcx + cryJ);
 	      std::stringstream MppcDirStream;
 	      MppcDirStream << "MPPC " << letter[jMppc] << number[iMppc] << " - 0.0-" << iMppc << "." << jMppc;
-// 	      std::cout << MppcDirStream.str() << std::endl;
-	      
-	      
+	      // 	      std::cout << MppcDirStream.str() << std::endl;
 	      std::stringstream CrystalDirStream;
 	      CrystalDirStream << "Crystal " <<  crystalNumber;
-// 	      std::cout << CrystalDirStream.str() << std::endl;
-	      
+	      // 	      std::cout << CrystalDirStream.str() << std::endl;
 	      std::stringstream directory;
 	      directory << "Module 0.0/" << MppcDirStream.str() << "/" << CrystalDirStream.str();
 	      
-// 	      f->cd("Module 0.0");
+	      // 	      f->cd("Module 0.0");
 	      std::cout << directory.str() << std::endl;
 	      f->cd();
-	      f->cd(directory.str().c_str());
-	      
-// 	      gDirectory->cd(MppcDirStream.str().c_str());
-// 	      gDirectory->cd(CrystalDirStream.str().c_str());
+	      bool dir_exists = f->cd(directory.str().c_str());
 	      
 	      int iCrystal = (iModule*nmppcx*ncrystalsx)+(iMppc*ncrystalsx)+(iCry);
 	      int jCrystal = (jModule*nmppcy*ncrystalsy)+(jMppc*ncrystalsy)+(jCry);
-	      std::stringstream stream;
-	      stream << "Calibration Plot - Crystal " << crystalNumber;
-	      TCanvas* C_graph = (TCanvas*) gDirectory->Get(stream.str().c_str());
-	      TGraph *calibGraph = (TGraph*) C_graph->GetPrimitive(stream.str().c_str());
 	      
+	      TCanvas* C_graph; 
+	      TGraph *calibGraph;
 	      
-	      
-	      for(int k = 0; k < inputDoi.size(); k++)
+	      if(dir_exists)
 	      {
-		int i = inputDoi[k].i;
-		int j = inputDoi[k].j;
-		if(iCrystal == i && jCrystal == j)
-		{
-		  TGraphErrors *points = new TGraphErrors(pointsFromDoi,&inputDoi[k].w[0],&inputDoi[k].z[0],&inputDoi[k].sw[0],&inputDoi[k].sz[0]);
-		  TF1 *lineTag = new TF1("lineTag","[0]*x + [1]",0,1);
-		  lineTag->SetParameter(0,inputDoi[k].m);
-		  lineTag->SetParameter(1,inputDoi[k].q);
-		  points->Fit(lineTag,"QN");
-		  
-		  lineTag->SetLineColor(2);
-		  double totalDelta = 0;
-		  for(int pointNum = 0; pointNum < pointsFromDoi ; pointNum++)
+		std::stringstream stream;
+	        stream << "Calibration Plot - Crystal " << crystalNumber;
+		C_graph = (TCanvas*) gDirectory->Get(stream.str().c_str());
+		
+		if(C_graph) 
+		  calibGraph = (TGraph*) C_graph->GetPrimitive(stream.str().c_str());
+		
+		if(calibGraph)
+		  for(int k = 0; k < inputDoi.size(); k++)
 		  {
-		    double xPoint;
-		    double yPoint;
-		    points->GetPoint(pointNum,xPoint,yPoint);
-		    histDoiPrecision->Fill(calibGraph->Eval(xPoint)-yPoint);
-		    totalDelta += calibGraph->Eval(xPoint) - yPoint;
-		    histLinePrecision->Fill(lineTag->Eval(xPoint)-yPoint);
+		    int i = inputDoi[k].i;
+		    int j = inputDoi[k].j;
+		    if(iCrystal == i && jCrystal == j)
+		    {
+		      TGraphErrors *points = new TGraphErrors(pointsFromDoi,&inputDoi[k].w[0],&inputDoi[k].z[0],&inputDoi[k].sw[0],&inputDoi[k].sz[0]);
+		      TF1 *lineTag = new TF1("lineTag","[0]*x + [1]",0,1);
+		      lineTag->SetParameter(0,inputDoi[k].m);
+		      lineTag->SetParameter(1,inputDoi[k].q);
+		      points->Fit(lineTag,"QN");
+		      
+		      lineTag->SetLineColor(2);
+		      double totalDelta = 0;
+		      for(int pointNum = 0; pointNum < pointsFromDoi ; pointNum++)
+		      {
+			double xPoint;
+			double yPoint;
+			points->GetPoint(pointNum,xPoint,yPoint);
+			histDoiPrecision->Fill(calibGraph->Eval(xPoint)-yPoint);
+			totalDelta += calibGraph->Eval(xPoint) - yPoint;
+			histLinePrecision->Fill(lineTag->Eval(xPoint)-yPoint);
+		      }
+		      diff2d->Fill(i,j,totalDelta/pointsFromDoi);
+		      TCanvas* C_new = new TCanvas(stream.str().c_str(),stream.str().c_str(),1200,800);
+		      
+		      double crystaLenght = 15.0; //FIXME hardcoded!
+		      double minBound = -1;
+		      double maxBound = -1;
+		      minBound = inputDoi[k].w[0];
+		      maxBound = inputDoi[k].w[pointsFromDoi-1];
+		      // 		  std::cout << minBound << " " << maxBound << std::endl;
+		      TF1 *lineFitSigma = new TF1("lineFitSigma","[0]*x + [1]",minBound,maxBound);
+		      lineFitSigma->SetLineColor(4);
+		      
+		      calibGraph->Draw("AL");
+		      calibGraph->Fit(lineFitSigma,"RNQ");
+		      points->SetMarkerColor(4);
+		      points->SetMarkerSize(1.2);
+		      points->SetMarkerStyle(21);
+		      points->Draw("P same");
+		      fOut->cd();
+		      C_new->Write();
+		      //lineTag->Draw("same");
+		      //lineFitSigma->Draw("same");
+		      // 		  legend = new TLegend(0.5,0.62,0.893,0.89,"");
+		      // 		  legend->SetFillStyle(0);
+		      // 		  legend->AddEntry(points,"Measured point","f");
+		      // 		  legend->AddEntry(lineTag,"Points Regression","f");
+		      // 		  legend->AddEntry(calibGraph,"Cumulative Calibration","f");
+		      // 		  legend->Draw("same");
+// 		      std::stringstream fileName;
+// 		      fileName << "./plots/CalibPlot" << crystalNumber << ".png"; 
+// 		      outTagFile << i << "\t" << j << "\t" << lineTag->GetParameter(0) << "\t" << lineFitSigma->GetParameter(0) << std::endl;
+		      xcorr.push_back(lineTag->GetParameter(0));
+		      ycorr.push_back(lineFitSigma->GetParameter(0));
+		      if(i > 1 && i < 6 && j > 1 && j < 6)
+		      {
+			xcorrCentral.push_back(lineTag->GetParameter(0));
+			ycorrCentral.push_back(lineFitSigma->GetParameter(0));
+		      }
+		      
+		      // 		  correlationPlot->SetPoint(points,lineTag->GetParameter(0),lineFitSigma->GetParameter(0));
+		      // 		  points++;
+		      // 		  outTagFile << i << "\t" << j << "\t" << inputDoi[k].m << "\t" << lineFitSigma->GetParameter(0) << std::endl;
+		      // 		  C_new->Print(fileName.str().c_str());
+		      // 		  fOut->cd();
+		      //                   C_new->Write();
+		    }
 		  }
-		  diff2d->Fill(i,j,totalDelta/pointsFromDoi);
-		  TCanvas* C_new = new TCanvas(stream.str().c_str(),stream.str().c_str(),1200,800);
-		  
-		  double crystaLenght = 15.0; //FIXME hardcoded!
-		  double minBound = -1;
-		  double maxBound = -1;
-// 		  for(int step = 0 ; step < 10000 ; step ++)
-// 		  {
-// 		    if(minBound == -1)
-// 		    {
-// 		      if(calibGraph->Eval((crystaLenght/10000)*step) < 14)
-// 		      {  
-// 			minBound = (crystaLenght/10000)*step;
-// 			
-// 		      }
-// 		        
-// 		    }
-// 		    if(maxBound == -1)
-// 		    {
-// 		      if(calibGraph->Eval((crystaLenght/10000)*step) < 1)
-// 			 maxBound = (crystaLenght/10000)*step;
-// 		    }
-// 		  }
-		  minBound = inputDoi[k].w[0];
-		  maxBound = inputDoi[k].w[pointsFromDoi-1];
-// 		  std::cout << minBound << " " << maxBound << std::endl;
-		  TF1 *lineFitSigma = new TF1("lineFitSigma","[0]*x + [1]",minBound,maxBound);
-		  lineFitSigma->SetLineColor(4);
-		  
-		  calibGraph->Draw("AL");
-		  calibGraph->Fit(lineFitSigma,"RNQ");
-		  points->SetMarkerColor(4);
-                  points->SetMarkerSize(1.2);
-                  points->SetMarkerStyle(21);
-		  points->Draw("P same");
-		  fOut->cd();
-                  C_new->Write();
-		  //lineTag->Draw("same");
-		  //lineFitSigma->Draw("same");
-// 		  legend = new TLegend(0.5,0.62,0.893,0.89,"");
-// 		  legend->SetFillStyle(0);
-// 		  legend->AddEntry(points,"Measured point","f");
-// 		  legend->AddEntry(lineTag,"Points Regression","f");
-// 		  legend->AddEntry(calibGraph,"Cumulative Calibration","f");
-// 		  legend->Draw("same");
-		  std::stringstream fileName;
-		  fileName << "./plots/CalibPlot" << crystalNumber << ".png"; 
-		  outTagFile << i << "\t" << j << "\t" << lineTag->GetParameter(0) << "\t" << lineFitSigma->GetParameter(0) << std::endl;
-		  xcorr.push_back(lineTag->GetParameter(0));
-		  ycorr.push_back(lineFitSigma->GetParameter(0));
-		  if(i > 1 && i < 6 && j > 1 && j < 6)
-		  {
-		    xcorrCentral.push_back(lineTag->GetParameter(0));
-		    ycorrCentral.push_back(lineFitSigma->GetParameter(0));
-		  }
-		  
-// 		  correlationPlot->SetPoint(points,lineTag->GetParameter(0),lineFitSigma->GetParameter(0));
-// 		  points++;
-// 		  outTagFile << i << "\t" << j << "\t" << inputDoi[k].m << "\t" << lineFitSigma->GetParameter(0) << std::endl;
-		  C_new->Print(fileName.str().c_str());
-// 		  fOut->cd();
-//                   C_new->Write();
-		}
 	      }
 	    }
 	  }
@@ -712,7 +699,7 @@ int main(int argc, char **argv)
       }
     }
   }
-  outTagFile.close();
+//   outTagFile.close();
   
   f->cd();
   f->cd("Module 0.0");
@@ -814,7 +801,7 @@ int main(int argc, char **argv)
   histDoiPrecision->Draw();
 //   gStyle->SetOptFit(1);
 //   histDoiPrecision->Fit("gaus");
-  C_histDoiPrecision->Print("./plots/HistoDOIprecision.png");
+//   C_histDoiPrecision->Print("./plots/HistoDOIprecision.png");
   fOut->cd();
   C_histDoiPrecision->Write();
   
@@ -824,7 +811,7 @@ int main(int argc, char **argv)
   histLinePrecision->Draw();
 //   gStyle->SetOptFit(1);
 //   histLinePrecision->Fit("gaus");
-  C_histLinePrecision->Print("./plots/HistoLINEprecision.png");
+//   C_histLinePrecision->Print("./plots/HistoLINEprecision.png");
   fOut->cd();
   C_histLinePrecision->Write();
   
@@ -838,7 +825,7 @@ int main(int argc, char **argv)
 //   TF1* corr1line = new TF1("corr1line","x");
 //   corr1line->Draw("same");
   std::cout << "Correlation = " << correlationPlot->GetCorrelationFactor() << std::endl;
-  C_correlationPlot->Print("./plots/correlation.png");
+//   C_correlationPlot->Print("./plots/correlation.png");
   fOut->cd();
   C_correlationPlot->Write();
   
@@ -852,7 +839,7 @@ int main(int argc, char **argv)
 //   TF1* corr1lineCentral = new TF1("corr1lineCentral","x");
 //   corr1lineCentral->Draw("same");
   std::cout << "Correlation = " << correlationPlotCentral->GetCorrelationFactor() << std::endl;
-  C_correlationPlotCentral->Print("./plots/correlationCentral.png");
+//   C_correlationPlotCentral->Print("./plots/correlationCentral.png");
   fOut->cd();
   C_correlationPlotCentral->Write();
   
