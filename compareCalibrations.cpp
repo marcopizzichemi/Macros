@@ -12,6 +12,7 @@
 #include <assert.h>
 #include <string.h>
 #include <vector>
+#include <TROOT.h>
 #include <algorithm>
 #include <sstream>
 #include <fstream>

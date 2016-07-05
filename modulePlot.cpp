@@ -13,6 +13,7 @@
 #include <string.h>
 #include <vector>
 #include <algorithm>
+#include <TROOT.h>
 #include <sstream>
 #include <fstream>
 #include <string>
