@@ -193,7 +193,7 @@ int main (int argc, char** argv)
       //mppc gain = 1.25e6
       //adc channel binning 156e-15 C
       double adcCh = detector[i]*1.25e6*1.6e-19/156e-15;
-      charge[i*2] = (Short_t) adcCh;
+      charge[i*2] = (Short_t) adcCh; 
     }
     
     RealX = RealY = RealZ = 0;

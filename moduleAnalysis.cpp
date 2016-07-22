@@ -1,5 +1,20 @@
+// Program to analyze the performance of a single module
+
 // compile with
 // g++ -o ../build/moduleAnalysis moduleAnalysis.cpp `root-config --cflags --glibs` 
+
+//HOWTO
+//This program analyzes the output of a moduleCalibration run
+//The generic syntax is
+
+//moduleAnalysis moduleCalibration.root [calibration_params.txt] [pointsFromDoi]
+
+// moduleCalibration.root   // name of the root file to analyze
+// calibration_params.txt   // OPTIONAL - name of the file with results of DOI tagging bench scan. The scan can have as many points as you want, for as many crystals as you like. In any case
+                            // only the non-edge modules will be considered and this data is used only to calcolate the sigma w in order to get a value for DOI res - if no value is given, DOI res is not analyzed
+// pointsFromDoi            // OPTIONAL - the number of points in vertical DOI scan. By default is 1
+
+// So in order to perform a complete analysis, the DOI scan has to be already performed and analyzed following the procedure described in the doiAnalysis repostory, file procedure.txt
 
 #include <stdio.h>
 #include <stdlib.h>
