@@ -1,7 +1,7 @@
 //simple program to translate sim output to "adc" format
 
 // compile with 
-// g++ -o ../build/simToPet simToPet.cpp `root-config --cflags --glibs`
+// g++ -o ../build/simToPetSingle simToPetSingle.cpp `root-config --cflags --glibs`
 // syntax
 // simToPet `ls out*`
 
@@ -22,14 +22,18 @@ int main (int argc, char** argv)
   
   //TFile* f1 = new TFile(argv[1]);
   TChain *tree =  new TChain("tree");
-  for (int i = 1 ; i < argc ; i++)
-  {
-    std::cout << "Adding file " << argv[i] << std::endl;
-    tree->Add(argv[i]);
-  }
+  //just one file
+//   for (int i = 1 ; i < argc ; i++)
+//   {
+  std::cout << "Adding file " << argv[1] << std::endl;
+  tree->Add(argv[1]);
+  
+  
+//   }
   
   //play with input names
-//   std::string inputFileName = 
+  std::string outFileName = "tree" + std::string(argv[1]);
+  
   
   // find the number of channels directly from the tchain file
   // before creating the variables
@@ -238,8 +242,8 @@ int main (int argc, char** argv)
     
   }
   std::cout << std::endl;
-  std::string outFile = "Tree_OUT.root";
-  TFile* fOut = new TFile(outFile.c_str(),"recreate");
+//   std::string outFile = "Tree_OUT.root";
+  TFile* fOut = new TFile(outFileName.c_str(),"recreate");
   
   t1->Write();
   
