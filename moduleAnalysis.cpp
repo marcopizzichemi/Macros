@@ -16,6 +16,11 @@
 
 // So in order to perform a complete analysis, the DOI scan has to be already performed and analyzed following the procedure described in the doiAnalysis repostory, file procedure.txt
 
+// If the acquisition is actually a calibration, you need to specify it like this
+
+//moduleAnalysis moduleCalibration.root sim
+
+// in this case obviously no calibration_params file is needed, the sigmaW is calculated from the simulation data in the .root file
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
@@ -120,11 +125,21 @@ int main(int argc, char **argv)
   //file with doi tag m, q and points per crystal
   //if it is given, set a flag to calculate the doi precision
   bool doDoiPrecision = false;
+  bool simulationRun = false;
   std::ifstream fDoiTag;
   if(argc > 2)
   {
     doDoiPrecision = true;
-    fDoiTag.open(argv[2],std::ios::in);
+    std::string sim = "sim";
+    std::string argv2 = argv[2];
+    if(argv2.compare(sim) != 0)
+    {
+      fDoiTag.open(argv[2],std::ios::in);
+    }
+    else
+    {
+      simulationRun = true;
+    }
   }
   int pointsFromDoi = 1;
   if(argc > 3)
@@ -170,8 +185,8 @@ int main(int argc, char **argv)
 //     
 //     std::cout << std::endl;
 //   }
-  double minSigma = 0.01;
-  double maxSigma = 0.03;
+  double minSigma = 0.00;
+  double maxSigma = 0.05;
   TH1F* sigmaWdoi = new TH1F("sigmaWdoi","Distribution of measured sigma w",50,minSigma,maxSigma);
   TH1F* sigmaWdoiCentral = new TH1F("sigmaWdoiCentral","Central Crystals - Distribution of measured sigma w",50,minSigma,maxSigma);
   double averageSigma = 0;
@@ -294,7 +309,7 @@ int main(int argc, char **argv)
   delete cc;
   delete c2;
   delete legend;
-  std::cout << "Light Output Central Channels [ADC Ch.] = " << averageLO << " +/- " << stdLO << std::endl;
+  std::cout << "Light Output Central Channels [ADC Ch.]   = " << averageLO << "\t+/- " << stdLO << std::endl;
   
   
   //-----------------------------//
@@ -397,7 +412,7 @@ int main(int argc, char **argv)
   delete cc;
   delete legend;
   
-    std::cout << "En. Res Corrected Central Channels [FWHM] = " << averageEN_corr << " +/- " << stdEN_corr << std::endl;
+    std::cout << "En. Res Corrected Central Channels [FWHM] = " << averageEN_corr << "\t+/- " << stdEN_corr << std::endl;
   
   //-----------------------------//
   //         DOI
@@ -407,56 +422,58 @@ int main(int argc, char **argv)
   if(doDoiPrecision)
   {
     //simple histogram of measured sigma w
-    
-    for(int i = 0; i < inputDoi.size();i++)
+    if(!simulationRun)
     {
-      for(int k =0 ; k < pointsFromDoi ; k++)
+      for(int i = 0; i < inputDoi.size();i++)
       {
-	//       std::cout << inputDoi[i].sw[k] * inputDoi[i].sqrt_nentries[k] << std::endl;
-	//       if(i > 1 && i < 6 && j > 1 && j < 6)
-	//       {
-	sigmaWdoi->Fill(inputDoi[i].sw[k] * inputDoi[i].sqrt_nentries[k]);
-	//       }
+        for(int k =0 ; k < pointsFromDoi ; k++)
+        {
+          //       std::cout << inputDoi[i].sw[k] * inputDoi[i].sqrt_nentries[k] << std::endl;
+          //       if(i > 1 && i < 6 && j > 1 && j < 6)
+          //       {
+          sigmaWdoi->Fill(inputDoi[i].sw[k] * inputDoi[i].sqrt_nentries[k]);
+          //       }
+        }
       }
-    }
-    fOut->cd();
-    sigmaWdoi->Write();
-    
-    //simple histogram of measured sigma w - central channels 
-    for(int i = 0 ; i < nmodulex*nmppcx*ncrystalsx ; i++)
-    {
-      for(int j = 0 ; j < nmoduley*nmppcy*ncrystalsy ; j++)
+      fOut->cd();
+      sigmaWdoi->Write();
+      
+      //simple histogram of measured sigma w - central channels 
+      for(int i = 0 ; i < nmodulex*nmppcx*ncrystalsx ; i++)
       {
-	if(i > (ncrystalsx - 1) && i < nmodulex*nmppcx*ncrystalsx - (ncrystalsx) && j > (ncrystalsy-1) && j < nmoduley*nmppcy*ncrystalsy - (ncrystalsy)) //only crystals not from frame channels
-	{
-	  for(int k = 0; k < inputDoi.size(); k++)
-	  {
-	    int ik = inputDoi[k].i;
-	    int jk = inputDoi[k].j;
-	    if(i == ik && j == jk)
-	    {
-	      for(int ik =0 ; ik < pointsFromDoi ; ik++)
-	      {
-		sigmaWdoiCentral->Fill(inputDoi[k].sw[ik] * inputDoi[k].sqrt_nentries[ik]);
-	      }
-	    }
-	  }
-	}
+        for(int j = 0 ; j < nmoduley*nmppcy*ncrystalsy ; j++)
+        {
+          if(i > (ncrystalsx - 1) && i < nmodulex*nmppcx*ncrystalsx - (ncrystalsx) && j > (ncrystalsy-1) && j < nmoduley*nmppcy*ncrystalsy - (ncrystalsy)) //only crystals not from frame channels
+          {
+            for(int k = 0; k < inputDoi.size(); k++)
+            {
+              int ik = inputDoi[k].i;
+              int jk = inputDoi[k].j;
+              if(i == ik && j == jk)
+              {
+                for(int ik =0 ; ik < pointsFromDoi ; ik++)
+                {
+                  sigmaWdoiCentral->Fill(inputDoi[k].sw[ik] * inputDoi[k].sqrt_nentries[ik]);
+                }
+              }
+            }
+          }
+        }
       }
+//       fOut->cd();
+//       TF1 *gaussF = new TF1("gaussF","[0]*exp(-0.5*((x-[1])/[2])**2)",minSigma,maxSigma);
+//       gaussF->SetParameter(1,sigmaWdoiCentral->GetMean());
+//       gaussF->SetParameter(2,sigmaWdoiCentral->GetRMS());
+//       sigmaWdoiCentral->Fit("gaussF","RQ");
+//       //     averageSigma = gaussF->GetParameter(1);
+//       //     averageSigmaError = gaussF->GetParError(1);
+//       
+//       averageSigma = sigmaWdoiCentral->GetMean();
+//       averageSigmaError = sigmaWdoiCentral->GetRMS()/TMath::Sqrt(sigmaWdoiCentral->GetEntries());
+//       
+//       
+//       sigmaWdoiCentral->Write();
     }
-    fOut->cd();
-    TF1 *gaussF = new TF1("gaussF","[0]*exp(-0.5*((x-[1])/[2])**2)",minSigma,maxSigma);
-    gaussF->SetParameter(1,sigmaWdoiCentral->GetMean());
-    gaussF->SetParameter(2,sigmaWdoiCentral->GetRMS());
-    sigmaWdoiCentral->Fit("gaussF","RQ");
-//     averageSigma = gaussF->GetParameter(1);
-//     averageSigmaError = gaussF->GetParError(1);
-    
-    averageSigma = sigmaWdoiCentral->GetMean();
-    averageSigmaError = sigmaWdoiCentral->GetRMS()/TMath::Sqrt(sigmaWdoiCentral->GetEntries());
-    
-    
-    sigmaWdoiCentral->Write();
     
     int calibGraphCounter = 0;
     double averageM = 0;
@@ -496,6 +513,8 @@ int main(int argc, char **argv)
 		
 		TCanvas* C_graph; 
 		TGraph *calibGraph;
+                TCanvas* C_sigma;
+                TH1F* sigmaHisto;
 		
 		if(dir_exists)
 		{
@@ -503,9 +522,31 @@ int main(int argc, char **argv)
 		  stream << "Calibration Plot - Crystal " << crystalNumber;
 		  C_graph = (TCanvas*) gDirectory->Get(stream.str().c_str());
 		  
+                  
+                  if(simulationRun)
+                  {
+                    std::stringstream sname;
+                    sname << "Sigma W from SIM - Crystal " << crystalNumber;
+                    C_sigma = (TCanvas*) gDirectory->Get(sname.str().c_str());
+                    if(C_sigma)
+                      sigmaHisto = (TH1F*) C_sigma->GetPrimitive(sname.str().c_str());
+                    if(sigmaHisto)
+                    {
+                      TF1 *gaussFunc = new TF1("gaussFunc","[0]*exp(-0.5*((x-[1])/[2])**2)");
+                      gaussFunc->SetParameter(1,sigmaHisto->GetMean());
+                      gaussFunc->SetParameter(2,sigmaHisto->GetRMS());
+                      sigmaHisto->Fit(gaussFunc,"Q");
+                      sigmaWdoiCentral->Fill(gaussFunc->GetParameter(1));
+                      
+                    }
+                    
+                  }
+                  
 		  if(C_graph) 
 		    calibGraph = (TGraph*) C_graph->GetPrimitive(stream.str().c_str());
 		  
+                  
+                  
 		  if(calibGraph) //if calibration plot exist
 		  {
 		    calibGraphCounter++;
@@ -551,11 +592,21 @@ int main(int argc, char **argv)
 	}
       }
     }
+    
+    fOut->cd();
+//     TF1 *gaussF = new TF1("gaussF","[0]*exp(-0.5*((x-[1])/[2])**2)",minSigma,maxSigma);
+//     gaussF->SetParameter(1,sigmaWdoiCentral->GetMean());
+//     gaussF->SetParameter(2,sigmaWdoiCentral->GetRMS());
+//     sigmaWdoiCentral->Fit("gaussF","RQ");
+    averageSigma = sigmaWdoiCentral->GetMean();
+    averageSigmaError = sigmaWdoiCentral->GetRMS()/TMath::Sqrt(sigmaWdoiCentral->GetEntries());
+    sigmaWdoiCentral->Write();
+    
     averageMErr = TMath::Sqrt(averageMErr);
     averageDoiResFWHM = 2.355 * (averageM * averageSigma) / calibGraphCounter;
     averageDoiResFWHMerr = averageDoiResFWHM * TMath::Sqrt( TMath::Power(averageMErr/averageM,2) + TMath::Power(averageSigmaError/averageSigma,2) );
     
-    std::cout << "DOI Resolution FWHM Central Channels [mm] = " << averageDoiResFWHM << " +/- " << averageDoiResFWHMerr << std::endl;
+    std::cout << "DOI Resolution FWHM Central Channels [mm] = " << averageDoiResFWHM << "\t+/- " << averageDoiResFWHMerr << std::endl;
     
   }
   
@@ -566,7 +617,7 @@ int main(int argc, char **argv)
   
   resultsFile << "LO\t\tsLO\t\tEnRes\t\tsEnRes\t\tDoiRes\t\tsDoiRes" << std::endl;
   resultsFile << "[ADC Ch.]\t[ADC Ch.]\t[%]\t\t[%]\t\t[mm]\t\t[mm]" << std::endl;
-  resultsFile << averageLO << "\t" <<"\t" << stdLO << "\t" << "\t"<<  averageEN_corr << "\t"<< stdEN_corr << "\t" << averageDoiResFWHM << "\t"<< "\t" << averageDoiResFWHMerr << std::endl;
+  resultsFile << averageLO << "\t" <<"\t" << stdLO << "\t" << "\t"<<  averageEN_corr << "\t\t"<< stdEN_corr << "\t" << averageDoiResFWHM << "\t"<< "\t" << averageDoiResFWHMerr << std::endl;
   
 //   std::cout << "Light Output Central Channels [ADC Ch.] = " << averageLO << " +/- " << stdLO << std::endl;
 //   std::cout << "En. Res Corrected Central Channels FWHM [%] = " << averageEN_corr << " +/- " << stdEN_corr << std::endl;
