@@ -188,7 +188,7 @@ int main(int argc, char **argv)
   double minSigma = 0.00;
   double maxSigma = 0.05;
   TH1F* sigmaWdoi = new TH1F("sigmaWdoi","Distribution of measured sigma w",50,minSigma,maxSigma);
-  TH1F* sigmaWdoiCentral = new TH1F("sigmaWdoiCentral","Central Crystals - Distribution of measured sigma w",50,minSigma,maxSigma);
+  TH1F* sigmaWdoiCentral = new TH1F("sigmaWdoiCentral","Central Crystals - Distribution of measured sigma w",1000,minSigma,maxSigma);
   double averageSigma = 0;
   double averageSigmaError = 0;
   double averageDoiResFWHM = 0;
