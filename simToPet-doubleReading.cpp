@@ -9,6 +9,10 @@
 #include "TTree.h"
 #include "TFile.h"
 #include "TChain.h"
+#include "TH2F.h"
+#include "TGraph.h"
+#include "TF1.h"
+#include "TCanvas.h"
 #include <iostream>
 #include <fstream>
 #include <string>
@@ -16,13 +20,11 @@
 #include "TObjArray.h"
 #include "TObject.h"
 #include <algorithm>
-#include "TH2F.h"
 
 int main (int argc, char** argv)
 {
   gROOT->ProcessLine("#include <vector>");
   
-  //TFile* f1 = new TFile(argv[1]);
   TChain *tree =  new TChain("tree");
   for (int i = 1 ; i < argc ; i++)
   {
@@ -32,41 +34,40 @@ int main (int argc, char** argv)
   
 
   //play with input names
-//   std::string inputFileName = 
+  //std::string inputFileName = 
   
-  // find the number of channels directly from the tchain file
-  // before creating the variables
-  // first, get the list of leaves
+  //find the number of channels directly from the tchain file
+  //before creating the variables
+  //first, get the list of leaves
   TObjArray *leavescopy = tree->GetListOfLeaves();
   int nLeaves = leavescopy->GetEntries();
   std::vector<std::string> leavesName;
-  // fill a vector with the leaves names
-//   std::cout << nLeaves << std::endl;
+  //fill a vector with the leaves names
+  //std::cout << nLeaves << std::endl;
   for(int i = 0 ; i < nLeaves ; i++)
   {
-//     std::cout << i << std::endl;
+    //std::cout << i << std::endl;
     leavesName.push_back(leavescopy->At(i)->GetName());
   }
-  // count the entries that start with "ch"
+  //count the entries that start with "ch"
   int numOfCh = 0;
   int numOfCry = 0;
   std::string det_prefix("detector");
   std::string cry_prefix("cry");
   for(int i = 0 ; i < nLeaves ; i++)
   {
-//     leavesName.push_back(leavescopy->At(i)->GetName());
+    //leavesName.push_back(leavescopy->At(i)->GetName());
     if (!leavesName[i].compare(0, det_prefix.size(), det_prefix))
       numOfCh++;
     if (!leavesName[i].compare(0, cry_prefix.size(), cry_prefix))
-      numOfCry++;
-    
+      numOfCry++;   
   }
   
   //the string "cry" appears 5 times per crystal..
   numOfCry = numOfCry / 5;
   
-  std::cout << numOfCh << std::endl;
-  std::cout << numOfCry << std::endl;
+  std::cout << "number of channels: \t" << numOfCh << std::endl;
+  std::cout << "number of crystals: \t" <<numOfCry << std::endl;
   
   
   Long64_t Seed;
@@ -87,7 +88,6 @@ int main (int argc, char** argv)
   std::vector<float> *PosZEnDep; 
   std::vector<float> **pPosZEnDep;
   
-//   DetectorHit         = new Short_t             [numOfCh];
   CryEnergyDeposited  = new std::vector<float>  [numOfCry];
   pCryEnergyDeposited = new std::vector<float>* [numOfCry];
   CryGlobalTime       = new std::vector<float>  [numOfCry];
@@ -98,10 +98,7 @@ int main (int argc, char** argv)
   pPosYEnDep          = new std::vector<float>* [numOfCry];
   PosZEnDep           = new std::vector<float>  [numOfCry];
   pPosZEnDep          = new std::vector<float>* [numOfCry];
-  
-//   short RunDetectorHit[16];
-  
-  
+    
   std::vector<float> **pEdep;
   std::vector<float> **pTime;
   std::vector<float> **px;
@@ -150,8 +147,6 @@ int main (int argc, char** argv)
     snames.str("");
     snames<< "cry" << i << "PosZEnDep";
     tree->SetBranchAddress(snames.str().c_str(),&pz[i]);
-
-
   }
   for (int i = 0 ; i < numOfCh ; i++)
   {
@@ -203,11 +198,24 @@ int main (int argc, char** argv)
   t1->Branch("CrystalsHit",&CrystalsHit,"CrystalsHit/S"); 
   t1->Branch("NumbOfInteractions",&NumbOfInteractions,"NumbOfInteractions/S"); 
 
-  TH2F* scatter = new TH2F ("scatter", "scatter", 50, 0, 15, 50, 0, 15);
+  //create canvas
+  TCanvas* Canvas = new TCanvas("Canvas", "Canvas", 1200, 800); 
+
+
+  TH2F* DOIscatter = new TH2F ("DOIscatter", "DOIscatter", 50, 0, 15, 50, 8, -8);
+  DOIscatter->GetXaxis()->SetTitle("DOI Detected");
+  DOIscatter->GetYaxis()->SetTitle("DOI Simulation");
+
+
+  TGraph* conversionNphotonsEnergy = new TGraph();
+  conversionNphotonsEnergy->SetNameTitle ("Conversion Edep vs detector hits", "Conversion Energy vs N photons detected");
+
+
   
   long int counter = 0;
+  Short_t pointN = 0;
+
   int nEntries = tree->GetEntries();
-  std::cout << "nEntries = " << nEntries << std::endl;
   for(int i = 0; i < nEntries ; i++)
   {  
     
@@ -226,7 +234,6 @@ int main (int argc, char** argv)
       //convert to ADC channels, as if it was data from a digitizer
       //mppc gain = 1.25e6
       //adc channel binning 156e-15 C
-      std::cout << detector[i] << std::endl;
       double adcCh = detector[i]*1.25e6*1.6e-19/156e-15;
       //charge[i*2] = (Short_t) adcCh; 
       charge[i] = (Short_t) adcCh; 
@@ -269,8 +276,11 @@ int main (int argc, char** argv)
 
 
 
-
+    //prepare DoiDetected and DoiSimulation
+    //fill DOIscatter plot to compare the two DOIs
+    //fill conversion n photons to energy graph to find conversion factor, needed to set a minimum for accepting events
     Float_t doiDet;
+    Float_t doiSim;
     Float_t CrystalLengthY = 15; //in mm
     Float_t min = 0;
 
@@ -280,29 +290,29 @@ int main (int argc, char** argv)
 
     for(int i=0; i<numOfCry; i++)
     {
-      if((charge[i] + charge[i+64]) != min)
+      if((detector[i] + detector[i+64]) != min)
       {
-
         for(int j=0; j<px[i]->size(); j++)
         {
-          wZ += (std::abs(pz[i]->at(j)) * pEdep[i]->at(j));
+          wZ += (pz[i]->at(j) * pEdep[i]->at(j));
           totEnergyCry += pEdep[i]->at(j);
         }
-
+        doiSim = wZ/totEnergyCry;
         if (totEnergyCry != 0)
         {
-          doiDet = (Float_t) CrystalLengthY*charge[i]/((Float_t) (charge[i] + charge[i+64]));
-          //std::cout << charge[i] << "\t" << charge[i+64] << std::endl;
+          doiDet = (Float_t) CrystalLengthY*detector[i]/((Float_t) (detector[i] + detector[i+64]));
           DoiDetected.push_back(doiDet);
-          DoiSimulation.push_back(wZ/totEnergyCry);
-          scatter->Fill(doiDet, wZ/totEnergyCry);
+          DoiSimulation.push_back(doiSim);
+          DOIscatter->Fill(doiDet, doiSim);
+          conversionNphotonsEnergy->SetPoint(pointN, totEnergyCry, detector[i]+detector[i+64]);
+          pointN++;
         }
         wZ = 0;
         totEnergyCry = 0;
       }
 
     }
-   
+
 
     if(NumbOfInteractions > 0) // discard events with no energy deposition (they would never trigger the detectors anyway..)
     {
@@ -322,20 +332,27 @@ int main (int argc, char** argv)
   TotalCryEnergy.clear();
   DoiDetected.clear();
   DoiSimulation.clear();
-  
   }
+
   std::cout << std::endl;
   std::string outFile = "Tree_OUT.root";
   TFile* fOut = new TFile(outFile.c_str(),"recreate");
   
-  scatter->Write();
+  DOIscatter->Write();
+  
+  Canvas->cd();
+  TF1* line = new TF1 ("line", "[0]*x", 0, 1);
+  conversionNphotonsEnergy->Fit("line", "Q");
+  //conversion factor number of photons on detector and energy 
+  Float_t conversionFactor = line->GetParameter(0);
+  conversionNphotonsEnergy->Draw("A*");
+  conversionNphotonsEnergy->GetXaxis()->SetTitle("Energy Dedposited");
+  conversionNphotonsEnergy->GetYaxis()->SetTitle("N of detector hits");
+  conversionNphotonsEnergy->Write();
+  
+
   t1->Write();
-  
-//   f1->Close();
-  
   fOut->Close();
-  
-  
   
   return 0;
 }
