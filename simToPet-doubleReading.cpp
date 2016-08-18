@@ -214,11 +214,14 @@ int main (int argc, char** argv)
   
   long int counter = 0;
   Short_t pointN = 0;
+  Short_t goodCounter=0;
+
 
   int nEntries = tree->GetEntries();
+  std::cout << "number of entries: \t" << nEntries << std::endl;
+
   for(int i = 0; i < nEntries ; i++)
   {  
-    
     tree->GetEvent(i);
     
     ExtendedTimeTag = 1e-9;
@@ -310,8 +313,91 @@ int main (int argc, char** argv)
         wZ = 0;
         totEnergyCry = 0;
       }
-
     }
+
+    /*
+    //work on detected data
+    //find events where the energy deposited detected is > threshold in 2 crystals, and the sum of those energies is about 511 keV (1 compton scattering)
+
+    Float_t cryThreshold = 0.1; //MeV
+    Float_t totalThreshold = 0.5; //MeV
+    Short_t NumbOfGoodInteractions = 0; //number of interaction where the energy detected is > threshold
+    Float_t SumGoodInteractionsEnergy = 0; //sum of the energies of the good interactions
+    Float_t convFactor = 5411; //comes from conversionFactor in conversionNphotonsEnergy->Fit
+
+    for(int i=0; i<numOfCry; i++)
+    {
+      if(((Float_t) ((detector[i] + detector[i+64])))/convFactor > 0)
+      {
+        NumbOfGoodInteractions++;
+        SumGoodInteractionsEnergy+= ((Float_t) (detector[i] + detector[i+64]))/convFactor;
+        //put somewhere number of crystal 1 and 2
+      }
+    }
+
+    if(NumbOfGoodInteractions==2 && SumGoodInteractionsEnergy>totalThreshold)
+    {
+      goodCounter++;
+      std::cout << "\n SumGoodInteractionsEnergy: " << SumGoodInteractionsEnergy << std::endl;
+      //case p1: crystal1 first, then crystal2
+      //case p2: crystal2 first, then crystal1
+      //factors in common will cancel out
+      //do p1/p2
+    }
+    */
+
+
+    //work on simulation data
+    //find events where the energy deposited is > threshold in 2 crystals, and the sum of those energies is about 511 keV (1 compton scattering)
+    Float_t cryThreshold = 0.1; //MeV
+    Float_t totalThreshold = 0.5; //MeV
+    Short_t NumbOfGoodInteractions = 0; //number of interaction where the energy deposited is > threshold
+    Float_t SumGoodInteractionsEnergy = 0; //sum of the energies of the good interactions
+    Float_t  *goodCrystals; //will store the number of crystals where good interactions happened
+    goodCrystals = new Float_t [NumbOfGoodInteractions];  
+    Float_t  *goodInteractionsEnergy; //will store the energy deposited in crystals where good interactions happened
+    goodInteractionsEnergy = new Float_t [NumbOfGoodInteractions];  
+    Float_t  *goodInteractionsDOI; //will store the DOI of the energy deposited in crystals where good interactions happened
+    goodInteractionsDOI = new Float_t [NumbOfGoodInteractions];  
+
+
+    for(int i=0; i<numOfCry; i++)
+    {
+      for(int j=0; j<px[i]->size(); j++)
+      {
+        totEnergyCry += pEdep[i]->at(j);
+        wZ += (pz[i]->at(j) * pEdep[i]->at(j));
+      }
+      if(totEnergyCry > cryThreshold)
+      {
+        NumbOfGoodInteractions++;
+        SumGoodInteractionsEnergy+= totEnergyCry;
+        goodInteractionsEnergy[NumbOfGoodInteractions]=totEnergyCry;
+        goodCrystals[NumbOfGoodInteractions]=i;
+        goodInteractionsDOI[NumbOfGoodInteractions]=wZ/totEnergyCry;
+      }
+      totEnergyCry = 0;
+      wZ = 0;
+    }
+
+
+    //filter events with exactly 2 good interactions whose energy sums up to >totalThreshold
+    //the numbers of the two crystals are stored in goodCrystals[1] and goodCrystals[2]
+    //the energies deposited in the two crystals are stored in goodInteractionsEnergy[1] and goodInteractionsEnergy[2]
+    //the DOIs are stored in goodInteractionsDOI[1] and goodInteractionsDOI[2]
+    if(NumbOfGoodInteractions==2 && SumGoodInteractionsEnergy>totalThreshold)
+    {
+      goodCounter++;
+      //case p1: crystal1 first, then crystal2
+      //case p2: crystal2 first, then crystal1
+      //factors in common will cancel out
+      //do p1/p2
+    }
+
+
+
+
+
 
 
     if(NumbOfInteractions > 0) // discard events with no energy deposition (they would never trigger the detectors anyway..)
@@ -326,18 +412,19 @@ int main (int argc, char** argv)
     {
       std::cout << "\r";
       std::cout << perc << "% done... ";
-      //std::cout << counter << std::endl;
     }
     
-  TotalCryEnergy.clear();
-  DoiDetected.clear();
-  DoiSimulation.clear();
+    TotalCryEnergy.clear();
+    DoiDetected.clear();
+    DoiSimulation.clear();
   }
 
   std::cout << std::endl;
+  std::cout << "number of good compton events: " << goodCounter << std::endl;
   std::string outFile = "Tree_OUT.root";
   TFile* fOut = new TFile(outFile.c_str(),"recreate");
   
+
   DOIscatter->Write();
   
   Canvas->cd();
