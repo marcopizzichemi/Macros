@@ -20,6 +20,73 @@
 #include "TObjArray.h"
 #include "TObject.h"
 #include <algorithm>
+#include <math.h>
+
+
+
+
+//travel function used for 511 gamma rays that reach interaction point
+Float_t simTravel1(Float_t pathLength)
+{
+  Float_t probTravel1 = 1;
+  return probTravel1;
+}
+
+//travel function used between compton and photoelectric effects
+Float_t simTravel2(Float_t pathLength, Float_t lambda)
+{
+  Float_t probTravel2 = 1;
+  return probTravel2;
+}
+
+//photoelectric effect function
+Float_t simPhotoelectric(Float_t preEnergy)
+{
+  Float_t probPhotoelectric = 1;
+  return probPhotoelectric;
+}
+
+//compton effect function
+Float_t simCompton(Float_t energyDeposited, Float_t comptonAngle)
+{
+  Float_t probCompton = 1;
+  return probCompton;
+}
+
+//distance  between 2 points in 3d space
+Float_t distance3D(Float_t ax, Float_t ay, Float_t az, Float_t bx, Float_t by, Float_t bz)
+{
+  //vector v
+  Float_t v[3] = {bx-ax, by-ay, bz-az};
+  //modulus vector
+  Float_t vMod = sqrt(pow(v[0],2) + pow(v[1],2) + pow(v[2],2));
+  return vMod;
+}
+
+
+//angle between 3 points in 3d space
+Float_t angle3D(Float_t ax, Float_t ay, Float_t az, Float_t bx, Float_t by, Float_t bz, Float_t cx, Float_t cy, Float_t cz)
+{
+  //vectors v1 and v2
+  Float_t v1[3] = {bx-ax, by-ay, bz-az};
+  Float_t v2[3] = {cx-bx, cy-by, cz-bz};
+  //normalize vectors
+  Float_t v1Mod = sqrt(pow(v1[0],2) + pow(v1[1],2) + pow(v1[2],2));
+  Float_t v1norm[3] = {v1[0]/v1Mod, v1[1]/v1Mod, v1[2]/v1Mod};
+  Float_t v2Mod = sqrt(pow(v2[0],2) + pow(v2[1],2) + pow(v2[2],2));
+  Float_t v2norm[3] = {v2[0]/v2Mod, v2[1]/v2Mod, v2[2]/v2Mod};
+  //dot product
+  Float_t dotProduct = v1norm[0] * v2norm[0] + v1norm[1] * v2norm[1] + v1norm[2] * v2norm[2];
+  //angle
+  Float_t angle = acos(dotProduct);
+  return angle;
+}
+
+
+
+
+
+
 
 int main (int argc, char** argv)
 {
@@ -213,8 +280,10 @@ int main (int argc, char** argv)
 
   
   long int counter = 0;
-  Short_t pointN = 0;
-  Short_t goodCounter=0;
+  long int pointN = 0;
+  long int goodCounter = 0;
+  long int winCounter = 0;
+
 
 
   int nEntries = tree->GetEntries();
@@ -323,7 +392,7 @@ int main (int argc, char** argv)
     Float_t totalThreshold = 0.5; //MeV
     Short_t NumbOfGoodInteractions = 0; //number of interaction where the energy detected is > threshold
     Float_t SumGoodInteractionsEnergy = 0; //sum of the energies of the good interactions
-    Float_t convFactor = 5411; //comes from conversionFactor in conversionNphotonsEnergy->Fit
+    Float_t convFactor = 5446; //comes from conversionFactor in conversionNphotonsEnergy->Fit
 
     for(int i=0; i<numOfCry; i++)
     {
@@ -348,17 +417,29 @@ int main (int argc, char** argv)
 
 
     //work on simulation data
-    //find events where the energy deposited is > threshold in 2 crystals, and the sum of those energies is about 511 keV (1 compton scattering)
+    /*find events where the energy deposited is > threshold in 2 crystals
+    and the sum of those energies is about 511 keV (1 compton scattering) */
     Float_t cryThreshold = 0.1; //MeV
     Float_t totalThreshold = 0.5; //MeV
     Short_t NumbOfGoodInteractions = 0; //number of interaction where the energy deposited is > threshold
     Float_t SumGoodInteractionsEnergy = 0; //sum of the energies of the good interactions
+    Float_t wX = 0;
+    Float_t wY = 0;
+    //Float_t wZ = 0; already exists
+    Float_t wT = 0;
+
     Float_t  *goodCrystals; //will store the number of crystals where good interactions happened
     goodCrystals = new Float_t [NumbOfGoodInteractions];  
     Float_t  *goodInteractionsEnergy; //will store the energy deposited in crystals where good interactions happened
     goodInteractionsEnergy = new Float_t [NumbOfGoodInteractions];  
+    Float_t  *goodInteractionsX; //will store the X position of the energy deposited in crystals where good interactions happened
+    goodInteractionsX = new Float_t [NumbOfGoodInteractions];  
+    Float_t  *goodInteractionsY; //will store the Y position of the energy deposited in crystals where good interactions happened
+    goodInteractionsY = new Float_t [NumbOfGoodInteractions];  
     Float_t  *goodInteractionsDOI; //will store the DOI of the energy deposited in crystals where good interactions happened
     goodInteractionsDOI = new Float_t [NumbOfGoodInteractions];  
+    Float_t  *goodInteractionsTime; //will store the time of the first interaction in crystals where good interactions happened (problem: the gamma ray can go back to the first crystal)
+    goodInteractionsTime = new Float_t [NumbOfGoodInteractions];  
 
 
     for(int i=0; i<numOfCry; i++)
@@ -366,6 +447,8 @@ int main (int argc, char** argv)
       for(int j=0; j<px[i]->size(); j++)
       {
         totEnergyCry += pEdep[i]->at(j);
+        wX += (px[i]->at(j) * pEdep[i]->at(j));
+        wY += (py[i]->at(j) * pEdep[i]->at(j));
         wZ += (pz[i]->at(j) * pEdep[i]->at(j));
       }
       if(totEnergyCry > cryThreshold)
@@ -374,9 +457,14 @@ int main (int argc, char** argv)
         SumGoodInteractionsEnergy+= totEnergyCry;
         goodInteractionsEnergy[NumbOfGoodInteractions]=totEnergyCry;
         goodCrystals[NumbOfGoodInteractions]=i;
+        goodInteractionsX[NumbOfGoodInteractions]=wX/totEnergyCry;
+        goodInteractionsY[NumbOfGoodInteractions]=wY/totEnergyCry;
         goodInteractionsDOI[NumbOfGoodInteractions]=wZ/totEnergyCry;
+        goodInteractionsTime[NumbOfGoodInteractions] = pTime[i]->at(0); //time of first interaction in the crystal
       }
       totEnergyCry = 0;
+      wX = 0;
+      wY = 0;
       wZ = 0;
     }
 
@@ -385,13 +473,38 @@ int main (int argc, char** argv)
     //the numbers of the two crystals are stored in goodCrystals[1] and goodCrystals[2]
     //the energies deposited in the two crystals are stored in goodInteractionsEnergy[1] and goodInteractionsEnergy[2]
     //the DOIs are stored in goodInteractionsDOI[1] and goodInteractionsDOI[2]
+    //..
+    Float_t comptonAngle1;
+    Float_t comptonAngle2;
+    Float_t comptonPhotoelDistance;
+
+
     if(NumbOfGoodInteractions==2 && SumGoodInteractionsEnergy>totalThreshold)
     {
       goodCounter++;
-      //case p1: crystal1 first, then crystal2
-      //case p2: crystal2 first, then crystal1
-      //factors in common will cancel out
-      //do p1/p2
+      //compton angles in the two cases
+      comptonAngle1 = angle3D(0,0,-208.2, goodInteractionsX[1], goodInteractionsY[1], goodInteractionsDOI[1], goodInteractionsX[2], goodInteractionsY[2], goodInteractionsDOI[2]);
+      comptonAngle2 = angle3D(0,0,-208.2, goodInteractionsX[2], goodInteractionsY[2], goodInteractionsDOI[2], goodInteractionsX[1], goodInteractionsY[1], goodInteractionsDOI[1]);
+      //distance travelled between compton and photoelectric effect
+      comptonPhotoelDistance = distance3D(goodInteractionsX[1], goodInteractionsY[1], goodInteractionsDOI[1], goodInteractionsX[2], goodInteractionsY[2], goodInteractionsDOI[2]);
+      //std::cout << "crystal 1: " << goodCrystals[1] << " crystal2: " << goodCrystals[2] << "\n DOI1: " << goodInteractionsDOI[1] << " DOI2: " << goodInteractionsDOI[2] <<  "\n angle1: " << comptonAngle0 << " angle 2: " << comptonAngle1 << "\n distance: " << comptonPhotoelDistance << "\n" << std::endl;
+      //coefficients for compton scattering, function of the energy of the gamma
+      Float_t lambda1;
+      Float_t lambda2;
+      Float_t totalProbability1 = simTravel1(goodInteractionsDOI[1])*
+                          simCompton(goodInteractionsEnergy[1],comptonAngle1)* //or find delta energy?
+                          simTravel2(comptonPhotoelDistance, lambda1)*
+                          simPhotoelectric(goodInteractionsEnergy[2]);
+      Float_t totalProbability2 = simTravel1(goodInteractionsDOI[2])*
+                          simCompton(goodInteractionsEnergy[2],comptonAngle2)* //or find delta energy?
+                          simTravel2(comptonPhotoelDistance, lambda2)*
+                          simPhotoelectric(goodInteractionsEnergy[1]);
+
+      if(totalProbability1/totalProbability2 > 1 && goodInteractionsTime[1] > goodInteractionsTime[2] ||
+         totalProbability1/totalProbability2 < 1 && goodInteractionsTime[1] < goodInteractionsTime[2])
+      {
+        winCounter++;
+      }
     }
 
 
@@ -421,6 +534,7 @@ int main (int argc, char** argv)
 
   std::cout << std::endl;
   std::cout << "number of good compton events: " << goodCounter << std::endl;
+  std::cout << "number of correct predictions: " << winCounter << std::endl;
   std::string outFile = "Tree_OUT.root";
   TFile* fOut = new TFile(outFile.c_str(),"recreate");
   
