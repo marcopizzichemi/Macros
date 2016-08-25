@@ -47,7 +47,7 @@ Float_t simCompton(Float_t comptonAngle)
 //pathLength and lambdaE in cm
 Float_t simTravel2(Float_t pathLength, Float_t lambdaE)
 {
-  Float_t probTravel2 = exp(-pathLength/lambdaE)/lambdaE;
+  Float_t probTravel2 = exp(-pathLength/lambdaE);
   return probTravel2;
 }
 
@@ -127,7 +127,7 @@ int main (int argc, char** argv)
   }
   
   //the string "cry" appears 5 times per crystal..
-  numOfCry = numOfCry / 5;
+  numOfCry = numOfCry / 13;
   
   std::cout << "number of channels: \t" << numOfCh << std::endl;
   std::cout << "number of crystals: \t" <<numOfCry << std::endl;
@@ -150,6 +150,23 @@ int main (int argc, char** argv)
   std::vector<float> **pPosYEnDep;
   std::vector<float> *PosZEnDep; 
   std::vector<float> **pPosZEnDep;
+  std::vector<float> *PosComptX;
+  std::vector<float> **pPosComptX;
+  std::vector<float> *PosComptY;
+  std::vector<float> **pPosComptY;
+  std::vector<float> *PosComptZ;
+  std::vector<float> **pPosComptZ;
+  std::vector<float> *PosPhotX;
+  std::vector<float> **pPosPhotX;
+  std::vector<float> *PosPhotY;
+  std::vector<float> **pPosPhotY;
+  std::vector<float> *PosPhotZ;
+  std::vector<float> **pPosPhotZ;
+  std::vector<float> *TimeCompt;
+  std::vector<float> **pTimeCompt;
+  std::vector<float> *TimePhot;
+  std::vector<float> **pTimePhot;
+
   
   CryEnergyDeposited  = new std::vector<float>  [numOfCry];
   pCryEnergyDeposited = new std::vector<float>* [numOfCry];
@@ -161,18 +178,54 @@ int main (int argc, char** argv)
   pPosYEnDep          = new std::vector<float>* [numOfCry];
   PosZEnDep           = new std::vector<float>  [numOfCry];
   pPosZEnDep          = new std::vector<float>* [numOfCry];
+  PosComptX           = new std::vector<float>  [numOfCry];
+  pPosComptX          = new std::vector<float>* [numOfCry];
+  PosComptY           = new std::vector<float>  [numOfCry];
+  pPosComptY          = new std::vector<float>* [numOfCry];
+  PosComptZ           = new std::vector<float>  [numOfCry];
+  pPosComptZ          = new std::vector<float>* [numOfCry];
+  PosPhotX            = new std::vector<float>  [numOfCry];
+  pPosPhotX           = new std::vector<float>* [numOfCry];
+  PosPhotY            = new std::vector<float>  [numOfCry];
+  pPosPhotY           = new std::vector<float>* [numOfCry];
+  PosPhotZ            = new std::vector<float>  [numOfCry];
+  pPosPhotZ           = new std::vector<float>* [numOfCry];
+  TimeCompt           = new std::vector<float>  [numOfCry];
+  pTimeCompt          = new std::vector<float>* [numOfCry];
+  TimePhot            = new std::vector<float>  [numOfCry];
+  pTimePhot           = new std::vector<float>* [numOfCry];
+
     
   std::vector<float> **pEdep;
   std::vector<float> **pTime;
   std::vector<float> **px;
   std::vector<float> **py;
   std::vector<float> **pz;
+  std::vector<float> **pComptX;
+  std::vector<float> **pComptY;    
+  std::vector<float> **pComptZ;    
+  std::vector<float> **pPhotX;    
+  std::vector<float> **pPhotY;     
+  std::vector<float> **pPhotZ;     
+  std::vector<float> **pTCompt;  
+  std::vector<float> **pTPhot;
+
   
-  pEdep = new std::vector<float>* [numOfCry];
-  pTime = new std::vector<float>* [numOfCry];
-  px    = new std::vector<float>* [numOfCry];
-  py    = new std::vector<float>* [numOfCry];
-  pz    = new std::vector<float>* [numOfCry];
+  pEdep       = new std::vector<float>* [numOfCry];
+  pTime       = new std::vector<float>* [numOfCry];
+  px          = new std::vector<float>* [numOfCry];
+  py          = new std::vector<float>* [numOfCry];
+  pz          = new std::vector<float>* [numOfCry];
+  pComptX     = new std::vector<float>* [numOfCry];
+  pComptY     = new std::vector<float>* [numOfCry];
+  pComptZ     = new std::vector<float>* [numOfCry];
+  pPhotX      = new std::vector<float>* [numOfCry];
+  pPhotY      = new std::vector<float>* [numOfCry];
+  pPhotZ      = new std::vector<float>* [numOfCry];
+  pTCompt     = new std::vector<float>* [numOfCry];
+  pTPhot   = new std::vector<float>* [numOfCry];
+ 
+
   
   for (int i = 0 ; i < numOfCry ; i++)
   {
@@ -181,6 +234,14 @@ int main (int argc, char** argv)
     px[i] = 0;
     py[i] = 0;
     pz[i] = 0;
+    pComptX[i] = 0;
+    pComptY[i] = 0;
+    pComptZ[i] = 0;
+    pPhotX[i] = 0;
+    pPhotY[i] = 0;
+    pPhotZ[i] = 0;
+    pTCompt[i] = 0;
+    pTPhot[i] = 0;
   }
 
   Short_t  *detector;
@@ -210,6 +271,31 @@ int main (int argc, char** argv)
     snames.str("");
     snames<< "cry" << i << "PosZEnDep";
     tree->SetBranchAddress(snames.str().c_str(),&pz[i]);
+    snames.str("");
+    snames<< "cry" << i << "PosComptX";
+    tree->SetBranchAddress(snames.str().c_str(),&pComptX[i]);
+    snames.str("");
+    snames<< "cry" << i << "PosComptY";
+    tree->SetBranchAddress(snames.str().c_str(),&pComptY[i]);
+    snames.str("");
+    snames<< "cry" << i << "PosComptZ";
+    tree->SetBranchAddress(snames.str().c_str(),&pComptZ[i]);
+    snames.str("");
+    snames<< "cry" << i << "PosPhotX";
+    tree->SetBranchAddress(snames.str().c_str(),&pPhotX[i]);
+    snames.str("");
+    snames<< "cry" << i << "PosPhotY";
+    tree->SetBranchAddress(snames.str().c_str(),&pPhotY[i]);
+    snames.str("");
+    snames<< "cry" << i << "PosPhotZ";
+    tree->SetBranchAddress(snames.str().c_str(),&pPhotZ[i]);
+    snames.str("");
+    snames<< "cry" << i << "TimeCompt";
+    tree->SetBranchAddress(snames.str().c_str(),&pTCompt[i]);
+    snames.str("");
+    snames<< "cry" << i << "TimePhot";
+    tree->SetBranchAddress(snames.str().c_str(),&pTPhot[i]);
+    snames.str("");
   }
   for (int i = 0 ; i < numOfCh ; i++)
   {
@@ -266,7 +352,6 @@ int main (int argc, char** argv)
   TCanvas* Canvas2 = new TCanvas("Canvas2", "Canvas2", 1200, 800); 
   TCanvas* Canvas3 = new TCanvas("Canvas3", "Canvas3", 1200, 800); 
   TCanvas* Canvas4 = new TCanvas("Canvas4", "Canvas4", 1200, 800); 
-  //TCanvas* Canvas5 = new TCanvas("Canvas5", "Canvas5", 1200, 800); 
 
 
 
@@ -284,6 +369,10 @@ int main (int argc, char** argv)
   long int pointN = 0;
   long int goodCounter = 0;
   long int winCounter = 0;
+  long int twoeventsCounter=0;
+  long int moreeventsCounter=0;
+
+
 
 
   Float_t vEnergyComptonPhotoelLYSO[103] = 
@@ -456,7 +545,7 @@ int main (int argc, char** argv)
     }
 
     /*
-    //work on detected data
+    //WORK ON SIMULATION DETECTED DATA
     //find events where the energy deposited detected is > threshold in 2 crystals, and the sum of those energies is about 511 keV (1 compton scattering)
 
     Float_t cryThreshold = 0.1; //MeV
@@ -487,9 +576,9 @@ int main (int argc, char** argv)
     */
 
 
-    //work on simulation data
-    /*find events where the energy deposited is > threshold in 2 crystals
-    and the sum of those energies is about 511 keV (1 compton scattering) */
+    /* SIMULATION USING ENERGY THRESHOLDS    
+    //find events where the energy deposited is > threshold in 2 crystals
+    //and the sum of those energies is about 511 keV (1 compton scattering) 
     Float_t cryThreshold = 0.1; //MeV
     Float_t totalThreshold = 0.5; //MeV
     Short_t NumbOfGoodInteractions = 0; //number of interaction where the energy deposited is > threshold
@@ -498,6 +587,8 @@ int main (int argc, char** argv)
     Float_t wY = 0;
     //Float_t wZ = 0; already exists
     Float_t wT = 0;
+    Short_t nCompt = 0;
+    Short_t nPhot = 0;
 
     Float_t  *goodCrystals; //will store the number of crystals where good interactions happened
     goodCrystals = new Float_t [NumbOfGoodInteractions];  
@@ -522,6 +613,7 @@ int main (int argc, char** argv)
         wY += (py[i]->at(j) * pEdep[i]->at(j));
         wZ += (pz[i]->at(j) * pEdep[i]->at(j));
       }
+    
       if(totEnergyCry > cryThreshold)
       {
         NumbOfGoodInteractions++;
@@ -538,7 +630,7 @@ int main (int argc, char** argv)
       wY = 0;
       wZ = 0;
     }
-
+  
 
     //filter events with exactly 2 good interactions whose energy sums up to >totalThreshold
     //the numbers of the two crystals are stored in goodCrystals[1] and goodCrystals[2]
@@ -574,7 +666,127 @@ int main (int argc, char** argv)
         winCounter++;
       }
     }
+    */
 
+
+    //SIMULATION USING EXACT POSITIONS OF COMPTON AND PHOTOELECTRIC EFFECT
+
+    //find events where there are exactly one compton and one photoelectric effect
+
+    Short_t nCompt = 0;
+    Short_t nPhot = 0;
+    Short_t ComptCrystal = -1;
+    Short_t PhotCrystal = -1;
+
+    Float_t  *goodCrystals; //will store the number of crystals where good interactions happened
+    goodCrystals = new Float_t [nCompt+nPhot];  
+    Float_t  *goodInteractionsX; //will store the X position of the energy deposited in crystals where good interactions happened
+    goodInteractionsX = new Float_t [nCompt+nPhot];  
+    Float_t  *goodInteractionsY; //will store the Y position of the energy deposited in crystals where good interactions happened
+    goodInteractionsY = new Float_t [nCompt+nPhot];  
+    Float_t  *goodInteractionsZ; //will store the DOI of the energy deposited in crystals where good interactions happened
+    goodInteractionsZ = new Float_t [nCompt+nPhot];
+
+    std::vector<float> comptCrystals; 
+    std::vector<float> photCrystals;
+    std::vector<float> diffcomptCrystals; 
+    std::vector<float> diffphotCrystals;  
+
+    for(int i=0; i<numOfCry; i++)
+    {
+      for(int k=0; k<pComptX[i]->size(); k++)
+      {
+        nCompt++;
+        comptCrystals.push_back(i);
+        ComptCrystal = i;
+      }
+      if(pComptX[i]->size() >= 1)
+      {
+        diffcomptCrystals.push_back(i);
+      }
+      for(int k=0; k<pPhotX[i]->size(); k++)
+      {
+        nPhot++;
+        photCrystals.push_back(i);
+        PhotCrystal = i;
+      }
+      if(pPhotX[i]->size() >= 1)
+      {
+        diffphotCrystals.push_back(i);
+      }
+    }
+
+    //check possibility that more interactions happen in the same crystal
+    if(diffcomptCrystals.size() ==1 && diffphotCrystals.size() ==1 && (ComptCrystal != PhotCrystal))
+      if(comptCrystals.size() == 1 && photCrystals.size() == 1)
+      {
+        twoeventsCounter++;
+      }
+      else 
+      {
+        moreeventsCounter++;
+      }
+
+
+
+   
+    Float_t comptonAngle1;
+    Float_t comptonAngle2;
+    Float_t comptonPhotoelDistance;
+
+
+    if(comptCrystals.size() == 1 && photCrystals.size() == 1 && ComptCrystal != -1 && PhotCrystal != -1 && (ComptCrystal != PhotCrystal))
+    {
+      goodCounter++;
+      goodInteractionsX[1] = pComptX[ComptCrystal]->at(0);
+      goodInteractionsX[2] = pPhotX[PhotCrystal]->at(0);
+      goodInteractionsY[1] = pComptY[ComptCrystal]->at(0);
+      goodInteractionsY[2] = pPhotY[PhotCrystal]->at(0);
+      goodInteractionsZ[1] = pComptZ[ComptCrystal]->at(0);
+      goodInteractionsZ[2] = pPhotZ[PhotCrystal]->at(0);
+  
+      //correct compton angle
+      comptonAngle1 = angle3D(0,0,-208.2, goodInteractionsX[1], goodInteractionsY[1], goodInteractionsZ[1], goodInteractionsX[2], goodInteractionsY[2], goodInteractionsZ[2]);
+      //incorrect compton angle
+      comptonAngle2 = angle3D(0,0,-208.2, goodInteractionsX[2], goodInteractionsY[2], goodInteractionsZ[2], goodInteractionsX[1], goodInteractionsY[1], goodInteractionsZ[1]);
+      //distance travelled between compton and photoelectric effect
+      comptonPhotoelDistance = distance3D(goodInteractionsX[1], goodInteractionsY[1], goodInteractionsZ[1], goodInteractionsX[2], goodInteractionsY[2], goodInteractionsZ[2]);
+      //std::cout << "crystal 1 energy: " << goodInteractionsEnergy[1] << " crystal2 energy: " << goodInteractionsEnergy[2] << "\n DOI1: " << goodInteractionsZ[1] << " DOI2: " << goodInteractionsZ[2] <<  "\n angle1: " << comptonAngle1 << " angle 2: " << comptonAngle2 << "\n distance: " << comptonPhotoelDistance << "\n" << std::endl;
+      //probability correct event
+      
+      /*
+      std::cout << goodInteractionsX[1] << ", " << goodInteractionsY[1] << ", " << goodInteractionsZ[1]<< "\t " << goodInteractionsX[2] << ", " << goodInteractionsY[2] << ", " << goodInteractionsZ[2] << std::endl;
+      std::cout << "angle1: " << comptonAngle1 << "\t angle2: " << comptonAngle2 << std::endl;
+      std::cout << "z1 " << (fabs(-7.5-goodInteractionsZ[1]))/10 << "\t z2 " << (fabs(-7.5-goodInteractionsZ[2]))/10 << "\t lambda " << lambdaLYSO->Eval(0.511) << std::endl;
+      std::cout << "distance 2: " << comptonPhotoelDistance/10 << std::endl;
+      */
+
+      Float_t totalProbability1 = simTravel1((abs(-7.5-goodInteractionsZ[1]))/10, lambdaLYSO->Eval(0.511))*
+                          simCompton(comptonAngle1)*
+                          simTravel2(comptonPhotoelDistance/10, lambdaLYSO->Eval((0.511/(2-cos(comptonAngle1)))))*
+                          simPhotoelectric(photoelectricCrossSectionLYSO->Eval(1000*(0.511/(2-cos(comptonAngle1)))));
+      //probability incorrect event
+      Float_t totalProbability2 = simTravel1((fabs(-7.5-goodInteractionsZ[2]))/10, lambdaLYSO->Eval(0.511))*
+                          simCompton(comptonAngle2)*
+                          simTravel2(comptonPhotoelDistance/10, lambdaLYSO->Eval((0.511/(2-cos(comptonAngle2)))))*
+                          simPhotoelectric(photoelectricCrossSectionLYSO->Eval(1000*(0.511/(2-cos(comptonAngle2)))));
+      /*
+      std::cout << "\ncorrect: "  << totalProbability1 << "\t incorrect: " << totalProbability2 << std::endl;
+      std::cout << "travel 1 : " << simTravel1((fabs(-7.5-goodInteractionsZ[1]))/10, lambdaLYSO->Eval(0.511))/simTravel1((fabs(-7.5-goodInteractionsZ[2]))/10, lambdaLYSO->Eval(0.511)) << std::endl;
+      std::cout << "compton: " << simCompton(comptonAngle1)/simCompton(comptonAngle2) << std::endl;
+      std::cout << "travel 2 : " <<  simTravel2(comptonPhotoelDistance/10, lambdaLYSO->Eval((0.511/(2-cos(comptonAngle1)))))/simTravel2(comptonPhotoelDistance/10, lambdaLYSO->Eval((0.511/(2-cos(comptonAngle2))))) << std::endl;
+      std::cout << "photoelectric: " << simPhotoelectric(photoelectricCrossSectionLYSO->Eval(1000*(0.511/(2-cos(comptonAngle1)))))/simPhotoelectric(photoelectricCrossSectionLYSO->Eval(1000*(0.511/(2-cos(comptonAngle2))))) << std::endl;
+      */
+
+      if(totalProbability1/totalProbability2 > 1)
+      {
+        winCounter++;
+        //std::cout << "----------GOOD-----------" << std::endl;
+      }
+      //else
+        //std::cout << "-------------------------" << std::endl;
+    }
+  
 
 
     if(NumbOfInteractions > 0) // discard events with no energy deposition (they would never trigger the detectors anyway..)
@@ -591,6 +803,13 @@ int main (int argc, char** argv)
       std::cout << perc << "% done... ";
     }
     
+
+    nCompt = 0;
+    nPhot = 0;
+    comptCrystals.clear();
+    photCrystals.clear();
+    diffcomptCrystals.clear();
+    diffphotCrystals.clear();
     TotalCryEnergy.clear();
     DoiDetected.clear();
     DoiSimulation.clear();
@@ -599,6 +818,10 @@ int main (int argc, char** argv)
   std::cout << std::endl;
   std::cout << "number of good compton events: " << goodCounter << std::endl;
   std::cout << "number of correct predictions: " << winCounter << std::endl;
+
+  std::cout << "two events in two different crystals: " << twoeventsCounter << std::endl;
+  std::cout << "more events in two different crystals: " << moreeventsCounter << std::endl;
+
   std::string outFile = "Tree_OUT.root";
   TFile* fOut = new TFile(outFile.c_str(),"recreate");
   
