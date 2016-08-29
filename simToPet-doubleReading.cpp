@@ -86,7 +86,7 @@ Float_t angle3D(Float_t ax, Float_t ay, Float_t az, Float_t bx, Float_t by, Floa
 
 Float_t MeasureProb(Float_t Em,Float_t Et,Float_t sigma)
 {
-  return (1.0/TMath::Sqrt(2.0*TMath::Pi())) * exp(- pow((Em-Et),2) / (2.0*pow(sigma,2)) );
+  return (1.0/(TMath::Sqrt(2.0*TMath::Pi()))*sigma) * exp(- pow((Em-Et),2) / (2.0*pow(sigma,2)) );
 }
 
 
