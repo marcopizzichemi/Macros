@@ -25,8 +25,8 @@
 
 
 
-//travel function used for 511 gamma rays that reach interaction point
-//pathlength and lambda511 in cm
+//travel function used for 0.511 MeV ma rays that reach interaction point
+//pathlength and lambda511 in mm
 Float_t simTravel1(Float_t pathLength, Float_t lambda511)
 {
   Float_t probTravel1 = exp(-pathLength/lambda511);
@@ -43,8 +43,7 @@ Float_t simCompton(Float_t comptonAngle)
 }
 
 //travel function used between compton and photoelectric effects
-//energy is 511-energy deposited in first crystal because of compton effect, in keV
-//pathLength and lambdaE in cm
+//pathLength and lambdaE in mm
 Float_t simTravel2(Float_t pathLength, Float_t lambdaE)
 {
   Float_t probTravel2 = exp(-pathLength/lambdaE);
@@ -52,7 +51,6 @@ Float_t simTravel2(Float_t pathLength, Float_t lambdaE)
 }
 
 //photoelectric effect function
-//energy is energy deposited in second crystal, in keV
 Float_t simPhotoelectric(Float_t csPE)
 {
   Float_t probPhotoelectric = csPE;
@@ -69,8 +67,8 @@ Float_t distance3D(Float_t ax, Float_t ay, Float_t az, Float_t bx, Float_t by, F
 }
 
 
-//angle between 3 points in 3d space
-Float_t angle3D(Float_t ax, Float_t ay, Float_t az, Float_t bx, Float_t by, Float_t bz, Float_t cx, Float_t cy, Float_t cz)
+//supplementary of the angle between 3 points in 3d space
+Float_t suppAngle3D(Float_t ax, Float_t ay, Float_t az, Float_t bx, Float_t by, Float_t bz, Float_t cx, Float_t cy, Float_t cz)
 {
   Float_t v1[3] = {bx-ax, by-ay, bz-az};
   Float_t v2[3] = {cx-bx, cy-by, cz-bz};
@@ -126,7 +124,7 @@ int main (int argc, char** argv)
       numOfCry++;   
   }
   
-  //the string "cry" appears 5 times per crystal..
+  //the string "cry" appears 13 times per crystal..
   numOfCry = numOfCry / 13;
   
   std::cout << "number of channels: \t" << numOfCh << std::endl;
@@ -313,7 +311,7 @@ int main (int argc, char** argv)
   Short_t CrystalsHit;
   Short_t NumbOfInteractions;
   
-  std::vector<float> TotalCryEnergy;	
+  std::vector<float> TotalCryEnergy;  
   std::vector<float>* pTotalCryEnergy; 
   pTotalCryEnergy = &TotalCryEnergy;
   std::vector<float> DoiDetected;  
@@ -326,8 +324,8 @@ int main (int argc, char** argv)
   
   TTree* t1 = new TTree("adc","adc");
   
-  t1->Branch("ExtendedTimeTag",&ExtendedTimeTag,"ExtendedTimeTag/l"); 	//absolute time tag of the event
-  t1->Branch("DeltaTimeTag",&DeltaTimeTag,"DeltaTimeTag/l"); 			//delta time from previous event
+  t1->Branch("ExtendedTimeTag",&ExtendedTimeTag,"ExtendedTimeTag/l");   //absolute time tag of the event
+  t1->Branch("DeltaTimeTag",&DeltaTimeTag,"DeltaTimeTag/l");      //delta time from previous event
   t1->Branch("TotalCryEnergy","std::vector<float>",&pTotalCryEnergy); 
   t1->Branch("DoiDetected","std::vector<float>",&pDoiDetected); 
   t1->Branch("DoiSimulation","std::vector<float>",&pDoiSimulation); 
@@ -374,7 +372,8 @@ int main (int argc, char** argv)
 
 
 
-
+  //values found using geant4/geant4.10.01.p03/examples/extended/electromagnetic/TestEm14
+  
   Float_t vEnergyComptonPhotoelLYSO[103] = 
   {5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100,
   105, 110, 115, 120, 125, 130, 135, 140, 145, 150, 155, 160, 165, 170, 175, 180, 185, 190, 195, 200,
@@ -382,6 +381,11 @@ int main (int argc, char** argv)
   305, 310, 315, 320, 325, 330, 335, 340, 345, 350, 355, 360, 365, 370, 375, 380, 385, 390, 395, 400,
   405, 410, 415, 420, 425, 430, 435, 440, 445, 450, 455, 460, 465, 470, 475, 480, 485, 490, 495, 500,
   505, 510, 515};
+  //change units to MeV in energy for photoelectric and compton cross section 
+  for(int i=0; i<103; i++)
+  {
+    vEnergyComptonPhotoelLYSO[i]=vEnergyComptonPhotoelLYSO[i]/1000;
+  }
 
   Float_t vCSComptonLYSO[103] = 
   {3.9897,6.5516,8.0894,9.1666,9.9455,10.505,10.902,11.18,11.37,11.494,11.568,11.606,11.615,11.603,
@@ -403,9 +407,11 @@ int main (int argc, char** argv)
   0.08187,0.079147,0.076554,0.074083,0.071728,0.06948,0.067335,0.065285,0.063327,0.061453,0.059661,
   0.057945,0.056301,0.054725,0.053214,0.051765,0.050374,0.049037,0.047754,0.046519,0.045333,0.044191,
   0.043092,0.042034,0.041014,0.040025,0.039078,0.038164,0.037282};
-
+  //change units to mm2/g in photoelectric cross section
   for(int i=0; i<103; i++)
+  {
     vCSPhotoelectricLYSO[i]=vCSPhotoelectricLYSO[i]*100;
+  }
  
   Float_t vEnergyLambdaLYSO[23] =
   {0.001,0.0015,0.002,0.003,0.004,0.005,0.006,0.008,0.01,0.015,0.02,
@@ -416,6 +422,13 @@ int main (int argc, char** argv)
   0.00053432,0.0011114,0.00078548,0.0014043,0.0029794,0.008657,0.018449,
   0.032981,0.052543,0.024507,0.043318,0.11986,0.23536,0.53397,0.84433,
   1.1232,1.6516};
+  //change units to mm in lambda
+  for(int i=0; i<23; i++)
+  {
+    vLambdaLYSO[i] = vLambdaLYSO[i]*10;
+  }
+  
+
 
 
 
@@ -430,18 +443,18 @@ int main (int argc, char** argv)
 
   Canvas2->cd();
   comptonCrossSectionLYSO->Draw("A*");
-  comptonCrossSectionLYSO->GetXaxis()->SetTitle("gamma energy [keV]");
+  comptonCrossSectionLYSO->GetXaxis()->SetTitle("gamma energy [MeV]");
   comptonCrossSectionLYSO->GetYaxis()->SetTitle("cross section [mm2/g]");
 
   Canvas3->cd();
   photoelectricCrossSectionLYSO->Draw("A*");
-  photoelectricCrossSectionLYSO->GetXaxis()->SetTitle("gamma energy [keV]");
+  photoelectricCrossSectionLYSO->GetXaxis()->SetTitle("gamma energy [MeV]");
   photoelectricCrossSectionLYSO->GetYaxis()->SetTitle("cross section [mm2/g]");
 
   Canvas4->cd();
   lambdaLYSO->Draw("A*");
   lambdaLYSO->GetXaxis()->SetTitle("gamma energy [MeV]");
-  lambdaLYSO->GetYaxis()->SetTitle("cross lambda [cm]");
+  lambdaLYSO->GetYaxis()->SetTitle("cross lambda [mm]");
 
  
 
@@ -467,7 +480,6 @@ int main (int argc, char** argv)
       //mppc gain = 1.25e6
       //adc channel binning 156e-15 C
       double adcCh = detector[i]*1.25e6*1.6e-19/156e-15;
-      //charge[i*2] = (Short_t) adcCh; 
       charge[i] = (Short_t) adcCh; 
     }
     
@@ -482,19 +494,19 @@ int main (int argc, char** argv)
       if(px[i]->size()) CrystalsHit++;
       for(int j = 0; j < px[i]->size(); j++)
       {
-		    RealX += (px[i]->at(j) * pEdep[i]->at(j))/totalEnergyDeposited;
+        RealX += (px[i]->at(j) * pEdep[i]->at(j))/totalEnergyDeposited;
       }
       for(int j = 0; j < px[i]->size(); j++)
       {
-		    RealY += (py[i]->at(j) * pEdep[i]->at(j))/totalEnergyDeposited;
+        RealY += (py[i]->at(j) * pEdep[i]->at(j))/totalEnergyDeposited;
       }
       for(int j = 0; j < px[i]->size(); j++)
       {
-		    RealZ += (pz[i]->at(j) * pEdep[i]->at(j))/totalEnergyDeposited;
+        RealZ += (pz[i]->at(j) * pEdep[i]->at(j))/totalEnergyDeposited;
       }
       for(int j = 0; j < px[i]->size(); j++)
       {
-		    SumEnergy += pEdep[i]->at(j);	
+        SumEnergy += pEdep[i]->at(j); 
       }
       TotalCryEnergy.push_back(SumEnergy);
     }
@@ -532,7 +544,7 @@ int main (int argc, char** argv)
         doiSim = wZ/totEnergyCry;
         if (totEnergyCry != 0)
         {
-          doiDet = (Float_t) CrystalLengthY*detector[i]/((Float_t) (detector[i] + detector[i+64]));
+          doiDet = (Float_t) (CrystalLengthY*detector[i])/((Float_t) (detector[i] + detector[i+64]));
           DoiDetected.push_back(doiDet);
           DoiSimulation.push_back(doiSim);
           DOIscatter->Fill(doiDet, doiSim);
@@ -645,8 +657,8 @@ int main (int argc, char** argv)
     {
       goodCounter++;
       //compton angles in the two cases
-      comptonAngle1 = M_PI-angle3D(0,0,-208.2, goodInteractionsX[1], goodInteractionsY[1], goodInteractionsZ[1], goodInteractionsX[2], goodInteractionsY[2], goodInteractionsZ[2]);
-      comptonAngle2 = M_PI-angle3D(0,0,-208.2, goodInteractionsX[2], goodInteractionsY[2], goodInteractionsZ[2], goodInteractionsX[1], goodInteractionsY[1], goodInteractionsZ[1]);
+      comptonAngle1 = suppAngle3D(0,0,-208.2, goodInteractionsX[1], goodInteractionsY[1], goodInteractionsZ[1], goodInteractionsX[2], goodInteractionsY[2], goodInteractionsZ[2]);
+      comptonAngle2 = suppAngle3D(0,0,-208.2, goodInteractionsX[2], goodInteractionsY[2], goodInteractionsZ[2], goodInteractionsX[1], goodInteractionsY[1], goodInteractionsZ[1]);
       //distance travelled between compton and photoelectric effect
       comptonPhotoelDistance = distance3D(goodInteractionsX[1], goodInteractionsY[1], goodInteractionsZ[1], goodInteractionsX[2], goodInteractionsY[2], goodInteractionsZ[2]);
       //std::cout << "crystal 1 energy: " << goodInteractionsEnergy[1] << " crystal2 energy: " << goodInteractionsEnergy[2] << "\n DOI1: " << goodInteractionsZ[1] << " DOI2: " << goodInteractionsZ[2] <<  "\n angle1: " << comptonAngle1 << " angle 2: " << comptonAngle2 << "\n distance: " << comptonPhotoelDistance << "\n" << std::endl;
@@ -730,61 +742,42 @@ int main (int argc, char** argv)
 
 
    
+    Float_t comptonAngle0;
     Float_t comptonAngle1;
-    Float_t comptonAngle2;
     Float_t comptonPhotoelDistance;
 
 
     if(comptCrystals.size() == 1 && photCrystals.size() == 1 && ComptCrystal != -1 && PhotCrystal != -1 && (ComptCrystal != PhotCrystal))
     {
       goodCounter++;
-      goodInteractionsX[1] = pComptX[ComptCrystal]->at(0);
-      goodInteractionsX[2] = pPhotX[PhotCrystal]->at(0);
-      goodInteractionsY[1] = pComptY[ComptCrystal]->at(0);
-      goodInteractionsY[2] = pPhotY[PhotCrystal]->at(0);
-      goodInteractionsZ[1] = pComptZ[ComptCrystal]->at(0);
-      goodInteractionsZ[2] = pPhotZ[PhotCrystal]->at(0);
+      goodInteractionsX[0] = pComptX[ComptCrystal]->at(0);
+      goodInteractionsX[1] = pPhotX[PhotCrystal]->at(0);
+      goodInteractionsY[0] = pComptY[ComptCrystal]->at(0);
+      goodInteractionsY[1] = pPhotY[PhotCrystal]->at(0);
+      goodInteractionsZ[0] = pComptZ[ComptCrystal]->at(0);
+      goodInteractionsZ[1] = pPhotZ[PhotCrystal]->at(0);
   
       //correct compton angle
-      comptonAngle1 = angle3D(0,0,-208.2, goodInteractionsX[1], goodInteractionsY[1], goodInteractionsZ[1], goodInteractionsX[2], goodInteractionsY[2], goodInteractionsZ[2]);
+      comptonAngle0 = suppAngle3D(0,0,-208.2, goodInteractionsX[0], goodInteractionsY[0], goodInteractionsZ[0], goodInteractionsX[1], goodInteractionsY[1], goodInteractionsZ[1]);
       //incorrect compton angle
-      comptonAngle2 = angle3D(0,0,-208.2, goodInteractionsX[2], goodInteractionsY[2], goodInteractionsZ[2], goodInteractionsX[1], goodInteractionsY[1], goodInteractionsZ[1]);
+      comptonAngle1 = suppAngle3D(0,0,-208.2, goodInteractionsX[1], goodInteractionsY[1], goodInteractionsZ[1], goodInteractionsX[0], goodInteractionsY[0], goodInteractionsZ[0]);
       //distance travelled between compton and photoelectric effect
-      comptonPhotoelDistance = distance3D(goodInteractionsX[1], goodInteractionsY[1], goodInteractionsZ[1], goodInteractionsX[2], goodInteractionsY[2], goodInteractionsZ[2]);
-      //std::cout << "crystal 1 energy: " << goodInteractionsEnergy[1] << " crystal2 energy: " << goodInteractionsEnergy[2] << "\n DOI1: " << goodInteractionsZ[1] << " DOI2: " << goodInteractionsZ[2] <<  "\n angle1: " << comptonAngle1 << " angle 2: " << comptonAngle2 << "\n distance: " << comptonPhotoelDistance << "\n" << std::endl;
+      comptonPhotoelDistance = distance3D(goodInteractionsX[0], goodInteractionsY[0], goodInteractionsZ[0], goodInteractionsX[1], goodInteractionsY[1], goodInteractionsZ[1]);
       //probability correct event
-      
-      /*
-      std::cout << goodInteractionsX[1] << ", " << goodInteractionsY[1] << ", " << goodInteractionsZ[1]<< "\t " << goodInteractionsX[2] << ", " << goodInteractionsY[2] << ", " << goodInteractionsZ[2] << std::endl;
-      std::cout << "angle1: " << comptonAngle1 << "\t angle2: " << comptonAngle2 << std::endl;
-      std::cout << "z1 " << (fabs(-7.5-goodInteractionsZ[1]))/10 << "\t z2 " << (fabs(-7.5-goodInteractionsZ[2]))/10 << "\t lambda " << lambdaLYSO->Eval(0.511) << std::endl;
-      std::cout << "distance 2: " << comptonPhotoelDistance/10 << std::endl;
-      */
-
-      Float_t totalProbability1 = simTravel1((abs(-7.5-goodInteractionsZ[1]))/10, lambdaLYSO->Eval(0.511))*
-                          simCompton(comptonAngle1)*
-                          simTravel2(comptonPhotoelDistance/10, lambdaLYSO->Eval((0.511/(2-cos(comptonAngle1)))))*
-                          simPhotoelectric(photoelectricCrossSectionLYSO->Eval(1000*(0.511/(2-cos(comptonAngle1)))));
+      Float_t totalProbability1 = simTravel1(fabs(-7.5-goodInteractionsZ[0]), lambdaLYSO->Eval(0.511))*
+                          simCompton(comptonAngle0)*
+                          simTravel2(comptonPhotoelDistance, lambdaLYSO->Eval((0.511/(2-cos(comptonAngle0)))))*
+                          simPhotoelectric(photoelectricCrossSectionLYSO->Eval(0.511/(2-cos(comptonAngle0))));
       //probability incorrect event
-      Float_t totalProbability2 = simTravel1((fabs(-7.5-goodInteractionsZ[2]))/10, lambdaLYSO->Eval(0.511))*
-                          simCompton(comptonAngle2)*
-                          simTravel2(comptonPhotoelDistance/10, lambdaLYSO->Eval((0.511/(2-cos(comptonAngle2)))))*
-                          simPhotoelectric(photoelectricCrossSectionLYSO->Eval(1000*(0.511/(2-cos(comptonAngle2)))));
-      /*
-      std::cout << "\ncorrect: "  << totalProbability1 << "\t incorrect: " << totalProbability2 << std::endl;
-      std::cout << "travel 1 : " << simTravel1((fabs(-7.5-goodInteractionsZ[1]))/10, lambdaLYSO->Eval(0.511))/simTravel1((fabs(-7.5-goodInteractionsZ[2]))/10, lambdaLYSO->Eval(0.511)) << std::endl;
-      std::cout << "compton: " << simCompton(comptonAngle1)/simCompton(comptonAngle2) << std::endl;
-      std::cout << "travel 2 : " <<  simTravel2(comptonPhotoelDistance/10, lambdaLYSO->Eval((0.511/(2-cos(comptonAngle1)))))/simTravel2(comptonPhotoelDistance/10, lambdaLYSO->Eval((0.511/(2-cos(comptonAngle2))))) << std::endl;
-      std::cout << "photoelectric: " << simPhotoelectric(photoelectricCrossSectionLYSO->Eval(1000*(0.511/(2-cos(comptonAngle1)))))/simPhotoelectric(photoelectricCrossSectionLYSO->Eval(1000*(0.511/(2-cos(comptonAngle2))))) << std::endl;
-      */
-
+      Float_t totalProbability2 = simTravel1(fabs(-7.5-goodInteractionsZ[1]), lambdaLYSO->Eval(0.511))*
+                          simCompton(comptonAngle1)*
+                          simTravel2(comptonPhotoelDistance, lambdaLYSO->Eval((0.511/(2-cos(comptonAngle1)))))*
+                          simPhotoelectric(photoelectricCrossSectionLYSO->Eval(0.511/(2-cos(comptonAngle1))));
+      
       if(totalProbability1/totalProbability2 > 1)
       {
         winCounter++;
-        //std::cout << "----------GOOD-----------" << std::endl;
       }
-      //else
-        //std::cout << "-------------------------" << std::endl;
     }
   
 
@@ -818,8 +811,10 @@ int main (int argc, char** argv)
   std::cout << std::endl;
   std::cout << "number of good compton events: " << goodCounter << std::endl;
   std::cout << "number of correct predictions: " << winCounter << std::endl;
+  std::cout << "percentage: " << (Float_t) (winCounter)/ (Float_t) (goodCounter)*100 << std::endl;
 
-  std::cout << "two events in two different crystals: " << twoeventsCounter << std::endl;
+
+  std::cout << "\ntwo events in two different crystals: " << twoeventsCounter << std::endl;
   std::cout << "more events in two different crystals: " << moreeventsCounter << std::endl;
 
   std::string outFile = "Tree_OUT.root";
