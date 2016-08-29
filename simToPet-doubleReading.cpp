@@ -83,7 +83,6 @@ Float_t angle3D(Float_t ax, Float_t ay, Float_t az, Float_t bx, Float_t by, Floa
   return angle;
 }
 
-
 Float_t MeasureProb(Float_t Em,Float_t Et,Float_t sigma)
 {
   return (1.0/(TMath::Sqrt(2.0*TMath::Pi()))*sigma) * exp(- pow((Em-Et),2) / (2.0*pow(sigma,2)) );
@@ -759,11 +758,11 @@ int main (int argc, char** argv)
     Float_t comptonAngle0;
     Float_t comptonAngle1;
     Float_t comptonPhotoelDistance;
+    Float_t sourceZ = -1008.2;
 
 
     if(comptCrystals.size() == 1 && photCrystals.size() == 1 && ComptCrystal != -1 && PhotCrystal != -1 && (ComptCrystal != PhotCrystal))
     {
-      //TODO make z calculation really in 3d
       //then pass to real "detector"
       //TODO make x-y discrete, the center of the crystals
       //TODO smear doi with precision 3mm fwhm
@@ -774,39 +773,41 @@ int main (int argc, char** argv)
       goodInteractionsY[1] = pPhotY[PhotCrystal]->at(0);
       goodInteractionsZ[0] = pComptZ[ComptCrystal]->at(0);
       goodInteractionsZ[1] = pPhotZ[PhotCrystal]->at(0);
-      
-      //properly calculate the travel lenght of path 1 
-      //distance3D with interesection line origin to compton vertex and plane on the back of the crystal (z= -7.5 in this scenario)
-      // parametric line 
-      //Float_t paramT = (goodInteractionsZ[1] - 1008.2 - 7.5)/(1008.2):
-      //Float_t Inters1[3] = { , , }; 
-      
       //take the energy deposited in the two crystals
       goodIEnergyDeposited[0] = TotalCryEnergy[ComptCrystal];
       goodIEnergyDeposited[1] = TotalCryEnergy[PhotCrystal];
       
-      
+      //properly calculate the travel lenght of path 1 
+      //distance3D with interesection line origin to compton vertex and plane on the back of the crystal (z= -7.5 in this scenario
+      Float_t paramT0 = (-7.5 - sourceZ)/(goodInteractionsZ[0] - sourceZ);
+      Float_t Inters0[3] = {0 + paramT0*(goodInteractionsX[0] - 0),0 + paramT0*(goodInteractionsY[0] - 0),-7.5}; 
+      Float_t disTravel1_0 = distance3D(0 + paramT0*(goodInteractionsX[0] - 0),0 + paramT0*(goodInteractionsY[0] - 0),-7.5, goodInteractionsX[0], goodInteractionsY[0], goodInteractionsZ[0]);
+      //std::cout << disTravel1_0 << "\t" << fabs(-7.5-goodInteractionsZ[0]) << std::endl;
+      Float_t paramT1 = (-7.5 - sourceZ)/(goodInteractionsZ[1] - sourceZ);
+      Float_t Inters1[3] = {0 + paramT1*(goodInteractionsX[1] - 0),0 + paramT1*(goodInteractionsY[1] - 0),-7.5}; 
+      Float_t disTravel1_1 = distance3D(0 + paramT1*(goodInteractionsX[1] - 0),0 + paramT1*(goodInteractionsY[1] - 0),-7.5, goodInteractionsX[1], goodInteractionsY[1], goodInteractionsZ[1]);
+      //std::cout << disTravel1_1 << "\t" << fabs(-7.5-goodInteractionsZ[1]) << std::endl;
       
       //correct compton angle
-      comptonAngle0 = angle3D(0,0,-1008.2, goodInteractionsX[0], goodInteractionsY[0], goodInteractionsZ[0], goodInteractionsX[1], goodInteractionsY[1], goodInteractionsZ[1]);
+      comptonAngle0 = angle3D(0, 0, sourceZ, goodInteractionsX[0], goodInteractionsY[0], goodInteractionsZ[0], goodInteractionsX[1], goodInteractionsY[1], goodInteractionsZ[1]);
       //incorrect compton angle
-      comptonAngle1 = angle3D(0,0,-1008.2, goodInteractionsX[1], goodInteractionsY[1], goodInteractionsZ[1], goodInteractionsX[0], goodInteractionsY[0], goodInteractionsZ[0]);
+      comptonAngle1 = angle3D(0, 0, sourceZ, goodInteractionsX[1], goodInteractionsY[1], goodInteractionsZ[1], goodInteractionsX[0], goodInteractionsY[0], goodInteractionsZ[0]);
+      
       //distance travelled between compton and photoelectric effect
       comptonPhotoelDistance = distance3D(goodInteractionsX[0], goodInteractionsY[0], goodInteractionsZ[0], goodInteractionsX[1], goodInteractionsY[1], goodInteractionsZ[1]);
-      //std::cout << "crystal 1 energy: " << goodInteractionsEnergy[1] << " crystal2 energy: " << goodInteractionsEnergy[2] << "\n DOI1: " << goodInteractionsZ[1] << " DOI2: " << goodInteractionsZ[2] <<  "\n angle1: " << comptonAngle1 << " angle 2: " << comptonAngle2 << "\n distance: " << comptonPhotoelDistance << "\n" << std::endl;
-      //probability correct event
       
       //calculate the "true" energies deposited that would derive from compton angles in hypothesis 1 and 2
-      // if 1 -> 2, compton angle is 1 and energy dep in 1 is
+      // if 0 -> 1 (correct), compton angle is 0 and energy dep is
+      //in compton crystal
       TrueEnergyDepositedFirst[0] = 0.511 - (0.511/(2-cos(comptonAngle0)));
+      //in photoelectric crystal
       TrueEnergyDepositedSecond[0] = (0.511/(2-cos(comptonAngle0)));
       
+      // if 1 -> 0 (incorrect), compton angle is 1 and energy dep is
+      //in compton crystal
       TrueEnergyDepositedFirst[1] = 0.511 - (0.511/(2-cos(comptonAngle1)));
+      //in photoelectric crystal
       TrueEnergyDepositedSecond[1] = (0.511/(2-cos(comptonAngle1)));
-      
-      
-      
-      
       
       //smear the reading of the detector
       float enResFWHM = 0.15;
@@ -814,61 +815,23 @@ int main (int argc, char** argv)
       smearedEnergyDeposited[0] = smearing->Gaus(goodIEnergyDeposited[0],(enResFWHM*goodIEnergyDeposited[0] )/ 2.355);
       smearedEnergyDeposited[1] = smearing->Gaus(goodIEnergyDeposited[1],(enResFWHM*goodIEnergyDeposited[1] )/ 2.355);
       
-      //test probability:
-      //i measured smearedEnergyDeposited 1 and 2,
-      //i make hipo 1
-      //m1 is the crystal that is hit first in reality 
-//       Float_t prob_m1_hipo1 = MeasureProb(smearedEnergyDeposited[1],TrueEnergyDepositedFirst[1],(enResFWHM*goodIEnergyDeposited[1] )/ 2.355);
-//       Float_t prob_m2_hipo1 = MeasureProb(smearedEnergyDeposited[2],TrueEnergyDepositedSecond[1],(enResFWHM*goodIEnergyDeposited[2] )/ 2.355);
-//       // i make hipo 2
-      // so now the crystal m1 would be assigned the energy of the photoelectric event, so TrueEnergyDepositedSecond
-//       Float_t prob_m1_hipo2 = MeasureProb(smearedEnergyDeposited[1],TrueEnergyDepositedSecond[2],(enResFWHM*goodIEnergyDeposited[1] )/ 2.355);
-//       Float_t prob_m2_hipo2 = MeasureProb(smearedEnergyDeposited[2],TrueEnergyDepositedFirst[2],(enResFWHM*goodIEnergyDeposited[2] )/ 2.355);
-      
-      
-//       std::cout << goodIEnergyDeposited[1] << "\t" << goodIEnergyDeposited[2] << std::endl; 
-//       std::cout <<(enResFWHM*goodIEnergyDeposited[1] )/ 2.355<< "\t" << (enResFWHM*goodIEnergyDeposited[2] )/ 2.355<< std::endl;
-//       std::cout << smearedEnergyDeposited[1] << "\t" << smearedEnergyDeposited[2] << std::endl; 
-//       std::cout << TrueEnergyDepositedFirst[1] << "\t" << TrueEnergyDepositedSecond[1]<< std::endl;  // in the goog hipo
-//       std::cout << prob_m1_hipo1 << "\t" << prob_m2_hipo1 << std::endl;
-//       std::cout << TrueEnergyDepositedFirst[2] << "\t" << TrueEnergyDepositedSecond[2]<< std::endl;  // in the bad hipo
-//       std::cout << prob_m1_hipo2 << "\t" << prob_m2_hipo2 << std::endl;
-//       std::cout << "--------------------------------------------------------------------" << std::endl; 
-      
-      
-      /*
-      std::cout << goodInteractionsX[1] << ", " << goodInteractionsY[1] << ", " << goodInteractionsZ[1]<< "\t " << goodInteractionsX[2] << ", " << goodInteractionsY[2] << ", " << goodInteractionsZ[2] << std::endl;
-      std::cout << "angle1: " << comptonAngle1 << "\t angle2: " << comptonAngle2 << std::endl;
-      std::cout << "z1 " << (fabs(-7.5-goodInteractionsZ[1]))/10 << "\t z2 " << (fabs(-7.5-goodInteractionsZ[2]))/10 << "\t lambda " << lambdaLYSO->Eval(0.511) << std::endl;
-      std::cout << "distance 2: " << comptonPhotoelDistance/10 << std::endl;
-      */
-
-      Float_t totalProbability0 = simTravel1((fabs(-7.5-goodInteractionsZ[0])), lambdaLYSO->Eval(0.511))*
+      //probabiliy coorect event
+      Float_t totalProbability0 = simTravel1(disTravel1_0, lambdaLYSO->Eval(0.511))*
                           simCompton(comptonAngle0)*
                           simTravel2(comptonPhotoelDistance, lambdaLYSO->Eval((0.511/(2-cos(comptonAngle0)))))*
                           simPhotoelectric(photoelectricCrossSectionLYSO->Eval((0.511/(2-cos(comptonAngle0)))))*
                           MeasureProb(smearedEnergyDeposited[0],TrueEnergyDepositedFirst[0],(enResFWHM*goodIEnergyDeposited[0] )/ 2.355)*MeasureProb(smearedEnergyDeposited[1],TrueEnergyDepositedSecond[0],(enResFWHM*goodIEnergyDeposited[1] )/ 2.355);
       //probability incorrect event
-      Float_t totalProbability1 = simTravel1((fabs(-7.5-goodInteractionsZ[1])), lambdaLYSO->Eval(0.511))*
+      Float_t totalProbability1 = simTravel1(disTravel1_1, lambdaLYSO->Eval(0.511))*
                           simCompton(comptonAngle1)*
                           simTravel2(comptonPhotoelDistance, lambdaLYSO->Eval((0.511/(2-cos(comptonAngle1)))))*
                           simPhotoelectric(photoelectricCrossSectionLYSO->Eval((0.511/(2-cos(comptonAngle1)))))*
                           MeasureProb(smearedEnergyDeposited[0],TrueEnergyDepositedSecond[1],(enResFWHM*goodIEnergyDeposited[0] )/ 2.355)*MeasureProb(smearedEnergyDeposited[1],TrueEnergyDepositedFirst[1],(enResFWHM*goodIEnergyDeposited[1] )/ 2.355);
-      /*
-      std::cout << "\ncorrect: "  << totalProbability1 << "\t incorrect: " << totalProbability2 << std::endl;
-      std::cout << "travel 1 : " << simTravel1((fabs(-7.5-goodInteractionsZ[1]))/10, lambdaLYSO->Eval(0.511))/simTravel1((fabs(-7.5-goodInteractionsZ[2]))/10, lambdaLYSO->Eval(0.511)) << std::endl;
-      std::cout << "compton: " << simCompton(comptonAngle1)/simCompton(comptonAngle2) << std::endl;
-      std::cout << "travel 2 : " <<  simTravel2(comptonPhotoelDistance/10, lambdaLYSO->Eval((0.511/(2-cos(comptonAngle1)))))/simTravel2(comptonPhotoelDistance/10, lambdaLYSO->Eval((0.511/(2-cos(comptonAngle2))))) << std::endl;
-      std::cout << "photoelectric: " << simPhotoelectric(photoelectricCrossSectionLYSO->Eval(1000*(0.511/(2-cos(comptonAngle1)))))/simPhotoelectric(photoelectricCrossSectionLYSO->Eval(1000*(0.511/(2-cos(comptonAngle2))))) << std::endl;
-      */
-
+      
       if(totalProbability0/totalProbability1 > 1)
       {
         winCounter++;
-        //std::cout << "----------GOOD-----------" << std::endl;
       }
-      //else
-        //std::cout << "-------------------------" << std::endl;
     }
   
 
