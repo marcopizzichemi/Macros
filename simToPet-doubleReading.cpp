@@ -26,6 +26,12 @@
 
 
 
+Short_t sgn(Float_t x)
+{
+  if (x > 0) return 1;
+  if (x < 0) return -1;
+  return 0;
+}
 
 //travel function used for 511 gamma rays that reach interaction point
 //pathlength and lambda511 in cm
@@ -700,7 +706,7 @@ int main (int argc, char** argv)
     goodInteractionsX = new Float_t [nCompt+nPhot];  
     Float_t  *goodInteractionsY; //will store the Y position of the energy deposited in crystals where good interactions happened
     goodInteractionsY = new Float_t [nCompt+nPhot];  
-    Float_t  *goodInteractionsZ; //will store the DOI of the energy deposited in crystals where good interactions happened
+    Float_t  *goodInteractionsZ; //will store the Z position of the energy deposited in crystals where good interactions happened
     goodInteractionsZ = new Float_t [nCompt+nPhot];
     Float_t  *goodIEnergyDeposited;
     goodIEnergyDeposited = new Float_t [nCompt+nPhot];
@@ -759,6 +765,9 @@ int main (int argc, char** argv)
     Float_t comptonAngle1;
     Float_t comptonPhotoelDistance;
     Float_t sourceZ = -1008.2;
+    Float_t crystalxEsr = 1.53+0.07; //x length in mm
+    Float_t crystalyEsr = 1.53+0.07; //y length in mm
+
 
 
     if(comptCrystals.size() == 1 && photCrystals.size() == 1 && ComptCrystal != -1 && PhotCrystal != -1 && (ComptCrystal != PhotCrystal))
@@ -767,12 +776,35 @@ int main (int argc, char** argv)
       //TODO make x-y discrete, the center of the crystals
       //TODO smear doi with precision 3mm fwhm
       goodCounter++;
+      //X, Y coordinates as center of the crystal
+      goodInteractionsX[0] = ((Short_t) (pComptX[ComptCrystal]->at(0) / crystalxEsr)) * crystalxEsr + sgn(pComptX[ComptCrystal]->at(0))*crystalxEsr/2;
+      goodInteractionsX[1] = ((Short_t) (pPhotX[PhotCrystal]->at(0) / crystalxEsr)) * crystalxEsr + sgn(pPhotX[PhotCrystal]->at(0))*crystalxEsr/2;
+      goodInteractionsY[0] = ((Short_t) (pComptY[ComptCrystal]->at(0) / crystalyEsr)) * crystalyEsr + sgn(pComptY[ComptCrystal]->at(0))*crystalyEsr/2;
+      goodInteractionsY[1] = ((Short_t) (pPhotY[PhotCrystal]->at(0) / crystalyEsr)) * crystalyEsr + sgn(pPhotY[PhotCrystal]->at(0))*crystalyEsr/2;
+      //smeared Z coordinate
+      Float_t ZResFWHM = 3; //mm
+      TRandom *smearingZ = new TRandom();
+      goodInteractionsZ[0] = smearingZ->Gaus(pComptZ[ComptCrystal]->at(0),(ZResFWHM*pComptZ[ComptCrystal]->at(0) )/ 2.355);
+      goodInteractionsZ[1] = smearingZ->Gaus(pPhotZ[PhotCrystal]->at(0),(ZResFWHM*pPhotZ[PhotCrystal]->at(0))/ 2.355);
+      
+      /*
+      std::cout << "center x: " << goodInteractionsX[0] << "\t exact:" << pComptX[ComptCrystal]->at(0) << std::endl;
+      std::cout << "center x: " << goodInteractionsX[1] << "\t exact:" << pPhotX[PhotCrystal]->at(0) << std::endl;
+      std::cout << "center y: " << goodInteractionsY[0] << "\t exact:" << pComptY[ComptCrystal]->at(0) << std::endl;
+      std::cout << "center y: " << goodInteractionsY[1] << "\t exact:" << pPhotY[PhotCrystal]->at(0) << std::endl;
+      std::cout << "smeared z: " << goodInteractionsZ[0] << "\t exact:" << pComptZ[ComptCrystal]->at(0) << std::endl;
+      std::cout << "smeared z: " << goodInteractionsZ[0] << "\t exact:" << pPhotZ[PhotCrystal]->at(0) << "\n" << std::endl;
+      */
+
+      //exact X,Y,Z coordinates
+      /*
       goodInteractionsX[0] = pComptX[ComptCrystal]->at(0);
       goodInteractionsX[1] = pPhotX[PhotCrystal]->at(0);
       goodInteractionsY[0] = pComptY[ComptCrystal]->at(0);
       goodInteractionsY[1] = pPhotY[PhotCrystal]->at(0);
       goodInteractionsZ[0] = pComptZ[ComptCrystal]->at(0);
       goodInteractionsZ[1] = pPhotZ[PhotCrystal]->at(0);
+      */
       //take the energy deposited in the two crystals
       goodIEnergyDeposited[0] = TotalCryEnergy[ComptCrystal];
       goodIEnergyDeposited[1] = TotalCryEnergy[PhotCrystal];
@@ -810,7 +842,7 @@ int main (int argc, char** argv)
       TrueEnergyDepositedSecond[1] = (0.511/(2-cos(comptonAngle1)));
       
       //smear the reading of the detector
-      float enResFWHM = 0.15;
+      Float_t enResFWHM = 0.15;
       TRandom *smearing = new TRandom();
       smearedEnergyDeposited[0] = smearing->Gaus(goodIEnergyDeposited[0],(enResFWHM*goodIEnergyDeposited[0] )/ 2.355);
       smearedEnergyDeposited[1] = smearing->Gaus(goodIEnergyDeposited[1],(enResFWHM*goodIEnergyDeposited[1] )/ 2.355);
