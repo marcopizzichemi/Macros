@@ -1,5 +1,3 @@
-//simple program to translate sim output to "adc" format
-
 // compile with 
 // g++ -o ../build/simRead_base simRead_base.cpp `root-config --cflags --glibs`
 // syntax
