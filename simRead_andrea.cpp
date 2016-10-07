@@ -1,5 +1,5 @@
 // compile with 
-// g++ -o ../build/simRead_base simRead_base.cpp `root-config --cflags --glibs`
+// g++ -o ../build/simRead_andrea simRead_andrea.cpp `root-config --cflags --glibs`
 // syntax
 // simRead_base `ls out*`
 
@@ -13,6 +13,27 @@
 #include <sstream>
 #include "TObjArray.h"
 #include "TObject.h"
+#include <algorithm>    // std::sort
+#include <numeric>      // std::accumulate
+#include <vector>  
+#include "TH1F.h"
+#include "TCanvas.h"
+
+	struct fotone_ottico
+	{
+	    float energia;
+	    float tempo;
+		float x;
+		float y;
+		
+		bool operator<(const fotone_ottico& a) const 
+		{
+    		return tempo < a.tempo;
+		}
+
+	};
+	
+
 
 int main (int argc, char** argv)
 {
@@ -196,7 +217,7 @@ int main (int argc, char** argv)
     snames<< "cry" << i << "PosZEnDep";
     tree->SetBranchAddress(snames.str().c_str(),&pz[i]);
   }
-  for (int i = 0 ; i < numOfCh ; i++)
+  for (int i = 0 ; i < numOfCh ; i++) 
   {
     std::stringstream snames;
     snames << "detector" << i;
@@ -224,66 +245,216 @@ int main (int argc, char** argv)
   long int counter = 0;
   int nEntries = tree->GetEntries();
   std::cout << "nEntries = " << nEntries << std::endl;
+  
+  TH1F *timeHisto[numOfCry];
+  TCanvas *timeCanvas[numOfCry];
+  
+  for(int i = 0; i < numOfCry ; i++)
+  {
+		std::ostringstream s;
+		s << "cristallo_" << i;
+		std::string name(s.str());
+ 		timeHisto[i]= new TH1F(name.c_str(),name.c_str(), 100, 0,2);
+		name+="_c";
+		timeCanvas[i]=new TCanvas(name.c_str(),name.c_str(),1200,800);
+  }
+		
+
   for(int iEvent = 256; iEvent < 257 ; iEvent++)
   {  
-    
-    tree->GetEvent(iEvent);
-    int CrystalsHit = 0;      // counter of how many crystals were hit by this gamma
-    
-    float* energyPerCrystal;  // total energy deposited in each crystal
-    energyPerCrystal = new float[numOfCry];
-    for(int i = 0; i < numOfCry ; i++)
-    {
-      energyPerCrystal[i] = 0;
-    }
-    
-    // some example of global variable
-    std::cout << "Event Numb \t\t\t = "              << Event << std::endl;
-    std::cout << "Total energy deposited \t\t = "  << totalEnergyDeposited << std::endl;
-    std::cout << "Total Numb of Opticals produced\t = "  << NumOptPhotons+NumCherenkovPhotons << std::endl;
-    
-    // one example of energy deposition related std::vectors
-    for(int i = 0; i < numOfCry ; i++) //crystal by crystal
-    {
-      if(px[i]->size()) //if the i-th crystal had energy deposition (--> if(0) => false) 
-      {
-        CrystalsHit++; //count the crystal as hit
-        for(int j = 0; j < px[i]->size(); j++) //run on the hits in this crystal
-        {
-          energyPerCrystal[i] += pEdep[i]->at(j); //add the energy deposited
-        }
-        //output to user
-        std::cout << "Crystal[" << i <<"]\t\t\t = "  << energyPerCrystal[i] << std::endl;
-      }
-    }
-    std::cout << "Crystals Hit\t\t\t = " << CrystalsHit << std::endl;
-   
-    // one example of optical photon related std::vectors
-    // get the total number of optical detected 
-    // the size of any optical photon related std::vector is M (see above)
-    std::cout << "Number of Opticals detected\t = " << pGlobalTime->size() << std::endl;
-    for(int i = 0; i < pGlobalTime->size() ; i++) //crystal by crystal
-    {
-      std::cout << pGlobalTime->at(i) << std::endl;
-    }
-      
-    std::cout << "-----------------------------" << std::endl;
-    std::cout << std::endl;
-    
-    
-    
-    
-    
-    //progress feedback to the user...
-    counter++;
-    int perc = ((100*counter)/nEntries); //should strictly have not decimal part, written like this...
-    if( (perc % 10) == 0 )
-    {
-      std::cout << "\r";
-      std::cout << perc << "% done... ";
-    }
+		
+		tree->GetEvent(iEvent);
+		int CrystalsHit = 0;      // counter of how many crystals were hit by this gamma
+		
+		float* energyPerCrystal;  // total energy deposited in each crystal
+		energyPerCrystal = new float[numOfCry];
+		for(int i = 0; i < numOfCry ; i++)
+		{
+		energyPerCrystal[i] = 0;
+		}
+		
+		// some example of global variable
+		std::cout << "Event Numb \t\t\t = "              << Event << std::endl;
+		std::cout << "Total energy deposited \t\t = "  << totalEnergyDeposited << std::endl;
+		std::cout << "Total Numb of Opticals produced\t = "  << NumOptPhotons+NumCherenkovPhotons << std::endl;
+		
+		int primi_fotoni = 10;
+
+		//creo un array di struct, tante quante sono i fotoni ottici; ogni elemento dell'array contiene energia, tempo di arrivo, x e y di rivelazione
+		fotone_ottico fotone[pGlobalTime->size()];
+		if(pGlobalTime->size())
+		{
+			for (int i=0; i<pGlobalTime->size(); i++) 
+			{
+				fotone[i].energia = pPhotonEnergy->at(i);
+				fotone[i].tempo = pGlobalTime->at(i);
+				fotone[i].x = pOpticalX->at(i);
+				fotone[i].y = pOpticalY->at(i);
+			}
+			std::sort(fotone, fotone+pGlobalTime->size());
+		}
+
+		// one example of energy deposition related std::vectors
+		for(int i = 0; i < numOfCry ; i++) //crystal by crystal
+		{
+		if(px[i]->size()) //if the i-th crystal had energy deposition (--> if(0) => false) 
+		{
+		
+			std:: cout << "Le posizioni in cui il gamma ha deposto energia sono: "<<std::endl;    /////
+			CrystalsHit++; //count the crystal as hit
+			for(int j = 0; j < px[i]->size(); j++) //run on the hits in this crystal
+			{
+				energyPerCrystal[i] += pEdep[i]->at(j); //add the energy deposited
+		
+				std::cout << "(" << px[i]->at(j) << "," << py[i]->at(j) << "," << pz[i]->at(j) << ")" << std::endl;   ///////
+			}
+			//output to user
+			std::cout << "Crystal[" << i <<"]\t\t\t = "  << energyPerCrystal[i] << std::endl;
+
+		}
+
+		}
+		std::cout << "Crystals Hit\t\t\t = " << CrystalsHit << std::endl;
+
+		// cerco di capire in che cristallo ha deposto en 
+
+
+		int index_i;
+		int index_j;
+
+		int numero_cristallo; //////
+
+			
+		float cry = 3.13;
+		float gap = 0.07;
+
+		float cryst_center_x;
+		float cryst_center_y;
+
+		float en_depositata=0.;
+		float tempo=0;
+		float primi_fotoni_vec[10];
+		float sigma=0;
+		float somma =0;
+
+		// qua ho messo mano
+		if(CrystalsHit==1)
+		{
+
+			
+			for(int i = 0; i < numOfCry ; i++) //crystal by crystal (serve solo per cercare il cristallo in cui ha interagito il gamma)
+			{
+					if(px[i]->size()) //if the i-th crystal had energy deposition (--> if(0) => false) 
+					{
+						std::cout << "Il cristallo che è stato colpito è: "<< i << std::endl;
+						// converto il numero del cristallo nelle sue coordinate (i,j) col quale viene indicizzato nella matrice
+						index_i = i/8;
+						index_j = i%8;
+						std::cout << "Le coordinate del cristallo sono:\t" << "(" << index_i <<","<<index_j<<")"<<std::endl;
+						// converto le coordinate del cristallo nelle (x,y) del suo centro
+						index_i = index_i-sqrt(numOfCry)/2;
+						index_j = index_j-sqrt(numOfCry)/2;
+						std::cout << "Le coordinate shiftate del cristallo sono:\t" << "(" << index_i <<","<<index_j<<")"<<std::endl;
+						cryst_center_x = gap/2 + cry/2 + index_i*(gap + cry); 
+						cryst_center_y = gap/2 + cry/2 + index_j*(gap + cry); 
+						std::cout << "Le coordinate (x,y) del cristallo sono:\t" << "(" << cryst_center_x <<","<< cryst_center_y<<")"<<std::endl;
+						std::cout << "I range in cui acquisire fotoni per questo cristallo:\t" << "(" << cryst_center_x-(cry/2) <<","<< cryst_center_x+(cry/2) << ")" <<" x "<< "("  << cryst_center_y-(cry/2) <<","<< cryst_center_y+(cry/2) << ")" << std::endl; 
+
+						for (int a = -1; a<2; a++)
+						{
+								for (int b = -1; b<2; b++)
+								{
+										int k =0;
+                                                                                std::cout << a << " " <<  b << std::endl;
+										for (int m=0; m < pOpticalX->size(); m++)
+										{
+//                                                                                         std::cout << "m="<< m <<std::endl;
+											if ( ((cryst_center_y + b*(gap + cry))-(cry/2)) < (fotone[m].y)  &&  (fotone[m].y) < (cryst_center_y+b*(gap+cry)+(cry/2))  &&   ((cryst_center_x + a*(gap + cry)) - (cry/2) ) < (fotone[m].x)  &&  (fotone[m].x < (cryst_center_x+a*(gap+cry)+(cry/2))) )	
+											{
+												en_depositata += pPhotonEnergy->at(m);
+												if (k<primi_fotoni)
+												{
+                                                                                                        std::cout << "k=" << k <<std::endl;
+													tempo += fotone[m].tempo;
+													k++;
+													primi_fotoni_vec[k]=fotone[m].tempo;
+												}
+											}
+										}
+										double mean = tempo/10;
+										if(a==0 && b==0)
+										{
+											std::cout << "L'mmpc in corrispondenza del cristallo colpito ha raccolto:" << en_depositata <<std::endl;
+										}
+										
+										std::cout << "l'energia depositata nel cristallo di centro (" << cryst_center_x+a*(gap+cry) <<","<< cryst_center_y + b*(gap + cry)<<") è: \t" << en_depositata <<std::endl;
+										
+										std::cout << "Il tempo medio di arrivo dei primi 10 fotoni su questo mppc è: \t"<< mean <<std::endl;
+										
+                                                                                
+										for (int l=0;l<primi_fotoni;l++){somma += pow(primi_fotoni_vec[l]-mean,2);}
+										sigma = sqrt(somma/primi_fotoni);
+										std::cout << "con sigma di:\t\t\t\t\t\t\t"<< sigma <<std::endl;
+										std::cout << "----------------------------------------------------" << std::endl;
+										if (a==0 && b==0)
+										{
+											timeHisto[i]->Fill(mean);
+										}
+										en_depositata=0;
+										somma=0;
+										sigma=0;
+										tempo=0;
+								}
+						}
+						
+						for (int i=0; i < pOpticalX->size(); i++){en_depositata += pPhotonEnergy->at(i);}
+						std::cout << "l'energia depositata dai fotoni ottici dopo l'interazione in questo cristallo è: " << en_depositata <<std::endl;
+						
+
+					}
+			}
+		}
+
+	
+
+		// one example of optical photon related std::vectors
+		// get the total number of optical detected 
+		// the size of any optical photon related std::vector is M (see above)
+		std::cout << "Number of Opticals detected\t = " << pGlobalTime->size() << std::endl;
+		
+		std::cout << "-----------------------------" << std::endl;
+		std::cout << std::endl;
+
+		//progress feedback to the user...
+		counter++;
+		int perc = ((100*counter)/nEntries); //should strictly have not decimal part, written like this...
+		if( (perc % 10) == 0 )
+		{
+		std::cout << "\r";
+		std::cout << perc << "% done... ";
+		}
   }
-  std::cout << std::endl;
-  TFile *foooooo = new TFile("prova.root","recreate"); 
+  
+  
+  for(int i = 0; i < numOfCry ; i++)
+  {
+		
+			std::cout << i<<std::endl;
+			std::ostringstream p;
+			p << "cristallo" << i;
+			std::string name(p.str());
+			std::cout << name <<std::endl;
+			timeCanvas[i]->cd();
+			timeHisto[i]->Draw();
+			std::cout << name <<std::endl;
+			//timeCanvas[i]->Print("name.gif");
+			std::cout << name <<std::endl;
+			
+			std::cout << "prova" << std::endl;
+		
+  }
+  std::cout << "prova1" << std::endl;
+//   TFile* provaHistogram = new TFile("prova.root", "new");
+  std::cout << "prova2" << std::endl;
   return 0;
 }
