@@ -94,9 +94,14 @@ Float_t angle3D(Float_t ax, Float_t ay, Float_t az, Float_t bx, Float_t by, Floa
 Float_t MeasureProb(Float_t Em,Float_t Et,Float_t sigma)
 {
   Float_t factor1 = (1.0/(TMath::Sqrt(2.0*TMath::Pi()))*sigma);
+  /*
   if(factor1==0)
+  {
     std::cout << "factor1" << factor1 << std::endl;
+  }
+  */
   Float_t factor2 = exp(- pow((Em-Et),2) / (2.0*pow(sigma,2)) );
+  /*
   if(factor2==0)
   {
     std::cout << "bad exp ------------ \t" << - pow((Em-Et),2) / (2.0*pow(sigma,2)) << std::endl;
@@ -110,6 +115,7 @@ Float_t MeasureProb(Float_t Em,Float_t Et,Float_t sigma)
     std::cout << "sigma \t" << sigma << std::endl;
   }
   std::cout << std::endl;
+  */
   Float_t measureprob = factor1*factor2;
   return measureprob;
 }
@@ -403,6 +409,7 @@ int main (int argc, char** argv)
   long int moreeventsCounter=0;
   long int zCheckWinCounter=0;
   long int zCheckLoseCounter=0;
+  long int oneGoodCrystalHitCounter=0;
   
   
   Float_t vEnergyComptonPhotoelLYSO[103] = {
@@ -561,6 +568,11 @@ int main (int argc, char** argv)
       }
       TotalCryEnergy.push_back(SumEnergy);
     }
+
+    if(CrystalsHit==1 && (fabs(totalEnergyDeposited-0.511)<0.1))
+    {
+      oneGoodCrystalHitCounter++;
+    }
     /*
      * //find crystal with max energy deposition
      * Float_t MaxEnergyCry = 0;
@@ -689,18 +701,26 @@ int main (int argc, char** argv)
     
 
 
-
-    if(comptCrystals.size() == 1 && photCrystals.size() == 1 && ComptCrystal != -1 && PhotCrystal != -1 && (ComptCrystal != PhotCrystal))
+    if(diffcomptCrystals.size() == 1 && diffphotCrystals.size() == 1 && ComptCrystal != -1 && PhotCrystal != -1 && (ComptCrystal != PhotCrystal))
     {
-      //then pass to real "detector"
-      //TODO make x-y discrete, the center of the crystals
-      //TODO smear doi with precision 3mm fwhm
       goodCounter++;
+      
       //X, Y coordinates as center of the crystal
+
       goodInteractionsX[0] = ((Short_t) (pComptX[ComptCrystal]->at(0) / crystalxEsr)) * crystalxEsr + sgn(pComptX[ComptCrystal]->at(0))*crystalxEsr/2;
       goodInteractionsX[1] = ((Short_t) (pPhotX[PhotCrystal]->at(0) / crystalxEsr)) * crystalxEsr + sgn(pPhotX[PhotCrystal]->at(0))*crystalxEsr/2;
       goodInteractionsY[0] = ((Short_t) (pComptY[ComptCrystal]->at(0) / crystalyEsr)) * crystalyEsr + sgn(pComptY[ComptCrystal]->at(0))*crystalyEsr/2;
       goodInteractionsY[1] = ((Short_t) (pPhotY[PhotCrystal]->at(0) / crystalyEsr)) * crystalyEsr + sgn(pPhotY[PhotCrystal]->at(0))*crystalyEsr/2;
+      
+
+      //exact X, Y coordinates
+      /*
+      goodInteractionsX[0] = pComptX[ComptCrystal]->at(0);
+      goodInteractionsX[1] = pPhotX[PhotCrystal]->at(0);
+      goodInteractionsY[0] = pComptY[ComptCrystal]->at(0);
+      goodInteractionsY[1] = pPhotY[PhotCrystal]->at(0);
+      */
+
       //smeared Z coordinate
       Float_t ZResFWHM = 3  ; //mm
       TRandom *smearingZ = new TRandom();
@@ -768,11 +788,13 @@ int main (int argc, char** argv)
       TrueEnergyDepositedSecond[1] = (0.511/(2-cos(comptonAngle1)));
       
       //smear the reading of the detector
-      Float_t enResFWHM = 0.15;
+      Float_t enResFWHM = 0.15; 
       TRandom *smearing = new TRandom();
       smearedEnergyDeposited[0] = smearing->Gaus(goodIEnergyDeposited[0],(enResFWHM*goodIEnergyDeposited[0] )/ 2.355);
       smearedEnergyDeposited[1] = smearing->Gaus(goodIEnergyDeposited[1],(enResFWHM*goodIEnergyDeposited[1] )/ 2.355);
       
+
+
       //probabiliy coorect event
       Float_t totalProbability0 = simTravel1(disTravel1_0, lambdaLYSO->Eval(0.511))*
                                   simCompton(comptonAngle0)*
@@ -786,7 +808,7 @@ int main (int argc, char** argv)
                                   simPhotoelectric(photoelectricCrossSectionLYSO->Eval((0.511/(2-cos(comptonAngle1)))))*
                                   MeasureProb(smearedEnergyDeposited[0],TrueEnergyDepositedSecond[1],(enResFWHM*goodIEnergyDeposited[0] )/ 2.355)*MeasureProb(smearedEnergyDeposited[1],TrueEnergyDepositedFirst[1],(enResFWHM*goodIEnergyDeposited[1] )/ 2.355);
       
-      if(totalProbability0/totalProbability1 > 1)
+      if(totalProbability0>totalProbability1)
       {
         winCounter++;
       }
@@ -794,7 +816,7 @@ int main (int argc, char** argv)
       
       
     
-      //DEBUGGING: print everything
+      //DEBUGGING: print everything 
       if(totalProbability0==0 || totalProbability1==0)
       {
         //std::cout << "prob0 = " << totalProbability0 << std::endl;
@@ -855,7 +877,7 @@ int main (int argc, char** argv)
       //they will be used to calculate the percentage of correct predictions, given that the z coordinates are not (too) similar
       if(fabs(pComptZ[ComptCrystal]->at(0) - pPhotZ[PhotCrystal]->at(0))>2)
       {
-        if (totalProbability0/totalProbability1>1)
+        if (totalProbability0/totalProbability1>1 && (totalProbability1 != 0 || totalProbability0 != 0))
         {
           zCheckWinCounter++;
         }
@@ -897,16 +919,20 @@ int main (int argc, char** argv)
   }
     
   std::cout << std::endl;
-  std::cout << "number of good compton events: " << goodCounter << std::endl;
-  std::cout << "number of correct predictions: " << winCounter << std::endl;
-  std::cout << "percentage: " << (Float_t) (winCounter)/ (Float_t) (goodCounter)*100 << std::endl;
+  std::cout << "------------\nnumber of events where only one crystal is hit: " << oneGoodCrystalHitCounter << std::endl;
 
-  std::cout << "percentage with not too similar z coordinates: " << (Float_t) (zCheckWinCounter)/ (Float_t) (zCheckLoseCounter+zCheckWinCounter)*100 << std::endl;
-  std::cout << "number of events with not too similar z coordinates: " << zCheckWinCounter+zCheckLoseCounter << std::endl;
+  std::cout << "\nnumber of good compton events: " << goodCounter << std::endl;
+  std::cout << "number of correct predictions: " << winCounter << std::endl;
+  std::cout << "(exactly two events in two different crystals: " << twoeventsCounter << "; \tmore events in two different crystals: " << moreeventsCounter << ")" << std::endl;
+  std::cout << "percentage correct predictions: " << (Float_t) (winCounter)/ (Float_t) (goodCounter)*100 << std::endl;
+  std::cout << "gain (correct predictions/one crystal events): " << (Float_t) (winCounter)/ (Float_t) (oneGoodCrystalHitCounter)*100 << std::endl;
+
+  std::cout << "\nnumber of compton events with not too similar z coordinates: " << zCheckWinCounter+zCheckLoseCounter << std::endl;
+  std::cout << "number of correct predictions with compton events with not too similar z coordinates: " << zCheckWinCounter << std::endl;
+  std::cout << "percentage correct predictions with not too similar z coordinates: " << (Float_t) (zCheckWinCounter)/ (Float_t) (zCheckLoseCounter+zCheckWinCounter)*100 << std::endl;
+  std::cout << "gain (correct predictions/one crystal events): " << (Float_t) (zCheckWinCounter)/ (Float_t) (oneGoodCrystalHitCounter)*100 << "\n------------" << std::endl;
 
   
-  std::cout << "two events in two different crystals: " << twoeventsCounter << std::endl;
-  std::cout << "more events in two different crystals: " << moreeventsCounter << std::endl;
   
   std::string outFile = "Tree_OUT.root";
   TFile* fOut = new TFile(outFile.c_str(),"recreate");
