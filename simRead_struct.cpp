@@ -19,6 +19,7 @@
 #include <vector>
 #include "TH1F.h"
 #include "TCanvas.h"
+#include "TF1.h"
 
 #include "../code/struct.hh"
 
@@ -108,112 +109,17 @@ int main (int argc, char** argv)
   int NumOptPhotons;                  // number of optical photons generated in this event, in the entire matrix
   int NumCherenkovPhotons;            // number of Cherenkov photons generated in this event, in the entire matrix
 
-  //energy deposition events
-  // these are 1 array of std::vector<float> per TTree entry. Explanation:
-  // one TTree entry is 1 gamma shot, but
-  // since the energy deposition events per gamma shot can be whatever, from 0 to N
-  // we saved the data in std::vectors since they have variable size
-  // if in a particular sim event the gamma deposited energy in N different points
-  // the std::vectors are effectively arrays of length N
-  // holding info of each energy deposition event, in this way
-  // pEdep[N] = E0,E1,E2,E3,...,EN
-  // px[N]    = x0,x1,x2,x3,...,xN
-  // py[N]    = y0,y1,y2,y3,...,yN
-  // pz[N]    = z0,z1,z2,z3,...,zN
-  // where En is the energy deposited by the gamma in the n-th interaction, xn the x position of this interaction, and so on.
-  // Just to complicate life (not really, in fact to make it simpler) the std::vectors are already sorted per crystal here, so
-  // connecting them to the TBranches is easier. Remember that in the output from the simulation, the vectors above are TTree entries called
-  // cryN
-  // cryNPosXEnDep
-  // cryNPosYEnDep
-  // cryNPosZEnDep
-  // here we need to store these values in some variables once we read them while looping on the TTree, and we don't know
-  // a priori the number of crystals. So instead of a simple pEdep std::vector, we need an array of pEdep std::vectors, with
-  // dynamic length (and same holds for px, py and pz). Hence, We don't declare a std::vector, but a pointer to std::vector, which
-  // allows to make an array of std::vectors run time.
-  // Finally, ROOT comes in the way and forces us not to pass a std::vector to the SetBranchAddress function, but a f...ing **ptr because
-  // of template classes. All very complicated but in the end this is how it work:
-  // in the event loop, after GetEvent(i) the variable pEdep[i] is a std::vector for the i-th crystal, that has N elements, one per each
-  // energy deposition occurred in that crystal.
-  // std::vector<float> **pEdep;         // for each energy deposition event, the amount of energy deposited
-  // std::vector<float> **px;            // for each energy deposition event, the x position
-  // std::vector<float> **py;            // for each energy deposition event, the y position
-  // std::vector<float> **pz;            // for each energy deposition event, the z position
-  // // create the arrays
-  // pEdep = new std::vector<float>* [numOfCry];
-  // px    = new std::vector<float>* [numOfCry];
-  // py    = new std::vector<float>* [numOfCry];
-  // pz    = new std::vector<float>* [numOfCry];
-  // // inizialize to 0... or you'll have bad surprises
-  // for (int i = 0 ; i < numOfCry ; i++)
-  // {
-  //   pEdep[i] = 0;
-  //   px[i] = 0;
-  //   py[i] = 0;
-  //   pz[i] = 0;
-  // }
-
-  //NEW energy deposition, each gamma 511 event has a std::vector of struct (type enDep) with all the data of each energy deposition
+  // energy deposition, each gamma 511 event has a std::vector of struct (type enDep) with all the data of each energy deposition
   std::vector<enDep> *energyDeposition = 0;
 
-  //Total number of photons detected in this event
+  // Total number of photons detected in this event
   // for each TTree entry, a simple number saying how many optical photons entered that
   // specific detector, passed the PDE check and where "detected" (i.e. saved)
   Short_t  *detector;
   detector = new Short_t [numOfCh];
 
-  //hits on detectors events
-  //these are 1 std::vector<float> per TTree entry
-  //For each gamma shot, a great number of opticals is generated in the matrix
-  //some of them enter the detectors, pass the PDE check and are "detected" (i.e. saved). So
-  //each one of these std::vector has length M, where M is the number of optical photons
-  //saved for that gamma event. Notice that this M is DIFFERENT from N of the energy deposition part.
-  //data is then arranged as above, so for example
-  // pOpticalX[M]               = x0,x1,x2,x3,...,xN
-  // pOpticalPreMomentumX[M]    = m0,m1,m2,m3,...,mN
-  // pOpticalPostMomentumX[M]   = v0,v1,v2,v3,...,vN
-  // pGlobalTime[M]             = t0,t1,t2,t3,...,tN
-  // and so on.
-
-  //NEW optical photons. for each gamma 511 event, every optical photon detected is a struct of type optPhot. a std::vector<optPhot> is saved for each gamma 511
+  // optical photons. for each gamma 511 event, every optical photon detected is a struct of type optPhot. a std::vector<optPhot> is saved for each gamma 511
   std::vector<optPhot> *photons = 0;
-
-
-  //Position of optical photon when entering detector
-  // std::vector<float> *pOpticalX;            // x position of optical photon when entering detector
-  // std::vector<float> *pOpticalY;            // y position of optical photon when entering detector
-  // std::vector<float> *pOpticalZ;            // z position of optical photon when entering detector
-  // //inizialize...
-  // pOpticalX = 0;
-  // pOpticalY = 0;
-  // pOpticalZ = 0;
-  // //Momentum before and after entering the detector
-  // //before
-  // std::vector<float> *pOpticalPreMomentumX;            // x component of momentum unitary vector of optical photon before entering detector
-  // std::vector<float> *pOpticalPreMomentumY;            // y component of momentum unitary vector of optical photon before entering detector
-  // std::vector<float> *pOpticalPreMomentumZ;            // z component of momentum unitary vector of optical photon before entering detector
-  // //inizialize...
-  // pOpticalPreMomentumX = 0;
-  // pOpticalPreMomentumY = 0;
-  // pOpticalPreMomentumZ = 0;
-  // //after
-  // std::vector<float> *pOpticalPostMomentumX;            // x component of momentum unitary vector of optical photon after entering detector
-  // std::vector<float> *pOpticalPostMomentumY;            // y component of momentum unitary vector of optical photon after entering detector
-  // std::vector<float> *pOpticalPostMomentumZ;            // z component of momentum unitary vector of optical photon after entering detector
-  // //inizialize...
-  // pOpticalPostMomentumX = 0;
-  // pOpticalPostMomentumY = 0;
-  // pOpticalPostMomentumZ = 0;
-  // //Global time (i.e. from emission of primary gamma for this event) of detection for the optical
-  // std::vector<float> *pGlobalTime;
-  // pGlobalTime = 0;//inizialize...
-  // //Type of optical photon (0 = scintillation, 1 = Cherenkov, 2 = other (should not exist))
-  // std::vector<int> *pPhotonType;
-  // pPhotonType = 0;//inizialize...
-  // //Energy of optical photon (in eV)
-  // std::vector<float> *pPhotonEnergy;
-  // pPhotonEnergy = 0;//inizialize...
-
 
   //------------------------
   // Set Branch Addresses
@@ -227,43 +133,13 @@ int main (int argc, char** argv)
 
   tree->SetBranchAddress("optical",&photons);
   tree->SetBranchAddress("energyDeposition",&energyDeposition);
-  // for (int i = 0 ; i < numOfCry ; i++)
-  // {
-  //   std::stringstream snames;
-  //   snames << "cry" << i;
-  //   tree->SetBranchAddress(snames.str().c_str(),&pEdep[i]);
-  //   snames.str("");
-  //   snames<< "cry" << i << "PosXEnDep";
-  //   tree->SetBranchAddress(snames.str().c_str(),&px[i]);
-  //   snames.str("");
-  //   snames<< "cry" << i << "PosYEnDep";
-  //   tree->SetBranchAddress(snames.str().c_str(),&py[i]);
-  //   snames.str("");
-  //   snames<< "cry" << i << "PosZEnDep";
-  //   tree->SetBranchAddress(snames.str().c_str(),&pz[i]);
-  // }
+
   for (int i = 0 ; i < numOfCh ; i++)
   {
     std::stringstream snames;
     snames << "detector" << i;
     tree->SetBranchAddress(snames.str().c_str(),&detector[i]);
   }
-  // tree->SetBranchAddress("PositionX",&pOpticalX);
-  // tree->SetBranchAddress("PositionY",&pOpticalY);
-  // tree->SetBranchAddress("PositionZ",&pOpticalZ);
-  //
-  // tree->SetBranchAddress("PreMomentumX",&pOpticalPreMomentumX);
-  // tree->SetBranchAddress("PreMomentumY",&pOpticalPreMomentumY);
-  // tree->SetBranchAddress("PreMomentumZ",&pOpticalPreMomentumZ);
-  // tree->SetBranchAddress("PostMomentumX",&pOpticalPostMomentumX);
-  // tree->SetBranchAddress("PostMomentumY",&pOpticalPostMomentumY);
-  // tree->SetBranchAddress("PostMomentumZ",&pOpticalPostMomentumZ);
-  //
-  // tree->SetBranchAddress("GlobalTime",&pGlobalTime);
-  // tree->SetBranchAddress("PhotonType",&pPhotonType);
-  // tree->SetBranchAddress("PhotonEnergy",&pPhotonEnergy);
-
-
 
   //output ttree
   // long long int DeltaTimeTag,ExtendedTimeTag;
@@ -294,29 +170,12 @@ int main (int argc, char** argv)
   long long int DeltaTimeTag,ExtendedTimeTag;
   Short_t charge[16];
 
-  //   TTree* t1 = new TTree("adc","adc");
-  //
-  //   t1->Branch("ExtendedTimeTag",&ExtendedTimeTag,"ExtendedTimeTag/l"); 	//absolute time tag of the event
-  //   t1->Branch("DeltaTimeTag",&DeltaTimeTag,"DeltaTimeTag/l"); 			//delta time from previous event
-  //   //branches of the 32 channels data
-  //   for (int i = 0 ; i < 32 ; i++)
-  //   {
-  //     //empty the stringstreams
-  //     std::stringstream snames,stypes;
-  //     charge[i] = 0;
-  //     snames << "ch" << i;
-  //     stypes << "ch" << i << "/S";
-  //     t1->Branch(snames.str().c_str(),&charge[i],stypes.str().c_str());
-  //   }
+  // correct geometry for 4x4 mppc
+  // Double_t xmppc[16]={-4.8,-1.6,1.6,4.8,-4.8,-1.6,1.6,4.8,-4.8,-1.6,1.6,4.8,-4.8,-1.6,1.6,4.8};
+  // Double_t ymppc[16]={-4.8,-4.8,-4.8,-4.8,-1.6,-1.6,-1.6,-1.6,1.6,1.6,1.6,1.6,4.8,4.8,4.8,4.8};
 
-  // correct one
-  Double_t xmppc[16]={-4.8,-1.6,1.6,4.8,-4.8,-1.6,1.6,4.8,-4.8,-1.6,1.6,4.8,-4.8,-1.6,1.6,4.8};
-  Double_t ymppc[16]={-4.8,-4.8,-4.8,-4.8,-1.6,-1.6,-1.6,-1.6,1.6,1.6,1.6,1.6,4.8,4.8,4.8,4.8};
-
-  // wrong geometry
-  //   Double_t xmppc[32]={-4.65,0,-1.55,0,1.55,0,4.65,0,-4.65,0,-1.55,0,1.55,0,4.65,0,-4.65,0,-1.55,0,1.55,0,4.65,0,-4.65,0,-1.55,0,1.55,0,4.65,0};
-  //   Double_t ymppc[32]={-4.65,0,-4.65,0,-4.65,0,-4.65,0,-1.55,0,-1.55,0,-1.55,0,-1.55,0,1.55,0,1.55,0,1.55,0,1.55,0,4.65,0,4.65,0,4.65,0,4.65,0};
-
+  Double_t xmppc[16]={-4.8,-4.8,-4.8,-4.8,-1.6,-1.6,-1.6,-1.6,1.6,1.6,1.6,1.6,4.8,4.8,4.8,4.8};
+  Double_t ymppc[16]={-4.8,-1.6,1.6,4.8,-4.8,-1.6,1.6,4.8,-4.8,-1.6,1.6,4.8,-4.8,-1.6,1.6,4.8};
 
   TH2F *flood = new TH2F("FloodHisto","FloodHisto",1000,-7,7,1000,-7,7);
   flood->GetXaxis()->SetTitle("X [mm]");
@@ -358,17 +217,43 @@ int main (int argc, char** argv)
   averageZvsRatio->GetXaxis()->SetTitle("Ratio (Fi/(Fi+Bi))");
   averageZvsRatio->GetYaxis()->SetTitle("AverageZ [mm]");
 
+  TH2F *normalizedZvsRatio = new TH2F("NormalizedZ vs Ratio","NormalizedZ vs Ratio",100,0,1,100,0,1);
+  normalizedZvsRatio->GetXaxis()->SetTitle("Ratio (Fi/(Fi+Bi))");
+  normalizedZvsRatio->GetYaxis()->SetTitle("NormalizedZ [fraction of crystal z]");
+
   TH2F *wivsRatio = new TH2F("wi vs Ratio","wi vs Ratio",100,0,1,100,0,1);
   wivsRatio->GetXaxis()->SetTitle("Ratio (Fi/(Fi+Bi))");
   wivsRatio->GetYaxis()->SetTitle("Wi");
 
-  TH2F *wMeasuredvsRatioW = new TH2F("wMeasuredvsRatioW","wMeasuredvsRatioW",100,0,1,100,0,1);
-  wMeasuredvsRatioW->GetXaxis()->SetTitle("RatioW Sum_i(Wi*Ei/Etot)");
+  TH2F *wMeasuredvsRatioW = new TH2F("wMeasuredvsRatioW","Measured w vs. Weighted average w_0 w_1",100,0,1,100,0,1);
+  wMeasuredvsRatioW->GetXaxis()->SetTitle("RatioW = Sum_i(Wi*Ei/Etot)");
   wMeasuredvsRatioW->GetYaxis()->SetTitle("Measured W");
+
+  TH2F *uMeasuredVsRatioU = new TH2F("uMeasuredVsRatioU","Measured u vs. Weighted average u_0 u_1",100,-1.3,-1,100,-1.3,-1);
+  uMeasuredVsRatioU->GetXaxis()->SetTitle("RatioU = Sum_i(Ui*Ei/Etot)");
+  uMeasuredVsRatioU->GetYaxis()->SetTitle("Measured U");
+
+  TH2F *vMeasuredVsRatioV = new TH2F("vMeasuredVsRatioV","Measured v vs. Weighted average v_0 v_1",100,1,2,100,1,2);
+  vMeasuredVsRatioV->GetXaxis()->SetTitle("RatioV = Sum_i(Vi*Ei/Etot)");
+  vMeasuredVsRatioV->GetYaxis()->SetTitle("Measured V");
 
   TH2F *averageZvsWi = new TH2F("AverageZ vs Wi","AverageZ vs Wi",100,0,1,100,-8,8);
   averageZvsWi->GetXaxis()->SetTitle("Wi");
   averageZvsWi->GetYaxis()->SetTitle("AverageZ [mm]");
+
+  TH2F *kMeasuredvsRatioF = new TH2F("kMeasuredveRatioF","kMeasuredveRatioF",100,0,1,100,0,1);
+  kMeasuredvsRatioF->GetXaxis()->SetTitle("RatioF");
+  kMeasuredvsRatioF->GetYaxis()->SetTitle("Measured K");
+
+  TH2F *pmaxiVsRatioF = new TH2F("pmaxiVsRatioF","Pmax_i vs. F_i",100,0,2000,100,0,2000);
+  pmaxiVsRatioF->GetXaxis()->SetTitle("F");
+  pmaxiVsRatioF->GetYaxis()->SetTitle("Pmax_i");
+
+  TH2F *kMeasuredvsPmaxi = new TH2F("kMeasuredvsPmaxi","k vs. Ratio(Pmax_i)",100,0,1,100,0,1);
+  kMeasuredvsPmaxi->GetXaxis()->SetTitle("Ratio(Pmax_i)");
+  kMeasuredvsPmaxi->GetYaxis()->SetTitle("Measured K");
+
+
 
   // for(int i =0 ; i < 2; i++)
   // {
@@ -384,8 +269,50 @@ int main (int argc, char** argv)
   for(int iEvent = 0; iEvent < nEntries ; iEvent++)
   {
     tree->GetEvent(iEvent);
+
+    columsum = 0;
+    rowsum = 0;
+    total = 0;
+    floodx = 0;
+    floody = 0;
+    floodz = 0;
+
+
+
+    //first clean the array
+    // for(int i = 0; i < 16 ; i++)
+    // {
+    //   charge[i] = 0;
+    // }
+
+    //then fill it with the detector data
+    // for(int i = 0; i < numOfCh ; i++)
+    // {
+    //   charge[i] = detector[i];
+    // }
+
+    //calculate weighted energy and fill 2d histo
+    for(int i = 0; i < 16 ; i++)
+    {
+      columsum += detector[i]*ymppc[i];
+      rowsum += detector[i]*xmppc[i];
+      total += detector[i];
+    }
+    floodx = rowsum/total;
+    floody = columsum/total;
+    // b_floodx->Fill();
+
+    flood->Fill(floodx,floody);
+
+
+
+
     std::vector<int> crystals;
     // std::vector<enDep> EventDepositions;
+
+
+
+
     for(int eEvent = 0; eEvent < energyDeposition->size(); eEvent++) //run on energy depositions and find in how many crystals energy was deposited
     {
       //read the crystal where energy was deposited
@@ -401,14 +328,18 @@ int main (int argc, char** argv)
     }
 
     //now take only events where energy was deposited in 2 crystals and total energy deposited is 511KeV
-    if((crystals[0] == 27 && crystals[1] == 28) | (crystals[0] == 28 && crystals[1] == 27))
+    //very not general, but this is only for testing: choose crystals 28 and 29 (2 crystals on the same mppc)
+    //and run only on the 9 relevant mppcs to compute w_near
+    if((crystals[0] == 28 && crystals[1] == 29) /*| (crystals[0] == 29 && crystals[1] == 28)*/)
+    // if((crystals[0] == 27 && crystals[1] == 28) | (crystals[0] == 28 && crystals[1] == 27))
+
     // if(true)
     {
       if(totalEnergyDeposited > 0.510)
       {
         if(crystals.size() == 2)
         {
-          //consider only non-lateral crystals
+          //consider only non-lateral crystals - not needed if it's restricted to 28 and 29...
           bool isCandidate = true;
           for(int eEvent = 0; eEvent < energyDeposition->size(); eEvent++) //run on energy depositions and check is not on borders
           {
@@ -431,7 +362,10 @@ int main (int argc, char** argv)
             std::vector<int> vToSort;
             for(int i = 0; i < numOfCh ; i++)
             {
-              Measured_totalDetCounts+=detector[i];
+              if(i == 1 | i == 2 | i == 3 | i == 5 | i == 6 | i == 7 | i == 9 | i == 10 | i == 11) //just channel 6 (where 28 and 29 are) and surrounding
+              {
+                Measured_totalDetCounts+=detector[i];
+              }
               vToSort.push_back(detector[i]);
             }
             std::sort (vToSort.begin(),vToSort.end());
@@ -449,15 +383,35 @@ int main (int argc, char** argv)
 
 
 
-            // double Measured_w = ((double) Measured_pmax) / ((double)Measured_totalDetCounts);
-            double Measured_w = ((double) Measured_pmax + (double)Measured_pSecond) / (2.0*(double)Measured_totalDetCounts);
+            double Measured_w = ((double) Measured_pmax) / ((double)Measured_totalDetCounts);
+            // double Measured_w = ((double) Measured_pmax + (double)Measured_pSecond) / (2.0*(double)Measured_totalDetCounts);
+            // double Measured_w = ((double) Measured_pmax + (double)Measured_pSecond) / ((double)Measured_totalDetCounts);
             double RatioW = 0.0;
+            double RatioF = 0.0;
+
+            //compute k
+
+            // we have u v coordinates for this event (floodx and floody)
+            // we roughly measured the center of the two spots,
+            // P28 = (-1.087,1.17) - P29 = (-1.087,1.97)
+            // now we should calculate the line connecting the two spots in u,v, then the normal, then intersection and bla bla.
+            // but we took same x for the two points, so the only coordinate that matters is y
+            double SpotsDistance = 1.97 - 1.17;
+            // std::cout << floodx << " "<<  floody << std::endl;
+            double kDistance = fabs(floody - 1.97);// 28 is 0, 29 is 1 - but maybe i've inverted. whatever
+            double Measured_k = kDistance/SpotsDistance;
 
 
             std::vector<double> totalEnergyPerCrystal;
             std::vector<double> averageZ;
+            std::vector<double> normalizedZ;
             std::vector<double> wi;
             std::vector<double> ratio;
+            std::vector<long int> Fi;
+            std::vector<long int> Bi;
+            std::vector<double> pmax_i;
+            std::vector<double> ui;
+            std::vector<double> vi;
 
             for(int j = 0 ; j < crystals.size() ; j++) // we are in a specific crystal
             {
@@ -476,8 +430,6 @@ int main (int argc, char** argv)
                 temp_averageZ += (energyDeposition->at(eEvent).DepositionZ *  energyDeposition->at(eEvent).EnergyDeposited)/temp_totalEnergyPerCrystal;
               }
 
-
-
               // now on opticals
               // 1.is averageZ correlated to Fi/(Fi+Bi)?
               // count Fi and Bi for this crystal
@@ -487,24 +439,24 @@ int main (int argc, char** argv)
               // divide opticals on the basis of origin crystal
               // count the photons detected by each detector for both origins
               // compute the two wi
-              long int Fi = 0;
-              long int Bi = 0;
+              long int temp_Fi = 0;
+              long int temp_Bi = 0;
               short detectorSorted[numOfCh];
               for(int iDet = 0; iDet < numOfCh ;iDet++)
               {
                 detectorSorted[iDet] = 0;
               }
 
-              for(int oEvent = 0; oEvent < photons->size(); oEvent++) //run on energy depositions and find in how many crystals energy was deposited
+              for(int oEvent = 0; oEvent < photons->size(); oEvent++)
               {
                 // calc origin crystal ID
                 int OriginCrystalID = photons->at(oEvent).OriginCrystalI * 8 +  photons->at(oEvent).OriginCrystalJ;
                 if(OriginCrystalID == crystals[j])
                 {
                   if(photons->at(oEvent).ExitFace == 1)
-                  Fi++;
+                    temp_Fi++;
                   if(photons->at(oEvent).ExitFace == 2)
-                  Bi++;
+                    temp_Bi++;
                   //the array of detectors
                   // std::cout << photons->at(oEvent).PositionX << " "<< (int) ((photons->at(oEvent).PositionX + 6.3) /  3.2) << std::endl;
                   int iDetector = (int) ((photons->at(oEvent).PositionX + 6.3) /  3.2);
@@ -517,28 +469,43 @@ int main (int argc, char** argv)
               int pmaxID = 0;
               int pmax = 0;
               int totalDetCounts = 0;
+              int allDetCounts = 0;
+              double temp_floodx = 0;
+              double temp_floody = 0;
+
               for(int i = 0; i < numOfCh ; i++)
               {
-                totalDetCounts += detectorSorted[i];
+                if(i == 1 | i == 2 | i == 3 | i == 5 | i == 6 | i == 7 | i == 9 | i == 10 | i == 11) //just channel 6 (where 28 and 29 are) and surrounding
+                {
+                  totalDetCounts += detectorSorted[i];
+
+                }
+
+                allDetCounts += detectorSorted[i];
+                temp_floodx += xmppc[i]*detectorSorted[i];
+                temp_floody += ymppc[i]*detectorSorted[i];
+
                 if(detectorSorted[i] > pmax)
                 {
                   pmax = detectorSorted[i];
                   pmaxID = i;
                 }
               }
+              temp_floodx = temp_floodx/( (double) allDetCounts);
+              temp_floody = temp_floody/( (double) allDetCounts);
+              pmax_i.push_back(pmax);
+              ui.push_back(temp_floodx);
+              vi.push_back(temp_floody);
               double temp_wi = ((double) pmax) / ((double)totalDetCounts);
-
-
-              double temp_ratio = ((double) Fi)/((double) Fi+ (double) Bi);
+              double temp_ratio = ((double) temp_Fi)/((double) temp_Fi+ (double) temp_Bi);
+              Fi.push_back(temp_Fi);
+              Bi.push_back(temp_Bi);
               wi.push_back(temp_wi);
               totalEnergyPerCrystal.push_back(temp_totalEnergyPerCrystal);
               ratio.push_back(temp_ratio);
               averageZ.push_back(temp_averageZ);
-
+              normalizedZ.push_back((temp_averageZ + 7.5) / 15.0);
               // RatioW += (wi * totalEnergyPerCrystal) / totalEnergyDeposited;
-
-
-
 
             }
 
@@ -550,26 +517,31 @@ int main (int argc, char** argv)
             if(doubleAccepted)
             {
               foundCandidate++;
+              RatioF = ((double) Fi[0])/(( (double) Fi[0])+( (double) Fi[1]));
+              double RatioP = ((double) pmax_i[0])/(((double) pmax_i[0])+( (double) pmax_i[1]));
+              double RatioU = (totalEnergyPerCrystal[0] * ui[0] + totalEnergyPerCrystal[1] * ui[1] )/ totalEnergyDeposited;
+              double RatioV = (totalEnergyPerCrystal[0] * vi[0] + totalEnergyPerCrystal[1] * vi[1] )/ totalEnergyDeposited;
               for(int countCry = 0; countCry < wi.size() ;countCry++ )
               {
                 averageZvsRatio->Fill(ratio[countCry],averageZ[countCry]);
+                normalizedZvsRatio->Fill(ratio[countCry],normalizedZ[countCry]);
                 wivsRatio->Fill(ratio[countCry],wi[countCry]);
                 averageZvsWi->Fill(wi[countCry],averageZ[countCry]);
                 RatioW += (wi[countCry] * totalEnergyPerCrystal[countCry]) / totalEnergyDeposited;
+                // std::cout << pmax_i[countCry] << " " << Fi[countCry] << std::endl;
+                pmaxiVsRatioF->Fill(Fi[countCry],pmax_i[countCry]);
               }
               wMeasuredvsRatioW->Fill(RatioW,Measured_w);
+              kMeasuredvsRatioF->Fill(RatioF,Measured_k);
+              kMeasuredvsPmaxi->Fill(RatioP,Measured_k);
+              uMeasuredVsRatioU->Fill(RatioU,floodx);
+              vMeasuredVsRatioV->Fill(RatioV,floody);
             }
 
           }
         }
       }
     }
-
-
-
-
-
-
 
     if(totalEnergyDeposited > 0.510)
     {
@@ -580,39 +552,7 @@ int main (int argc, char** argv)
     }
     // std::cout << "Event " << iEvent << " - Dep in crystals = " << crystals.size() << std::endl;
 
-    // columsum = 0;
-    // rowsum = 0;
-    // total = 0;
-    // floodx = 0;
-    // floody = 0;
-    // floodz = 0;
-    //
-    //
-    //
-    // //first clean the array
-    // for(int i = 0; i < 16 ; i++)
-    // {
-    //   charge[i] = 0;
-    // }
-    //
-    // //then fill it with the detector data
-    // for(int i = 0; i < numOfCh ; i++)
-    // {
-    //   charge[i] = detector[i];
-    // }
-    //
-    // //calculate weighted energy and fill 2d histo
-    // for(int i = 0; i < 16 ; i++)
-    // {
-    //   columsum += charge[i]*ymppc[i];
-    //   rowsum += charge[i]*xmppc[i];
-    //   total += charge[i];
-    // }
-    // floodx = rowsum/total;
-    // floody = columsum/total;
-    // b_floodx->Fill();
-    //
-    // flood->Fill(floodx,floody);
+
 
 
     //calculate the average x and y deposition position
@@ -698,12 +638,80 @@ int main (int argc, char** argv)
   std::cout << "Multi cry [511 KeV deposition] events = "<< multipleCounter << std::endl;
   std::cout << "Candidates = "<< foundCandidate << std::endl;
 
+  TF1 *line = new TF1("line","x",-7,7);
+  line->SetLineColor(kRed);
+  TF1 *line2 = new TF1("line2","x",0,2000);
+  line2->SetLineColor(kRed);
+
+
+
   std::string outFile = "FileOut.root";
   TFile* fOut = new TFile(outFile.c_str(),"recreate");
-  averageZvsRatio->Write();
-  averageZvsWi->Write();
-  wivsRatio->Write();
-  wMeasuredvsRatioW->Write();
+
+  TCanvas *C_flood = new TCanvas("C_flood","C_flood",800,800);
+  flood->Draw("COLZ");
+  C_flood->Write();
+  TCanvas *C_averageZvsRatio = new TCanvas("C_averageZvsRatio","C_averageZvsRatio",800,800);
+  C_averageZvsRatio->cd();
+  averageZvsRatio->Draw();
+  C_averageZvsRatio->Write();
+
+  TCanvas *C_normalizedZvsRatio = new TCanvas("C_normalizedZvsRatio","C_normalizedZvsRatio",800,800);
+  C_normalizedZvsRatio->cd();
+  normalizedZvsRatio->Draw();
+  C_normalizedZvsRatio->Write();
+
+  TCanvas *C_averageZvsWi = new TCanvas("C_averageZvsWi","C_averageZvsWi",800,800);
+  C_averageZvsWi->cd();
+  averageZvsWi->Draw();
+  C_averageZvsWi->Write();
+
+  TCanvas *C_wivsRatio = new TCanvas("C_wivsRatio","C_wivsRatio",800,800);
+  C_wivsRatio->cd();
+  wivsRatio->Draw();
+  line->Draw("same");
+  C_wivsRatio->Write();
+
+  TCanvas *C_wMeasuredvsRatioW = new TCanvas("C_wMeasuredvsRatioW","C_wMeasuredvsRatioW",800,800);
+  C_wMeasuredvsRatioW->cd();
+  wMeasuredvsRatioW->Draw();
+  line->Draw("same");
+  C_wMeasuredvsRatioW->Write();
+
+  TCanvas *C_uMeasuredVsRatioU = new TCanvas("C_uMeasuredVsRatioU","C_uMeasuredVsRatioU",800,800);
+  C_uMeasuredVsRatioU->cd();
+  uMeasuredVsRatioU->Draw();
+  line->Draw("same");
+  C_uMeasuredVsRatioU->Write();
+
+  TCanvas *C_vMeasuredVsRatioV = new TCanvas("C_vMeasuredVsRatioV","C_vMeasuredVsRatioV",800,800);
+  C_vMeasuredVsRatioV->cd();
+  vMeasuredVsRatioV->Draw();
+  line->Draw("same");
+  C_vMeasuredVsRatioV->Write();
+
+
+
+
+  TCanvas *C_kMeasuredvsRatioF = new TCanvas("C_kMeasuredvsRatioF","C_kMeasuredvsRatioF",800,800);
+  C_kMeasuredvsRatioF->cd();
+  kMeasuredvsRatioF->Draw();
+  line->Draw("same");
+  C_kMeasuredvsRatioF->Write();
+
+  TCanvas *C_kMeasuredvsPmaxi = new TCanvas("C_kMeasuredvsPmaxi","C_kMeasuredvsPmaxi",800,800);
+  C_kMeasuredvsPmaxi->cd();
+  kMeasuredvsPmaxi->Draw();
+  line->Draw("same");
+  C_kMeasuredvsPmaxi->Write();
+
+  TCanvas *C_pmaxiVsRatioF = new TCanvas("C_pmaxiVsRatioF","C_pmaxiVsRatioF",800,800);
+  C_pmaxiVsRatioF->cd();
+  pmaxiVsRatioF->Draw();
+  line2->Draw("same");
+  C_pmaxiVsRatioF->Write();
+
+
   // t1->Write();
 
   //   f1->Close();
