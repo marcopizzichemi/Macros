@@ -21,6 +21,7 @@
 #include "TCanvas.h"
 #include "TF1.h"
 
+
 #include "../code/struct.hh"
 
 
@@ -146,7 +147,9 @@ int main (int argc, char** argv)
   std::string outFileName = "treeout.root"; //+ std::string(argv[1]);
   //output ttree
   long long int DeltaTimeTag,ExtendedTimeTag;
-  Short_t charge[32]; //adc type is always 32 channels
+
+  Short_t *charge; //adc type
+  charge = new Short_t[numOfCh];
   Float_t RealX,RealY,RealZ;
   Short_t CrystalsHit;
   Short_t NumbOfInteractions;
@@ -155,8 +158,8 @@ int main (int argc, char** argv)
 
   t1->Branch("ExtendedTimeTag",&ExtendedTimeTag,"ExtendedTimeTag/l"); 	//absolute time tag of the event
   t1->Branch("DeltaTimeTag",&DeltaTimeTag,"DeltaTimeTag/l"); 			//delta time from previous event
-  //branches of the 32 channels data
-  for (int i = 0 ; i < 32 ; i++)
+  //branches of the channels data
+  for (int i = 0 ; i < numOfCh ; i++)
   {
     //empty the stringstreams
     std::stringstream snames,stypes;
@@ -197,7 +200,7 @@ int main (int argc, char** argv)
       //mppc gain = 1.25e6
       //adc channel binning 156e-15 C
       double adcCh = detector[i]*1.25e6*1.6e-19/156e-15;
-      charge[i*2] = (Short_t) adcCh;
+      charge[i] = (Short_t) adcCh; //potentially truncation error?
     }
 
     RealX = RealY = RealZ = 0;
@@ -207,8 +210,6 @@ int main (int argc, char** argv)
     std::vector<int> crystals;
     for(int eEvent = 0; eEvent < energyDeposition->size(); eEvent++)// run on energy depositions for this gamma event
     {
-
-
       // -- counting the crystals where energy was deposited in this event
       //read the crystal where energy was deposited
       int cry = energyDeposition->at(eEvent).CrystalID;
@@ -224,9 +225,9 @@ int main (int argc, char** argv)
       // -- calculate the average coordinate of energy deposition
 
 	      // RealX += (px[i]->at(j) * pEdep[i]->at(j))/totalEnergyDeposited;
-      RealX = (energyDeposition->at(eEvent).DepositionX * energyDeposition->at(eEvent).EnergyDeposited)/totalEnergyDeposited;
-      RealY = (energyDeposition->at(eEvent).DepositionY * energyDeposition->at(eEvent).EnergyDeposited)/totalEnergyDeposited;
-      RealZ = (energyDeposition->at(eEvent).DepositionZ * energyDeposition->at(eEvent).EnergyDeposited)/totalEnergyDeposited;
+      RealX += (energyDeposition->at(eEvent).DepositionX * energyDeposition->at(eEvent).EnergyDeposited)/totalEnergyDeposited;
+      RealY += (energyDeposition->at(eEvent).DepositionY * energyDeposition->at(eEvent).EnergyDeposited)/totalEnergyDeposited;
+      RealZ += (energyDeposition->at(eEvent).DepositionZ * energyDeposition->at(eEvent).EnergyDeposited)/totalEnergyDeposited;
     }
 
     CrystalsHit = crystals.size();
@@ -362,7 +363,7 @@ int main (int argc, char** argv)
   //   f1->Close();
   std::cout << std::endl;
   std::cout << "Writing output to file "<< outFileName << std::endl;
-  
+
   TFile* fOut = new TFile(outFileName.c_str(),"recreate");
   t1->Write();
 

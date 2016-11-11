@@ -1,4 +1,4 @@
-// compile with 
+// compile with
 // g++ -o ../build/simRead_base simRead_base.cpp `root-config --cflags --glibs`
 // syntax
 // simRead_base `ls out*`
@@ -17,7 +17,7 @@
 int main (int argc, char** argv)
 {
   gROOT->ProcessLine("#include <vector>"); //needed by ROOT to deal with standard vectors
-  
+
   //-------------------
   // Input Files
   //-------------------
@@ -55,23 +55,23 @@ int main (int argc, char** argv)
   numOfCry = numOfCry / 4;
   std::cout << "Detector Channels \t= " << numOfCh << std::endl;
   std::cout << "Number of Crystals \t= "<< numOfCry << std::endl;
-  
-  
+
+
   //------------------
   // Input TTree
   //------------------
-  
+
   //create the branches in the input ttree and connect to the variables
-  
+
   // global variables
   // these are 1 number per TTree entry - so 1 number per gamma shot
-  Long64_t Seed;                      // seed of the simulation (read every time, but always the same) 
-  int Run;                            // run id (usually just 1)(read every time, but always the same) 
+  Long64_t Seed;                      // seed of the simulation (read every time, but always the same)
+  int Run;                            // run id (usually just 1)(read every time, but always the same)
   int Event;                          // event id
   float totalEnergyDeposited;         // total energy deposited in this event, in all the matrix
   int NumOptPhotons;                  // number of optical photons generated in this event, in the entire matrix
   int NumCherenkovPhotons;            // number of Cherenkov photons generated in this event, in the entire matrix
-  
+
   //energy deposition events
   // these are 1 array of std::vector<float> per TTree entry. Explanation:
   // one TTree entry is 1 gamma shot, but
@@ -91,19 +91,19 @@ int main (int argc, char** argv)
   // cryNPosXEnDep
   // cryNPosYEnDep
   // cryNPosZEnDep
-  // here we need to store these values in some variables once we read them while looping on the TTree, and we don't know 
-  // a priori the number of crystals. So instead of a simple pEdep std::vector, we need an array of pEdep std::vectors, with 
+  // here we need to store these values in some variables once we read them while looping on the TTree, and we don't know
+  // a priori the number of crystals. So instead of a simple pEdep std::vector, we need an array of pEdep std::vectors, with
   // dynamic length (and same holds for px, py and pz). Hence, We don't declare a std::vector, but a pointer to std::vector, which
   // allows to make an array of std::vectors run time.
   // Finally, ROOT comes in the way and forces us not to pass a std::vector to the SetBranchAddress function, but a f...ing **ptr because
   // of template classes. All very complicated but in the end this is how it work:
-  // in the event loop, after GetEvent(i) the variable pEdep[i] is a std::vector for the i-th crystal, that has N elements, one per each 
+  // in the event loop, after GetEvent(i) the variable pEdep[i] is a std::vector for the i-th crystal, that has N elements, one per each
   // energy deposition occurred in that crystal.
   std::vector<float> **pEdep;         // for each energy deposition event, the amount of energy deposited
-  std::vector<float> **px;            // for each energy deposition event, the x position 
-  std::vector<float> **py;            // for each energy deposition event, the y position 
+  std::vector<float> **px;            // for each energy deposition event, the x position
+  std::vector<float> **py;            // for each energy deposition event, the y position
   std::vector<float> **pz;            // for each energy deposition event, the z position
-  // create the arrays 
+  // create the arrays
   pEdep = new std::vector<float>* [numOfCry];
   px    = new std::vector<float>* [numOfCry];
   py    = new std::vector<float>* [numOfCry];
@@ -111,19 +111,19 @@ int main (int argc, char** argv)
   // inizialize to 0... or you'll have bad surprises
   for (int i = 0 ; i < numOfCry ; i++)
   {
-    pEdep[i] = 0; 
+    pEdep[i] = 0;
     px[i] = 0;
     py[i] = 0;
     pz[i] = 0;
   }
-  
+
   //Total number of photons detected in this event
   // for each TTree entry, a simple number saying how many optical photons entered that
   // specific detector, passed the PDE check and where "detected" (i.e. saved)
   Short_t  *detector;
   detector = new Short_t [numOfCh];
-  
-  //hits on detectors events 
+
+  //hits on detectors events
   //these are 1 std::vector<float> per TTree entry
   //For each gamma shot, a great number of opticals is generated in the matrix
   //some of them enter the detectors, pass the PDE check and are "detected" (i.e. saved). So
@@ -135,7 +135,7 @@ int main (int argc, char** argv)
   // pOpticalPostMomentumX[M]   = v0,v1,v2,v3,...,vN
   // pGlobalTime[M]             = t0,t1,t2,t3,...,tN
   // and so on.
-  
+
   //Position of optical photon when entering detector
   std::vector<float> *pOpticalX;            // x position of optical photon when entering detector
   std::vector<float> *pOpticalY;            // y position of optical photon when entering detector
@@ -170,8 +170,8 @@ int main (int argc, char** argv)
   //Energy of optical photon (in eV)
   std::vector<float> *pPhotonEnergy;
   pPhotonEnergy = 0;//inizialize...
-  
-  
+
+
   //------------------------
   // Set Branch Addresses
   //------------------------
@@ -187,7 +187,7 @@ int main (int argc, char** argv)
     snames << "cry" << i;
     tree->SetBranchAddress(snames.str().c_str(),&pEdep[i]);
     snames.str("");
-    snames<< "cry" << i << "PosXEnDep";    
+    snames<< "cry" << i << "PosXEnDep";
     tree->SetBranchAddress(snames.str().c_str(),&px[i]);
     snames.str("");
     snames<< "cry" << i << "PosYEnDep";
@@ -205,47 +205,47 @@ int main (int argc, char** argv)
   tree->SetBranchAddress("PositionX",&pOpticalX);
   tree->SetBranchAddress("PositionY",&pOpticalY);
   tree->SetBranchAddress("PositionZ",&pOpticalZ);
-  
+
   tree->SetBranchAddress("PreMomentumX",&pOpticalPreMomentumX);
   tree->SetBranchAddress("PreMomentumY",&pOpticalPreMomentumY);
   tree->SetBranchAddress("PreMomentumZ",&pOpticalPreMomentumZ);
   tree->SetBranchAddress("PostMomentumX",&pOpticalPostMomentumX);
   tree->SetBranchAddress("PostMomentumY",&pOpticalPostMomentumY);
   tree->SetBranchAddress("PostMomentumZ",&pOpticalPostMomentumZ);
-  
+
   tree->SetBranchAddress("GlobalTime",&pGlobalTime);
   tree->SetBranchAddress("PhotonType",&pPhotonType);
   tree->SetBranchAddress("PhotonEnergy",&pPhotonEnergy);
-  
-  
+
+
   //----------------------------------------//
   //             LOOP ON EVENTS             //
   //----------------------------------------//
   long int counter = 0;
   int nEntries = tree->GetEntries();
   std::cout << "nEntries = " << nEntries << std::endl;
-  for(int iEvent = 256; iEvent < 257 ; iEvent++)
-  {  
-    
+  for(int iEvent = 0; iEvent < 1 ; iEvent++)
+  {
+
     tree->GetEvent(iEvent);
     int CrystalsHit = 0;      // counter of how many crystals were hit by this gamma
-    
+
     float* energyPerCrystal;  // total energy deposited in each crystal
     energyPerCrystal = new float[numOfCry];
     for(int i = 0; i < numOfCry ; i++)
     {
       energyPerCrystal[i] = 0;
     }
-    
+
     // some example of global variable
-    std::cout << "Event Numb \t\t\t = "              << Event << std::endl;
+    std::cout << "Event Numb \t\t\t = "              << iEvent << std::endl;
     std::cout << "Total energy deposited \t\t = "  << totalEnergyDeposited << std::endl;
     std::cout << "Total Numb of Opticals produced\t = "  << NumOptPhotons+NumCherenkovPhotons << std::endl;
-    
+
     // one example of energy deposition related std::vectors
     for(int i = 0; i < numOfCry ; i++) //crystal by crystal
     {
-      if(px[i]->size()) //if the i-th crystal had energy deposition (--> if(0) => false) 
+      if(px[i]->size()) //if the i-th crystal had energy deposition (--> if(0) => false)
       {
         CrystalsHit++; //count the crystal as hit
         for(int j = 0; j < px[i]->size(); j++) //run on the hits in this crystal
@@ -257,23 +257,23 @@ int main (int argc, char** argv)
       }
     }
     std::cout << "Crystals Hit\t\t\t = " << CrystalsHit << std::endl;
-   
+
     // one example of optical photon related std::vectors
-    // get the total number of optical detected 
+    // get the total number of optical detected
     // the size of any optical photon related std::vector is M (see above)
     std::cout << "Number of Opticals detected\t = " << pGlobalTime->size() << std::endl;
     for(int i = 0; i < pGlobalTime->size() ; i++) //crystal by crystal
     {
       std::cout << pGlobalTime->at(i) << std::endl;
     }
-      
+
     std::cout << "-----------------------------" << std::endl;
     std::cout << std::endl;
-    
-    
-    
-    
-    
+
+
+
+
+
     //progress feedback to the user...
     counter++;
     int perc = ((100*counter)/nEntries); //should strictly have not decimal part, written like this...
@@ -284,6 +284,6 @@ int main (int argc, char** argv)
     }
   }
   std::cout << std::endl;
-  TFile *foooooo = new TFile("prova.root","recreate"); 
+  TFile *foooooo = new TFile("prova.root","recreate");
   return 0;
 }

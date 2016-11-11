@@ -23,6 +23,24 @@
 
 #include "../code/struct.hh"
 
+struct avgCryEnergyDep
+{
+  int id;
+  float x;
+  float y;
+  float z;
+  float sx;
+  float sy;
+  float sz;
+  float energy;
+  float time;
+};
+
+
+bool compareByTime(const enDep &a,const enDep  &b)
+{
+    return a.DepositionTime < b.DepositionTime;
+}
 
 int main (int argc, char** argv)
 {
@@ -213,6 +231,33 @@ int main (int argc, char** argv)
   int nEntries = tree->GetEntries();
   std::cout << "nEntries = " << nEntries << std::endl;
 
+
+  TH1F *histoSigmaX = new TH1F("histoSigmaX","Sigma x distribution",1000,0,1);
+  histoSigmaX->GetXaxis()->SetTitle("Sigma x [mm]");
+
+  TH1F *histoSigmaY = new TH1F("histoSigmaY","Sigma y distribution",1000,0,1);
+  histoSigmaY->GetXaxis()->SetTitle("Sigma y [mm]");
+
+  TH1F *histoSigmaZ = new TH1F("histoSigmaZ","Sigma z distribution",1000,0,1);
+  histoSigmaZ->GetXaxis()->SetTitle("Sigma z [mm]");
+
+  TH1F *DeltaR = new TH1F("DeltaR","Delta r distribution",1000,-30,30);
+  DeltaR->GetXaxis()->SetTitle("Delta r [mm]");
+
+  TH1F *DeltaR_xy = new TH1F("DeltaR_xy","Delta r_xy distribution",1000,-30,30);
+  DeltaR_xy->GetXaxis()->SetTitle("Delta r_xy [mm]");
+
+  TH1F *DeltaZ = new TH1F("DeltaZ","Delta z distribution",1000,-15,15);
+  DeltaZ->GetXaxis()->SetTitle("Delta z [mm]");
+
+  TH1F *DeltaE = new TH1F("DeltaE","Delta E distribution",1000,-0.511,0.511);
+  DeltaE->GetXaxis()->SetTitle("Delta E [MeV]");
+
+  TH2F *DeltaEvsDeltaZ = new TH2F("DeltaZvsDeltaE","DeltaE vs DeltaZ",1000,-15,15,1000,-0.511,0.511);
+  DeltaEvsDeltaZ->GetXaxis()->SetTitle("Delta z [mm]");
+  DeltaEvsDeltaZ->GetYaxis()->SetTitle("Delta E [MeV]");
+
+
   TH2F *averageZvsRatio = new TH2F("AverageZ vs Ratio","AverageZ vs Ratio",100,0,1,100,-8,8);
   averageZvsRatio->GetXaxis()->SetTitle("Ratio (Fi/(Fi+Bi))");
   averageZvsRatio->GetYaxis()->SetTitle("AverageZ [mm]");
@@ -266,10 +311,22 @@ int main (int argc, char** argv)
   long int doubleCounter = 0;
   long int tripleCounter = 0;
   long int multipleCounter = 0;
+  // int firstCrystal[64];
+  // int secondCrystal[64];
+  //
+  // for (int i = 0 ; i < 64 ; i++)
+  // {
+  //   firstCrystal[i] = 0;
+  //   secondCrystal[i] = 0;
+  // }
+
+
+  long int globalReturned = 0;
   for(int iEvent = 0; iEvent < nEntries ; iEvent++)
+  // for(int iEvent = 5; iEvent < 6 ; iEvent++)
   {
     tree->GetEvent(iEvent);
-
+    // std::cout << "iEvent "<<iEvent << std::endl;
     columsum = 0;
     rowsum = 0;
     total = 0;
@@ -312,11 +369,60 @@ int main (int argc, char** argv)
 
 
 
+    // stackingaction is last-in-first-out so we need to sort energyDeposition before we check what crystal was hit first
+    // check crystal sequence, check for returning gammas, calculate an average xyz per crystal
+    std::sort(energyDeposition->begin(), energyDeposition->end(), compareByTime);
+    std::vector<std::vector < enDep > > separatedEnDep;
+    // float EnDepPerCrystal = 0.0;
+    int CurrentID = -1;
+    // bool newcrystal = false;
+    float RealX = 0.0;
+    float RealY = 0.0;
+    float RealZ = 0.0;
+    std::vector < enDep > CrystalEnDepCollection;
 
     for(int eEvent = 0; eEvent < energyDeposition->size(); eEvent++) //run on energy depositions and find in how many crystals energy was deposited
     {
       //read the crystal where energy was deposited
       int cry = energyDeposition->at(eEvent).CrystalID;
+      //create temp enDep variable and copy this eEvent into it
+
+      //DEBUG
+      // std::cout << eEvent <<" ";
+      // std::cout << energyDeposition->at(eEvent).CrystalID << " ";
+      // std::cout << energyDeposition->at(eEvent).EnergyDeposited<< " ";
+      // std::cout << energyDeposition->at(eEvent).DepositionTime<< " ";
+      // std::cout << energyDeposition->at(eEvent).DepositionX<< " ";
+      // std::cout << energyDeposition->at(eEvent).DepositionY<< " ";
+      // std::cout << energyDeposition->at(eEvent).DepositionZ<< std::endl;
+      //---DEBUG
+
+      enDep tempCrystalEnDep;
+      tempCrystalEnDep = energyDeposition->at(eEvent);
+
+      // std::cout << eEvent <<" ";
+      // std::cout << tempCrystalEnDep.CrystalID << " ";
+      // std::cout << tempCrystalEnDep.EnergyDeposited<< " ";
+      // std::cout << tempCrystalEnDep.DepositionTime<< " ";
+      // std::cout << tempCrystalEnDep.DepositionX<< " ";
+      // std::cout << tempCrystalEnDep.DepositionY<< " ";
+      // std::cout << tempCrystalEnDep.DepositionZ<< std::endl;
+
+      //if the crystal is changing
+      if(eEvent == 0) CurrentID = cry;
+      if(cry != CurrentID) // changes everytime the gamma enters a new crystal
+      {
+        separatedEnDep.push_back(CrystalEnDepCollection); // save the collection of this crystal into the std::vector of collections
+        CrystalEnDepCollection.clear(); //clear this collection
+        CurrentID = cry; //change the current id
+      }
+
+      CrystalEnDepCollection.push_back(tempCrystalEnDep); // save this enDep event into the collection if this crystal
+
+      if(eEvent == energyDeposition->size() -1)
+      {
+        separatedEnDep.push_back(CrystalEnDepCollection);
+      }
       //loop in the crystals found
       //look for the same id
       bool sameID = false;
@@ -326,19 +432,151 @@ int main (int argc, char** argv)
       }
       if(!sameID) crystals.push_back(cry);
     }
+    // std::cout << separatedEnDep.size() << std::endl;
 
-    //now take only events where energy was deposited in 2 crystals and total energy deposited is 511KeV
+    //DEBUG
+    // for(int iColl = 0 ; iColl < separatedEnDep.size(); iColl++)
+    // {
+    //   std::cout << separatedEnDep.at(iColl).size()<< std::endl;
+    //   for(int iEndep = 0; iEndep < separatedEnDep.at(iColl).size(); iEndep++)
+    //   {
+    //     std::cout << iColl << " " << iEndep << " " ;
+    //     std::cout << separatedEnDep.at(iColl).at(iEndep).CrystalID << " ";
+    //     std::cout << separatedEnDep.at(iColl).at(iEndep).EnergyDeposited<< " ";
+    //     std::cout << separatedEnDep.at(iColl).at(iEndep).DepositionTime<< " ";
+    //     std::cout << separatedEnDep.at(iColl).at(iEndep).DepositionX<< " ";
+    //     std::cout << separatedEnDep.at(iColl).at(iEndep).DepositionY<< " ";
+    //     std::cout << separatedEnDep.at(iColl).at(iEndep).DepositionZ<< std::endl;
+    //   }
+    // }
+    //---DEBUG
+
+
+    std::vector<avgCryEnergyDep> averageDepEvents;
+    // now the en dep events are collected by crystal
+    // run on each collection and find average
+    for(int iColl = 0 ; iColl < separatedEnDep.size(); iColl++)
+    {
+      avgCryEnergyDep tempAvgEnDep;
+
+      tempAvgEnDep.id = separatedEnDep.at(iColl).at(0).CrystalID;
+      tempAvgEnDep.x = 0;
+      tempAvgEnDep.y = 0;
+      tempAvgEnDep.z = 0;
+      tempAvgEnDep.time = 0;
+      tempAvgEnDep.energy = 0;
+      tempAvgEnDep.sx = 0;
+      tempAvgEnDep.sy = 0;
+      tempAvgEnDep.sz = 0;
+      for(int iEndep = 0; iEndep < separatedEnDep.at(iColl).size(); iEndep++)
+      {
+        tempAvgEnDep.energy += separatedEnDep.at(iColl).at(iEndep).EnergyDeposited;
+        // std::cout << separatedEnDep.at(iColl).at(iEndep).EnergyDeposited << std::endl;
+        tempAvgEnDep.x += separatedEnDep.at(iColl).at(iEndep).DepositionX * separatedEnDep.at(iColl).at(iEndep).EnergyDeposited;
+        tempAvgEnDep.y += separatedEnDep.at(iColl).at(iEndep).DepositionY * separatedEnDep.at(iColl).at(iEndep).EnergyDeposited;
+        tempAvgEnDep.z += separatedEnDep.at(iColl).at(iEndep).DepositionZ * separatedEnDep.at(iColl).at(iEndep).EnergyDeposited;
+        tempAvgEnDep.time += separatedEnDep.at(iColl).at(iEndep).DepositionTime * separatedEnDep.at(iColl).at(iEndep).EnergyDeposited;
+      }
+      tempAvgEnDep.x = tempAvgEnDep.x / tempAvgEnDep.energy;
+      tempAvgEnDep.y = tempAvgEnDep.y / tempAvgEnDep.energy;
+      tempAvgEnDep.z = tempAvgEnDep.z / tempAvgEnDep.energy;
+      tempAvgEnDep.time = tempAvgEnDep.time / tempAvgEnDep.energy;
+      float varx = 0.0;
+      float vary = 0.0;
+      float varz = 0.0;
+      for(int iEndep = 0; iEndep < separatedEnDep.at(iColl).size(); iEndep++)
+      {
+        varx += (separatedEnDep.at(iColl).at(iEndep).EnergyDeposited * pow(separatedEnDep.at(iColl).at(iEndep).DepositionX  - tempAvgEnDep.x,2)) / tempAvgEnDep.energy;
+        vary += (separatedEnDep.at(iColl).at(iEndep).EnergyDeposited * pow(separatedEnDep.at(iColl).at(iEndep).DepositionY  - tempAvgEnDep.y,2)) / tempAvgEnDep.energy;
+        varz += (separatedEnDep.at(iColl).at(iEndep).EnergyDeposited * pow(separatedEnDep.at(iColl).at(iEndep).DepositionZ  - tempAvgEnDep.z,2)) / tempAvgEnDep.energy;
+      }
+      tempAvgEnDep.sx = sqrt(varx);
+      tempAvgEnDep.sy = sqrt(vary);
+      tempAvgEnDep.sz = sqrt(varz);
+
+      averageDepEvents.push_back(tempAvgEnDep);
+
+    }
+    //DEBUG
+    // for (int iAvg = 0 ; iAvg < averageDepEvents.size() ; iAvg++)
+    // {
+    //   std::cout << "----------------------" << std::endl;
+    //   std::cout << averageDepEvents.at(iAvg).id << " " << averageDepEvents.at(iAvg).energy << " " << averageDepEvents.at(iAvg).time << std::endl;
+    //   std::cout << "(" << averageDepEvents.at(iAvg).x << "," << averageDepEvents.at(iAvg).y << "," << averageDepEvents.at(iAvg).z <<  ") " << std::endl;
+    //   std::cout << "(" << averageDepEvents.at(iAvg).sx << "," << averageDepEvents.at(iAvg).sy << "," << averageDepEvents.at(iAvg).sx <<  ") " << std::endl;
+    //
+    // }
+    //---DEBUG
+
+    //fill a global histogram of energy deposition sigmas in the crystals
+    for (int iAvg = 0 ; iAvg < averageDepEvents.size() ; iAvg++)
+    {
+      // std::cout << "----------------------" << std::endl;
+      // std::cout << averageDepEvents.at(iAvg).id << " " << averageDepEvents.at(iAvg).energy << " " << averageDepEvents.at(iAvg).time << std::endl;
+      // std::cout << "(" << averageDepEvents.at(iAvg).x << "," << averageDepEvents.at(iAvg).y << "," << averageDepEvents.at(iAvg).z <<  ") " << std::endl;
+      // std::cout << "(" << averageDepEvents.at(iAvg).sx << "," << averageDepEvents.at(iAvg).sy << "," << averageDepEvents.at(iAvg).sx <<  ") " << std::endl;
+      histoSigmaX->Fill(averageDepEvents.at(iAvg).sx);
+      histoSigmaY->Fill(averageDepEvents.at(iAvg).sy);
+      histoSigmaZ->Fill(averageDepEvents.at(iAvg).sz);
+    }
+
+
+    //two crystals or more hit, but a crystal is hit more than once (like, 28 -> 36 -> 28)
+    std::vector <int> checkReturning; // this std::vector has same size of averageDepEvents if there is no returning, smaller if there is
+    int returned = 0;
+    for (int iAvg = 0 ; iAvg < averageDepEvents.size() ; iAvg++)
+    {
+      int cry = averageDepEvents.at(iAvg).id;
+      bool sameID = false;
+      for(int i = 0 ; i < checkReturning.size(); i++)
+      {
+        if(cry == checkReturning[i])
+        {
+          sameID = true;
+          returned++;
+        }
+      }
+      if(!sameID) checkReturning.push_back(cry);
+    }
+    globalReturned += returned;
+
+    if(totalEnergyDeposited > 0.400)
+    {
+      if(averageDepEvents.size() == 2)
+      {
+        DeltaZ->Fill(averageDepEvents[0].z - averageDepEvents[1].z);
+        DeltaE->Fill(averageDepEvents[0].energy - averageDepEvents[1].energy);
+        DeltaEvsDeltaZ->Fill(averageDepEvents[0].z - averageDepEvents[1].z,averageDepEvents[0].energy - averageDepEvents[1].energy);
+        DeltaR->Fill(sqrt(pow(averageDepEvents[0].x - averageDepEvents[1].x,2)+pow(averageDepEvents[0].y - averageDepEvents[1].y,2)+pow(averageDepEvents[0].z - averageDepEvents[1].z,2)));
+        DeltaR_xy->Fill(sqrt(pow(averageDepEvents[0].x - averageDepEvents[1].x,2)+pow(averageDepEvents[0].y - averageDepEvents[1].y,2)));
+      }
+    }
+
+
+    //now take only events where energy was deposited in 2 crystals and total energy deposited is around 511KeV
     //very not general, but this is only for testing: choose crystals 28 and 29 (2 crystals on the same mppc)
     //and run only on the 9 relevant mppcs to compute w_near
-    if((crystals[0] == 28 && crystals[1] == 29) /*| (crystals[0] == 29 && crystals[1] == 28)*/)
     // if((crystals[0] == 27 && crystals[1] == 28) | (crystals[0] == 28 && crystals[1] == 27))
 
     // if(true)
+    // std::cout << counter << " " << crystals[0] << " " << crystals[1] << std::endl;
+    // if(totalEnergyDeposited > 0.510)
+    // {
+      // if(crystals.size() == 2)
+      // {
+      //   firstCrystal[crystals[0]]++;
+      //   secondCrystal[crystals[1]]++;
+      // }
+    // }
+
+    if((crystals[0] == 28 && crystals[1] == 29) /*| (crystals[0] == 29 && crystals[1] == 28)*/)
     {
+
       if(totalEnergyDeposited > 0.510)
       {
-        if(crystals.size() == 2)
+        if(crystals.size() == 2 )
         {
+
           //consider only non-lateral crystals - not needed if it's restricted to 28 and 29...
           bool isCandidate = true;
           for(int eEvent = 0; eEvent < energyDeposition->size(); eEvent++) //run on energy depositions and check is not on borders
@@ -619,6 +857,10 @@ int main (int argc, char** argv)
     // }
 
     counter++;
+    // std::cout << std::endl;
+    // std::cout << "============================================"<< std::endl;
+    // std::cout << std::endl;
+
 
     int perc = ((100*counter)/nEntries); //should strictly have not decimal part, written like this...
     if( (perc % 10) == 0 )
@@ -632,10 +874,21 @@ int main (int argc, char** argv)
   }
 
   std::cout << std::endl;
+  // int sumFirst = 0;
+  // int sumSecond = 0;
+  // for (int i = 0 ; i < 64; i++)
+  // {
+  //   std::cout << "First["<< i <<  "] = " << firstCrystal[i] << std::endl;
+  //   std::cout << "Second["<< i <<  "] = " << secondCrystal[i] << std::endl;
+  //   sumFirst += firstCrystal[i];
+  //   sumSecond += secondCrystal[i];
+  // }
+  // std::cout << "sumFirst = " << sumFirst << " sumSecond = " << sumSecond << std::endl;
   std::cout << "1 cry [511 KeV deposition] events = "    << singleCounter << std::endl;
   std::cout << "2 cry [511 KeV deposition] events = "    << doubleCounter << std::endl;
   std::cout << "3 cry [511 KeV deposition] events = "    << tripleCounter << std::endl;
   std::cout << "Multi cry [511 KeV deposition] events = "<< multipleCounter << std::endl;
+  std::cout << "Returned = " << globalReturned << std::endl;
   std::cout << "Candidates = "<< foundCandidate << std::endl;
 
   TF1 *line = new TF1("line","x",-7,7);
@@ -648,6 +901,15 @@ int main (int argc, char** argv)
   std::string outFile = "FileOut.root";
   TFile* fOut = new TFile(outFile.c_str(),"recreate");
 
+
+  histoSigmaX->Write();
+  histoSigmaY->Write();
+  histoSigmaZ->Write();
+  DeltaZ->Write();
+  DeltaE->Write();
+  DeltaR->Write();
+  DeltaR_xy->Write();
+  DeltaEvsDeltaZ->Write();
   TCanvas *C_flood = new TCanvas("C_flood","C_flood",800,800);
   flood->Draw("COLZ");
   C_flood->Write();
