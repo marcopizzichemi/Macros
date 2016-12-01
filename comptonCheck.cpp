@@ -53,10 +53,132 @@ Float_t simTravel1(Float_t pathLength, Float_t lambda511);
 Float_t simCompton(Float_t comptonAngle);
 Float_t simTravel2(Float_t pathLength, Float_t lambdaE);
 Float_t simPhotoelectric(Float_t csPE);
+// void reconstructArray(std::vector<double>& recoDetector,Float_t energy,TGraph* w0,Float_t z0,std::vector<int>& relevantMppcs,int numOfCh);
 
 
 
+class CVec3
+{
+public:
+	// Data
+	float x, y, z;
 
+	// Ctors
+	CVec3( float InX, float InY, float InZ ) : x( InX ), y( InY ), z( InZ )
+		{
+		}
+	CVec3( ) : x(0), y(0), z(0)
+		{
+		}
+
+	// Operator Overloads
+	inline bool operator== (const CVec3& V2) const
+		{
+		return (x == V2.x && y == V2.y && z == V2.z);
+		}
+
+	inline CVec3 operator+ (const CVec3& V2) const
+		{
+		return CVec3( x + V2.x,  y + V2.y,  z + V2.z);
+		}
+	inline CVec3 operator- (const CVec3& V2) const
+		{
+		return CVec3( x - V2.x,  y - V2.y,  z - V2.z);
+		}
+	inline CVec3 operator- ( ) const
+		{
+		return CVec3(-x, -y, -z);
+		}
+
+	inline CVec3 operator/ (float S ) const
+		{
+		float fInv = 1.0f / S;
+		return CVec3 (x * fInv , y * fInv, z * fInv);
+		}
+	inline CVec3 operator/ (const CVec3& V2) const
+		{
+		return CVec3 (x / V2.x,  y / V2.y,  z / V2.z);
+		}
+	inline CVec3 operator* (const CVec3& V2) const
+		{
+		return CVec3 (x * V2.x,  y * V2.y,  z * V2.z);
+		}
+	inline CVec3 operator* (float S) const
+		{
+		return CVec3 (x * S,  y * S,  z * S);
+		}
+
+	inline void operator+= ( const CVec3& V2 )
+		{
+		x += V2.x;
+		y += V2.y;
+		z += V2.z;
+		}
+	inline void operator-= ( const CVec3& V2 )
+		{
+		x -= V2.x;
+		y -= V2.y;
+		z -= V2.z;
+		}
+
+	inline float operator[] ( int i )
+		{
+		if ( i == 0 ) return x;
+		else if ( i == 1 ) return y;
+		else return z;
+		}
+
+	// Functions
+	inline float Dot( const CVec3 &V1 ) const
+		{
+		return V1.x*x + V1.y*y + V1.z*z;
+		}
+
+	inline CVec3 CrossProduct( const CVec3 &V2 ) const
+		{
+		return CVec3(
+			y * V2.z  -  z * V2.y,
+			z * V2.x  -  x * V2.z,
+			x * V2.y  -  y * V2.x 	);
+		}
+
+	// Return vector rotated by the 3x3 portion of matrix m
+	// (provided because it's used by bbox.cpp in article 21)
+	CVec3 RotByMatrix( const float m[16] ) const
+	{
+	return CVec3(
+		x*m[0] + y*m[4] + z*m[8],
+		x*m[1] + y*m[5] + z*m[9],
+		x*m[2] + y*m[6] + z*m[10] );
+ 	}
+
+	// These require math.h for the sqrtf function
+	float Magnitude( ) const
+		{
+		return sqrtf( x*x + y*y + z*z );
+		}
+
+	float Distance( const CVec3 &V1 ) const
+		{
+		return ( *this - V1 ).Magnitude();
+		}
+
+	inline void Normalize()
+		{
+		float fMag = ( x*x + y*y + z*z );
+		if (fMag == 0) {return;}
+
+		float fMult = 1.0f/sqrtf(fMag);
+		x *= fMult;
+		y *= fMult;
+		z *= fMult;
+		return;
+		}
+};
+
+int inline GetIntersection( float fDst1, float fDst2, CVec3 P1, CVec3 P2, CVec3 &Hit);
+int inline InBox( CVec3 Hit, CVec3 B1, CVec3 B2, const int Axis);
+int CheckLineBox( CVec3 B1, CVec3 B2, CVec3 L1, CVec3 L2, CVec3 &Hit);
 
 //struct of averaged crystal events
 struct avgCryEnergyDep
@@ -70,6 +192,18 @@ struct avgCryEnergyDep
   float sz;
   float energy;
   float time;
+};
+
+struct CrystalData
+{
+  int id;
+  double x;
+  double y;
+  int mppci;
+  int mppcj;
+  TGraph* wz; //w(z) graph for this crystal
+  TGraphDelaunay*** gd; //pointers to the pi_(w,E) for this crystal
+  Float_t correction;
 };
 
 //function to compare deposition event struct vectors using the field time
@@ -238,6 +372,7 @@ int main (int argc, char** argv)
     if (!leavesName[i].compare(0, det_prefix.size(), det_prefix)) numOfCh++;
   }
   std::cout << "Detector Channels \t= " << numOfCh << std::endl;
+  int numOfCry = 64;//this needs to be input somewhere...
 
 
   //----------------------------------------------------------------------//
@@ -258,27 +393,21 @@ int main (int argc, char** argv)
   ss3 >> cEvent;
 
   bool isNewDataset = true;
-  int mppcI0 = 1;
-  int mppcJ0 = 2;
-  int mppcI1 = 1;
-  int mppcJ1 = 1;
-  // int cry0N = 28;
-  // int cry1N = 29;
-  // double cry0x = -0.8;
-  // double cry0y = 0.8;
-  // double cry1x = -0.8;
-  // double cry1y = 2.4;
-  int cry0N = 28;
-  int cry1N = 26;
+  bool specificCrystals = false;
+  bool verbose = false;
+  bool usingRealXY = false;
+  bool frontSource = true;
+  // int sp_mppcI0 = 2;
+  // int sp_mppcJ0 = 1;
+  // int sp_mppcI1 = 2;
+  // int sp_mppcJ1 = 1;
+  int sp_cry0N = 28;
+  int sp_cry1N = 29;
+  // double sp_cry0centerX = -0.8;
+  // double sp_cry0centerY = +0.8;
+  // double sp_cry1centerX = -0.8;
+  // double sp_cry1centerY = +2.4;
 
-  double cry0centerX = -0.8;
-  double cry0centerY = +0.8;
-  double cry1centerX = -0.8;
-  double cry1centerY = -2.4;
-  double cry0x = cry0centerX;
-  double cry0y = cry0centerY;
-  double cry1x = cry1centerX;
-  double cry1y = cry1centerY;
 
 
   //----------------------------------------------------------------------//
@@ -351,106 +480,226 @@ int main (int argc, char** argv)
       ymppc[detCounter] = (j+0.5*(1.0-sqrt(numOfCh)))*mppcPitch;
     }
   }
-
-
-  //----------------------------------------------------------------------//
-  //                                                                      //
-  //                        FETCH CALIBRATION PLOTS                       //
-  //                                                                      //
-  //----------------------------------------------------------------------//
+  //crystal objects
+  CrystalData*** crystal;
   std::string mppcLabel [16] = {"A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P"};
-  std::stringstream  crystal0;
-  crystal0 << "Crystal " << cry0N;
-  std::stringstream crystal1;
-  crystal1 << "Crystal " << cry1N;
-  std::stringstream mppc0;
-  mppc0 << "MPPC " << mppcLabel[mppcJ0] << mppcI0+1 << " - 0.0-" << mppcI0 << "."<< mppcJ0;
-  std::stringstream mppc1;
-  mppc1 << "MPPC " << mppcLabel[mppcJ1] << mppcI1+1 << " - 0.0-" << mppcI1 << "."<< mppcJ1;
-  std::stringstream cry0folder;
-  std::stringstream cry1folder;
-  cry0folder << "Module 0.0/" << mppc0.str() << "/" << crystal0.str();
-  cry1folder << "Module 0.0/" << mppc1.str() << "/" << crystal1.str();
-  std::stringstream w0Plot;
-  std::stringstream w1Plot;
-  w0Plot << "w(z) Plot - " << crystal0.str();
-  w1Plot << "w(z) Plot - " << crystal1.str();
   TFile *calibrationFile = TFile::Open("calibration.root"); // hardcoded calibration file, output of ModuleCalibration on the out* files..
-  std::cout << cry0folder.str().c_str() << std::endl;
-  calibrationFile->cd(cry0folder.str().c_str());
-  TCanvas *canvas = (TCanvas*) gDirectory->Get(w0Plot.str().c_str());
-  TGraph *wzgraph0,*wzgraph1;
-  wzgraph0 = (TGraph*) canvas->GetPrimitive(w0Plot.str().c_str());
-  calibrationFile->cd(cry1folder.str().c_str());// cry1
-  TCanvas* canvas1 = (TCanvas*) gDirectory->Get(w1Plot.str().c_str());
-  wzgraph1 = (TGraph*) canvas1->GetPrimitive(w1Plot.str().c_str());
-  //now load the TGraph2Ds from the calibration run
-  //and calculate the "surfaces"
-  TGraphDelaunay ***gd0;
-  gd0 = new TGraphDelaunay**[(int) sqrt(numOfCh)];
-  for(int i = 0; i < sqrt(numOfCh) ; i++) gd0[i] = new TGraphDelaunay* [(int) sqrt(numOfCh)];
-  TGraphDelaunay ***gd1;
-  gd1 = new TGraphDelaunay**[(int) sqrt(numOfCh)];
-  for(int i = 0; i < sqrt(numOfCh) ; i++) gd1[i] = new TGraphDelaunay* [(int) sqrt(numOfCh)];
-  TGraph2D ***camp0;
-  TGraph2D ***camp1;
-  camp0 = new TGraph2D**[(int) sqrt(numOfCh)];
-  for(int i = 0; i < sqrt(numOfCh) ; i++) camp0[i] = new TGraph2D* [(int) sqrt(numOfCh)];
-  camp1 = new TGraph2D**[(int) sqrt(numOfCh)];
-  for(int i = 0; i < sqrt(numOfCh) ; i++) camp1[i] = new TGraph2D* [(int) sqrt(numOfCh)];
-
-
-  bool dumpPoint = false; //dump points to a text file, in case you want to compare with a matlab analysis for example
-  if(dumpPoint)
+  int cryLateralNum = (int) sqrt(numOfCry);
+  int cryLatPerMppc = ((int) sqrt(numOfCry)) / ((int) sqrt(numOfCh));
+  double crystalPitch = 1.6;
+  double matrixShiftX = (crystalPitch * cryLateralNum)/2.0 -  crystalPitch/2.0;
+  double matrixShiftY = (crystalPitch * cryLateralNum)/2.0 -  crystalPitch/2.0;
+  crystal = new CrystalData**[cryLateralNum];
+  for(int i = 0 ; i < cryLateralNum ; i ++) crystal[i] = new CrystalData* [cryLateralNum];
+  //fill them with positions etc
+  for(int iCry = 0 ; iCry < cryLateralNum; iCry++)
   {
-    calibrationFile->cd(cry0folder.str().c_str());// cry0
-    for(int iMPPC = mppcI0 -1; iMPPC < mppcI0+2; iMPPC++)
+    for(int jCry = 0 ; jCry < cryLateralNum; jCry++)
     {
-      for(int jMPPC = mppcJ0-1; jMPPC < mppcJ0+2 ; jMPPC++)
+
+      crystal[iCry][jCry] = new CrystalData();
+      crystal[iCry][jCry]->id = iCry*cryLateralNum + jCry;
+      crystal[iCry][jCry]->x = iCry*crystalPitch - matrixShiftX;
+      crystal[iCry][jCry]->y = jCry*crystalPitch - matrixShiftX;
+      //find mppc i and j
+      crystal[iCry][jCry]->mppci = iCry / cryLatPerMppc;
+      crystal[iCry][jCry]->mppcj = jCry / cryLatPerMppc;
+      if( (iCry > (cryLatPerMppc-1)) && (iCry < (cryLateralNum - cryLatPerMppc)) && (jCry > (cryLatPerMppc-1)) && (jCry < (cryLateralNum - cryLatPerMppc)) ) // avoid frame channels
       {
-        std::stringstream sstream;
-        sstream << "Graph_Pi(E,w)[" << iMPPC <<  "][" << jMPPC <<  "]_" << cry0N;
-        TCanvas *canv = (TCanvas*) gDirectory->Get(sstream.str().c_str());
-        TGraph2D *graph = (TGraph2D*) canv->GetPrimitive(sstream.str().c_str());
-        Double_t *x = graph->GetX();
-        Double_t *y = graph->GetY();
-        Double_t *z = graph->GetZ();
-        std::ofstream myfile;
-        std::stringstream fileStream;
-        fileStream << "Gr_[" << iMPPC <<  "][" << jMPPC <<  "]_" << cry0N << ".dat";
-        myfile.open (fileStream.str().c_str(),std::ios::out);
-        for(int i = 0 ; i < graph->GetN() ; i++){
-          myfile << x[i] << " " << y[i] << " " << z[i] << std::endl;
+        //fetch the wz TGraph;
+        // std::cout << iCry << "," << jCry << std::endl;
+        std::stringstream  sscrystal;
+        sscrystal << "Crystal " << crystal[iCry][jCry]->id;
+        std::stringstream ssmppc;
+        ssmppc << "MPPC " << mppcLabel[crystal[iCry][jCry]->mppcj] << crystal[iCry][jCry]->mppci+1 << " - 0.0-" << crystal[iCry][jCry]->mppci << "."<< crystal[iCry][jCry]->mppcj;
+        std::stringstream sscryfolder;
+        sscryfolder << "Module 0.0/" << ssmppc.str() << "/" << sscrystal.str();
+        std::stringstream sswPlot;
+        sswPlot << "w(z) Plot - " << sscrystal.str();
+        // std::cout << sscryfolder.str().c_str() << std::endl;
+        calibrationFile->cd(sscryfolder.str().c_str());
+        TCanvas *canvas = (TCanvas*) gDirectory->Get(sswPlot.str().c_str());
+        crystal[iCry][jCry]->wz = (TGraph*) canvas->GetPrimitive(sswPlot.str().c_str());
+        // TGraphDelaunay ***gd;
+        crystal[iCry][jCry]->gd = new TGraphDelaunay**[(int) sqrt(numOfCh)];
+        for(int igd = 0; igd < sqrt(numOfCh) ; igd++) crystal[iCry][jCry]->gd[igd] = new TGraphDelaunay* [(int) sqrt(numOfCh)];
+        TGraph2D ***camp;
+        camp = new TGraph2D**[(int) sqrt(numOfCh)];
+        for(int igd = 0; igd < sqrt(numOfCh) ; igd++) camp[igd] = new TGraph2D* [(int) sqrt(numOfCh)];
+
+        //calculate the TGraphDelaunays (after sampling)
+        for(int iMPPC = 0; iMPPC < sqrt(numOfCh); iMPPC++)
+        {
+          for(int jMPPC = 0; jMPPC < sqrt(numOfCh) ; jMPPC++)
+          {
+            std::stringstream sstream;
+            sstream << "Pi_[" << iMPPC <<  "][" << jMPPC <<  "]_" << crystal[iCry][jCry]->id;
+            TCanvas *canv = (TCanvas*) gDirectory->Get(sstream.str().c_str());
+            TH3I* histo3d = (TH3I*) canv-> GetPrimitive(sstream.str().c_str()); //get the 3d histo
+            sstream << "_camp";
+            camp[iMPPC][jMPPC] = new TGraph2D();
+            camp[iMPPC][jMPPC]->SetName(sstream.str().c_str());
+            int campPoint = 0;
+            for(int iBin = 1; iBin < histo3d->GetXaxis()->GetNbins()-1 ; iBin++)
+            {
+              for(int jBin = 1; jBin < histo3d->GetYaxis()->GetNbins()-1 ; jBin++)
+              {
+                double sum = 0.0;
+                double part = 0.0;
+                for(int kBin = 1; kBin < histo3d->GetZaxis()->GetNbins()-1 ; kBin++)
+                {
+                  if(histo3d->GetBinContent(iBin,jBin,kBin) > 0)
+                  {
+                    sum += histo3d->GetBinContent(iBin,jBin,kBin);
+                    part += histo3d->GetBinContent(iBin,jBin,kBin) * histo3d->GetZaxis()->GetBinCenter(kBin);
+                  }
+                }
+                if(sum > 0){
+                  part = part/sum;
+                  camp[iMPPC][jMPPC]->SetPoint(campPoint,histo3d->GetXaxis()->GetBinCenter(iBin),histo3d->GetYaxis()->GetBinCenter(jBin),part);
+                  campPoint++;
+                }
+              }
+            }
+            // std::cout << crystal[iCry][jCry]->id << " " << iMPPC << " " << jMPPC << std::endl;
+            crystal[iCry][jCry]->gd[iMPPC][jMPPC] = new TGraphDelaunay(camp[iMPPC][jMPPC]);
+            crystal[iCry][jCry]->gd[iMPPC][jMPPC]->SetMaxIter(100000);
+            crystal[iCry][jCry]->gd[iMPPC][jMPPC]->SetMarginBinsContent(0);
+            crystal[iCry][jCry]->gd[iMPPC][jMPPC]->ComputeZ(0,0);
+            crystal[iCry][jCry]->gd[iMPPC][jMPPC]->FindAllTriangles();
+            sstream.str("");
+          }
         }
-        myfile.close();
-        sstream.str("");
+
+        std::stringstream sstream1;
+        sstream1 << "Charge Spectrum - Crystal " << crystal[iCry][jCry]->id << " - MPPC " <<  mppcLabel[crystal[iCry][jCry]->mppcj] << crystal[iCry][jCry]->mppci+1;
+        // std::cout << sstream1.str() << std::endl;
+        TCanvas *c_spectrum0 = (TCanvas*) gDirectory->Get(sstream1.str().c_str());
+        TH1F* spectrum0 = (TH1F*) c_spectrum0->GetPrimitive(sstream1.str().c_str());
+        sstream1.str("");
+        sstream1 << "gaussCharge - Crystal " << crystal[iCry][jCry]->id << " - MPPC " <<  mppcLabel[crystal[iCry][jCry]->mppcj] << crystal[iCry][jCry]->mppci+1;
+        TF1* gaussCharge0 = (TF1*) c_spectrum0->GetPrimitive(sstream1.str().c_str());
+        Float_t peak0 = gaussCharge0->GetParameter(1);
+        crystal[iCry][jCry]->correction = peak0 / 0.511;
       }
     }
-    calibrationFile->cd(cry1folder.str().c_str());// cry1
-    for(int iMPPC = mppcI1-1; iMPPC < mppcI1+2; iMPPC++)
-    {
-      for(int jMPPC = mppcJ1-1; jMPPC < mppcJ1+2 ; jMPPC++)
-      {
-        std::stringstream sstream;
-        sstream << "Graph_Pi(E,w)[" << iMPPC <<  "][" << jMPPC <<  "]_" << cry1N;
-        TCanvas *canv = (TCanvas*) gDirectory->Get(sstream.str().c_str());
-        TGraph2D *graph = (TGraph2D*) canv->GetPrimitive(sstream.str().c_str());
-        Double_t *x = graph->GetX();
-        Double_t *y = graph->GetY();
-        Double_t *z = graph->GetZ();
-        std::ofstream myfile;
-        std::stringstream fileStream;
-        fileStream << "Gr_[" << iMPPC <<  "][" << jMPPC <<  "]_" << cry1N << ".dat";
-        myfile.open (fileStream.str().c_str(),std::ios::out);
-        for(int i = 0 ; i < graph->GetN() ; i++){
-          myfile << x[i] << " " << y[i] << " " << z[i] << std::endl;
-        }
-        myfile.close();
-        sstream.str("");
-      }
-    }
-    std::cout << "Points dumped." << std::endl;
   }
+  // for(int iCry = 0 ; iCry < cryLateralNum; iCry++)
+  // {
+  //   for(int jCry = 0 ; jCry < cryLateralNum; jCry++)
+  //   {
+  //     std::cout << iCry << " " << jCry << " "  << crystal[iCry][jCry]->id <<" "  << crystal[iCry][jCry]->mppci << " " << crystal[iCry][jCry]->mppcj << " ";
+  //     if( (iCry > (cryLatPerMppc-1)) && (iCry < (cryLateralNum - cryLatPerMppc)) && (jCry > (cryLatPerMppc-1)) && (jCry < (cryLateralNum - cryLatPerMppc)) ) // avoid frame channels
+  //     {
+  //       std::cout << crystal[iCry][jCry]->wz->Eval(7.5) << " " <<  crystal[iCry][jCry]->gd[2][2]->ComputeZ(0.7,800) << " " << crystal[iCry][jCry]->correction;
+  //     }
+  //     std::cout << std::endl;
+  //   }
+  // }
+
+
+
+
+
+  //----------------------------------------------------------------------//
+  //                                                                      //
+  //                     FETCH CALIBRATION PLOTS                          //
+  //                                                                      //
+  //----------------------------------------------------------------------//
+
+
+  // std::stringstream  crystal0;
+  // crystal0 << "Crystal " << cry0N;
+  // std::stringstream crystal1;
+  // crystal1 << "Crystal " << cry1N;
+  // std::stringstream mppc0;
+  // mppc0 << "MPPC " << mppcLabel[mppcJ0] << mppcI0+1 << " - 0.0-" << mppcI0 << "."<< mppcJ0;
+  // std::stringstream mppc1;
+  // mppc1 << "MPPC " << mppcLabel[mppcJ1] << mppcI1+1 << " - 0.0-" << mppcI1 << "."<< mppcJ1;
+  // std::stringstream cry0folder;
+  // std::stringstream cry1folder;
+  // cry0folder << "Module 0.0/" << mppc0.str() << "/" << crystal0.str();
+  // cry1folder << "Module 0.0/" << mppc1.str() << "/" << crystal1.str();
+  // std::stringstream w0Plot;
+  // std::stringstream w1Plot;
+  // w0Plot << "w(z) Plot - " << crystal0.str();
+  // w1Plot << "w(z) Plot - " << crystal1.str();
+  //
+  // std::cout << cry0folder.str().c_str() << std::endl;
+  // calibrationFile->cd(cry0folder.str().c_str());
+  // TCanvas *canvas = (TCanvas*) gDirectory->Get(w0Plot.str().c_str());
+  // TGraph *wzgraph0,*wzgraph1;
+  // wzgraph0 = (TGraph*) canvas->GetPrimitive(w0Plot.str().c_str());
+  // calibrationFile->cd(cry1folder.str().c_str());// cry1
+  // TCanvas* canvas1 = (TCanvas*) gDirectory->Get(w1Plot.str().c_str());
+  // wzgraph1 = (TGraph*) canvas1->GetPrimitive(w1Plot.str().c_str());
+  // //now load the TGraph2Ds from the calibration run
+  // //and calculate the "surfaces"
+  // TGraphDelaunay ***gd0;
+  // gd0 = new TGraphDelaunay**[(int) sqrt(numOfCh)];
+  // for(int i = 0; i < sqrt(numOfCh) ; i++) gd0[i] = new TGraphDelaunay* [(int) sqrt(numOfCh)];
+  // TGraphDelaunay ***gd1;
+  // gd1 = new TGraphDelaunay**[(int) sqrt(numOfCh)];
+  // for(int i = 0; i < sqrt(numOfCh) ; i++) gd1[i] = new TGraphDelaunay* [(int) sqrt(numOfCh)];
+  // TGraph2D ***camp0;
+  // TGraph2D ***camp1;
+  // camp0 = new TGraph2D**[(int) sqrt(numOfCh)];
+  // for(int i = 0; i < sqrt(numOfCh) ; i++) camp0[i] = new TGraph2D* [(int) sqrt(numOfCh)];
+  // camp1 = new TGraph2D**[(int) sqrt(numOfCh)];
+  // for(int i = 0; i < sqrt(numOfCh) ; i++) camp1[i] = new TGraph2D* [(int) sqrt(numOfCh)];
+
+
+  // bool dumpPoint = false; //dump points to a text file, in case you want to compare with a matlab analysis for example
+  // if(dumpPoint)
+  // {
+  //   calibrationFile->cd(cry0folder.str().c_str());// cry0
+  //   for(int iMPPC = mppcI0 -1; iMPPC < mppcI0+2; iMPPC++)
+  //   {
+  //     for(int jMPPC = mppcJ0-1; jMPPC < mppcJ0+2 ; jMPPC++)
+  //     {
+  //       std::stringstream sstream;
+  //       sstream << "Graph_Pi(E,w)[" << iMPPC <<  "][" << jMPPC <<  "]_" << cry0N;
+  //       TCanvas *canv = (TCanvas*) gDirectory->Get(sstream.str().c_str());
+  //       TGraph2D *graph = (TGraph2D*) canv->GetPrimitive(sstream.str().c_str());
+  //       Double_t *x = graph->GetX();
+  //       Double_t *y = graph->GetY();
+  //       Double_t *z = graph->GetZ();
+  //       std::ofstream myfile;
+  //       std::stringstream fileStream;
+  //       fileStream << "Gr_[" << iMPPC <<  "][" << jMPPC <<  "]_" << cry0N << ".dat";
+  //       myfile.open (fileStream.str().c_str(),std::ios::out);
+  //       for(int i = 0 ; i < graph->GetN() ; i++){
+  //         myfile << x[i] << " " << y[i] << " " << z[i] << std::endl;
+  //       }
+  //       myfile.close();
+  //       sstream.str("");
+  //     }
+  //   }
+  //   calibrationFile->cd(cry1folder.str().c_str());// cry1
+  //   for(int iMPPC = mppcI1-1; iMPPC < mppcI1+2; iMPPC++)
+  //   {
+  //     for(int jMPPC = mppcJ1-1; jMPPC < mppcJ1+2 ; jMPPC++)
+  //     {
+  //       std::stringstream sstream;
+  //       sstream << "Graph_Pi(E,w)[" << iMPPC <<  "][" << jMPPC <<  "]_" << cry1N;
+  //       TCanvas *canv = (TCanvas*) gDirectory->Get(sstream.str().c_str());
+  //       TGraph2D *graph = (TGraph2D*) canv->GetPrimitive(sstream.str().c_str());
+  //       Double_t *x = graph->GetX();
+  //       Double_t *y = graph->GetY();
+  //       Double_t *z = graph->GetZ();
+  //       std::ofstream myfile;
+  //       std::stringstream fileStream;
+  //       fileStream << "Gr_[" << iMPPC <<  "][" << jMPPC <<  "]_" << cry1N << ".dat";
+  //       myfile.open (fileStream.str().c_str(),std::ios::out);
+  //       for(int i = 0 ; i < graph->GetN() ; i++){
+  //         myfile << x[i] << " " << y[i] << " " << z[i] << std::endl;
+  //       }
+  //       myfile.close();
+  //       sstream.str("");
+  //     }
+  //   }
+  //   std::cout << "Points dumped." << std::endl;
+  // }
 
 
   //----------------------------------------------------------------------//
@@ -459,104 +708,104 @@ int main (int argc, char** argv)
   //                                                                      //
   //----------------------------------------------------------------------//
   int interpolationWay = 2;  // 0 = TGraphDelaunay, 1 = planes, 2 = TGraphDelaunay on sampled data
-  //take and interpolate all TGraph2D, regardless of how many will be used later
-  if(interpolationWay == 2)
-  {
-    calibrationFile->cd(cry0folder.str().c_str());// cry0
-    // for(int iMPPC = mppcI0 -1; iMPPC < mppcI0+2; iMPPC++)
-    // {
-    //   for(int jMPPC = mppcJ0-1; jMPPC < mppcJ0+2 ; jMPPC++)
-    //   {
-    for(int iMPPC = 0; iMPPC < sqrt(numOfCh); iMPPC++)
-    {
-      for(int jMPPC = 0; jMPPC < sqrt(numOfCh) ; jMPPC++)
-      {
-        std::stringstream sstream;
-        sstream << "Pi_[" << iMPPC <<  "][" << jMPPC <<  "]_" << cry0N;
-        TCanvas *canv = (TCanvas*) gDirectory->Get(sstream.str().c_str());
-        TH3I* histo3d = (TH3I*) canv-> GetPrimitive(sstream.str().c_str()); //get the 3d histo
-        sstream << "_camp";
-        camp0[iMPPC][jMPPC] = new TGraph2D();
-        camp0[iMPPC][jMPPC]->SetName(sstream.str().c_str());
-        int campPoint = 0;
-        for(int iBin = 1; iBin < histo3d->GetXaxis()->GetNbins()-1 ; iBin++)
-        {
-          for(int jBin = 1; jBin < histo3d->GetYaxis()->GetNbins()-1 ; jBin++)
-          {
-            double sum = 0.0;
-            double part = 0.0;
-            for(int kBin = 1; kBin < histo3d->GetZaxis()->GetNbins()-1 ; kBin++)
-            {
-              if(histo3d->GetBinContent(iBin,jBin,kBin) > 0)
-              {
-                sum += histo3d->GetBinContent(iBin,jBin,kBin);
-                part += histo3d->GetBinContent(iBin,jBin,kBin) * histo3d->GetZaxis()->GetBinCenter(kBin);
-              }
-            }
-            if(sum > 0){
-              part = part/sum;
-              camp0[iMPPC][jMPPC]->SetPoint(campPoint,histo3d->GetXaxis()->GetBinCenter(iBin),histo3d->GetYaxis()->GetBinCenter(jBin),part);
-              campPoint++;
-            }
-          }
-        }
-        std::cout << cry0N << " " << iMPPC << " " << jMPPC << std::endl;
-        gd0[iMPPC][jMPPC] = new TGraphDelaunay(camp0[iMPPC][jMPPC]);
-        gd0[iMPPC][jMPPC]->SetMaxIter(100000);
-        gd0[iMPPC][jMPPC]->SetMarginBinsContent(0);
-        gd0[iMPPC][jMPPC]->ComputeZ(0,0);
-        gd0[iMPPC][jMPPC]->FindAllTriangles();
-        sstream.str("");
-      }
-    }
-    calibrationFile->cd(cry1folder.str().c_str());// cry1
-    // for(int iMPPC = mppcI1-1; iMPPC < mppcI1+2; iMPPC++)
-    // {
-    //   for(int jMPPC = mppcJ1-1; jMPPC < mppcJ1+2 ; jMPPC++)
-    //   {
-    for(int iMPPC = 0; iMPPC < sqrt(numOfCh); iMPPC++)
-    {
-      for(int jMPPC = 0; jMPPC < sqrt(numOfCh) ; jMPPC++)
-      {
-        std::stringstream sstream;
-        sstream << "Pi_[" << iMPPC <<  "][" << jMPPC <<  "]_" << cry1N;
-        TCanvas *canv = (TCanvas*) gDirectory->Get(sstream.str().c_str());
-        TH3I* histo3d = (TH3I*) canv-> GetPrimitive(sstream.str().c_str()); //get the 3d histo
-        sstream << "_camp";
-        camp1[iMPPC][jMPPC] = new TGraph2D();
-        camp1[iMPPC][jMPPC]->SetName(sstream.str().c_str());
-        int campPoint = 0;
-        for(int iBin = 1; iBin < histo3d->GetXaxis()->GetNbins()-1 ; iBin++)
-        {
-          for(int jBin = 1; jBin < histo3d->GetYaxis()->GetNbins()-1 ; jBin++)
-          {
-            double sum = 0.0;
-            double part = 0.0;
-            for(int kBin = 1; kBin < histo3d->GetZaxis()->GetNbins()-1 ; kBin++)
-            {
-              if(histo3d->GetBinContent(iBin,jBin,kBin) > 0)
-              {
-                sum += histo3d->GetBinContent(iBin,jBin,kBin);
-                part += histo3d->GetBinContent(iBin,jBin,kBin) * histo3d->GetZaxis()->GetBinCenter(kBin);
-              }
-            }
-            if(sum > 0){
-              part = part/sum;
-              camp1[iMPPC][jMPPC]->SetPoint(campPoint,histo3d->GetXaxis()->GetBinCenter(iBin),histo3d->GetYaxis()->GetBinCenter(jBin),part);
-              campPoint++;
-            }
-          }
-        }
-        std::cout << cry1N << " " << iMPPC << " " << jMPPC << std::endl;
-        gd1[iMPPC][jMPPC] = new TGraphDelaunay(camp1[iMPPC][jMPPC]);
-        gd1[iMPPC][jMPPC]->SetMaxIter(100000);
-        gd1[iMPPC][jMPPC]->SetMarginBinsContent(0);
-        gd1[iMPPC][jMPPC]->ComputeZ(0,0);
-        gd1[iMPPC][jMPPC]->FindAllTriangles();
-        sstream.str("");
-      }
-    }
-  }
+  // //take and interpolate all TGraph2D, regardless of how many will be used later
+  // if(interpolationWay == 2)
+  // {
+  //   calibrationFile->cd(cry0folder.str().c_str());// cry0
+  //   // for(int iMPPC = mppcI0 -1; iMPPC < mppcI0+2; iMPPC++)
+  //   // {
+  //   //   for(int jMPPC = mppcJ0-1; jMPPC < mppcJ0+2 ; jMPPC++)
+  //   //   {
+  //   for(int iMPPC = 0; iMPPC < sqrt(numOfCh); iMPPC++)
+  //   {
+  //     for(int jMPPC = 0; jMPPC < sqrt(numOfCh) ; jMPPC++)
+  //     {
+  //       std::stringstream sstream;
+  //       sstream << "Pi_[" << iMPPC <<  "][" << jMPPC <<  "]_" << cry0N;
+  //       TCanvas *canv = (TCanvas*) gDirectory->Get(sstream.str().c_str());
+  //       TH3I* histo3d = (TH3I*) canv-> GetPrimitive(sstream.str().c_str()); //get the 3d histo
+  //       sstream << "_camp";
+  //       camp0[iMPPC][jMPPC] = new TGraph2D();
+  //       camp0[iMPPC][jMPPC]->SetName(sstream.str().c_str());
+  //       int campPoint = 0;
+  //       for(int iBin = 1; iBin < histo3d->GetXaxis()->GetNbins()-1 ; iBin++)
+  //       {
+  //         for(int jBin = 1; jBin < histo3d->GetYaxis()->GetNbins()-1 ; jBin++)
+  //         {
+  //           double sum = 0.0;
+  //           double part = 0.0;
+  //           for(int kBin = 1; kBin < histo3d->GetZaxis()->GetNbins()-1 ; kBin++)
+  //           {
+  //             if(histo3d->GetBinContent(iBin,jBin,kBin) > 0)
+  //             {
+  //               sum += histo3d->GetBinContent(iBin,jBin,kBin);
+  //               part += histo3d->GetBinContent(iBin,jBin,kBin) * histo3d->GetZaxis()->GetBinCenter(kBin);
+  //             }
+  //           }
+  //           if(sum > 0){
+  //             part = part/sum;
+  //             camp0[iMPPC][jMPPC]->SetPoint(campPoint,histo3d->GetXaxis()->GetBinCenter(iBin),histo3d->GetYaxis()->GetBinCenter(jBin),part);
+  //             campPoint++;
+  //           }
+  //         }
+  //       }
+  //       std::cout << cry0N << " " << iMPPC << " " << jMPPC << std::endl;
+  //       gd0[iMPPC][jMPPC] = new TGraphDelaunay(camp0[iMPPC][jMPPC]);
+  //       gd0[iMPPC][jMPPC]->SetMaxIter(100000);
+  //       gd0[iMPPC][jMPPC]->SetMarginBinsContent(0);
+  //       gd0[iMPPC][jMPPC]->ComputeZ(0,0);
+  //       gd0[iMPPC][jMPPC]->FindAllTriangles();
+  //       sstream.str("");
+  //     }
+  //   }
+  //   calibrationFile->cd(cry1folder.str().c_str());// cry1
+  //   // for(int iMPPC = mppcI1-1; iMPPC < mppcI1+2; iMPPC++)
+  //   // {
+  //   //   for(int jMPPC = mppcJ1-1; jMPPC < mppcJ1+2 ; jMPPC++)
+  //   //   {
+  //   for(int iMPPC = 0; iMPPC < sqrt(numOfCh); iMPPC++)
+  //   {
+  //     for(int jMPPC = 0; jMPPC < sqrt(numOfCh) ; jMPPC++)
+  //     {
+  //       std::stringstream sstream;
+  //       sstream << "Pi_[" << iMPPC <<  "][" << jMPPC <<  "]_" << cry1N;
+  //       TCanvas *canv = (TCanvas*) gDirectory->Get(sstream.str().c_str());
+  //       TH3I* histo3d = (TH3I*) canv-> GetPrimitive(sstream.str().c_str()); //get the 3d histo
+  //       sstream << "_camp";
+  //       camp1[iMPPC][jMPPC] = new TGraph2D();
+  //       camp1[iMPPC][jMPPC]->SetName(sstream.str().c_str());
+  //       int campPoint = 0;
+  //       for(int iBin = 1; iBin < histo3d->GetXaxis()->GetNbins()-1 ; iBin++)
+  //       {
+  //         for(int jBin = 1; jBin < histo3d->GetYaxis()->GetNbins()-1 ; jBin++)
+  //         {
+  //           double sum = 0.0;
+  //           double part = 0.0;
+  //           for(int kBin = 1; kBin < histo3d->GetZaxis()->GetNbins()-1 ; kBin++)
+  //           {
+  //             if(histo3d->GetBinContent(iBin,jBin,kBin) > 0)
+  //             {
+  //               sum += histo3d->GetBinContent(iBin,jBin,kBin);
+  //               part += histo3d->GetBinContent(iBin,jBin,kBin) * histo3d->GetZaxis()->GetBinCenter(kBin);
+  //             }
+  //           }
+  //           if(sum > 0){
+  //             part = part/sum;
+  //             camp1[iMPPC][jMPPC]->SetPoint(campPoint,histo3d->GetXaxis()->GetBinCenter(iBin),histo3d->GetYaxis()->GetBinCenter(jBin),part);
+  //             campPoint++;
+  //           }
+  //         }
+  //       }
+  //       std::cout << cry1N << " " << iMPPC << " " << jMPPC << std::endl;
+  //       gd1[iMPPC][jMPPC] = new TGraphDelaunay(camp1[iMPPC][jMPPC]);
+  //       gd1[iMPPC][jMPPC]->SetMaxIter(100000);
+  //       gd1[iMPPC][jMPPC]->SetMarginBinsContent(0);
+  //       gd1[iMPPC][jMPPC]->ComputeZ(0,0);
+  //       gd1[iMPPC][jMPPC]->FindAllTriangles();
+  //       sstream.str("");
+  //     }
+  //   }
+  // }
 
 
   //----------------------------------------------------------------------//
@@ -565,28 +814,28 @@ int main (int argc, char** argv)
   //                                                                      //
   //----------------------------------------------------------------------//
   //take the charge spectra for the two channels 28 and 29
-  calibrationFile->cd(cry0folder.str().c_str());// cry0
-  std::stringstream sstream1;
-  sstream1 << "Charge Spectrum - Crystal " << cry0N << " - MPPC " <<  mppcLabel[mppcJ0] << mppcI0+1;
-  // std::cout << sstream1.str() << std::endl;
-  TCanvas *c_spectrum0 = (TCanvas*) gDirectory->Get(sstream1.str().c_str());
-  TH1F* spectrum0 = (TH1F*) c_spectrum0->GetPrimitive(sstream1.str().c_str());
-  sstream1.str("");
-  sstream1 << "gaussCharge - Crystal " << cry0N << " - MPPC " <<  mppcLabel[mppcJ0] << mppcI0+1;
-  TF1* gaussCharge0 = (TF1*) c_spectrum0->GetPrimitive(sstream1.str().c_str());
-  Float_t peak0 = gaussCharge0->GetParameter(1);
-  sstream1.str("");
-  calibrationFile->cd(cry1folder.str().c_str());// cry1
-  sstream1 << "Charge Spectrum - Crystal " << cry1N << " - MPPC " <<  mppcLabel[mppcJ1] << mppcI1+1;
-  TCanvas *c_spectrum1 = (TCanvas*) gDirectory->Get(sstream1.str().c_str());
-  TH1F* spectrum1 = (TH1F*) c_spectrum1->GetPrimitive(sstream1.str().c_str());
-  sstream1.str("");
-  sstream1 << "gaussCharge - Crystal " << cry1N << " - MPPC " <<  mppcLabel[mppcJ1] << mppcI1+1;
-  TF1* gaussCharge1 = (TF1*) c_spectrum1->GetPrimitive(sstream1.str().c_str());
-  Float_t peak1 = gaussCharge1->GetParameter(1);
-  //assuming linear relation charge - energy deposited...
-  Float_t correction0 = peak0 / 0.511; //charge bin / MeV
-  Float_t correction1 = peak1 / 0.511; //charge bin / MeV
+  // calibrationFile->cd(cry0folder.str().c_str());// cry0
+  // std::stringstream sstream1;
+  // sstream1 << "Charge Spectrum - Crystal " << cry0N << " - MPPC " <<  mppcLabel[mppcJ0] << mppcI0+1;
+  // // std::cout << sstream1.str() << std::endl;
+  // TCanvas *c_spectrum0 = (TCanvas*) gDirectory->Get(sstream1.str().c_str());
+  // TH1F* spectrum0 = (TH1F*) c_spectrum0->GetPrimitive(sstream1.str().c_str());
+  // sstream1.str("");
+  // sstream1 << "gaussCharge - Crystal " << cry0N << " - MPPC " <<  mppcLabel[mppcJ0] << mppcI0+1;
+  // TF1* gaussCharge0 = (TF1*) c_spectrum0->GetPrimitive(sstream1.str().c_str());
+  // Float_t peak0 = gaussCharge0->GetParameter(1);
+  // sstream1.str("");
+  // calibrationFile->cd(cry1folder.str().c_str());// cry1
+  // sstream1 << "Charge Spectrum - Crystal " << cry1N << " - MPPC " <<  mppcLabel[mppcJ1] << mppcI1+1;
+  // TCanvas *c_spectrum1 = (TCanvas*) gDirectory->Get(sstream1.str().c_str());
+  // TH1F* spectrum1 = (TH1F*) c_spectrum1->GetPrimitive(sstream1.str().c_str());
+  // sstream1.str("");
+  // sstream1 << "gaussCharge - Crystal " << cry1N << " - MPPC " <<  mppcLabel[mppcJ1] << mppcI1+1;
+  // TF1* gaussCharge1 = (TF1*) c_spectrum1->GetPrimitive(sstream1.str().c_str());
+  // Float_t peak1 = gaussCharge1->GetParameter(1);
+  // //assuming linear relation charge - energy deposited...
+  // Float_t correction0 = peak0 / 0.511; //charge bin / MeV
+  // Float_t correction1 = peak1 / 0.511; //charge bin / MeV
 
 
   //----------------------------------------------------------------------//
@@ -673,6 +922,9 @@ int main (int argc, char** argv)
   //----------------------------------------------------------------------//
   long int counter = 0;
   int nEntries = tree->GetEntries();
+  long int goodCounter = 0;
+  long int goodCounterOnlyCompton = 0;
+  long int goodCounterNoPhotEl = 0;
   std::cout << "nEntries = " << nEntries << std::endl;
   // int cEvent = 5197;
   // int cEvent = 400;
@@ -688,119 +940,7 @@ int main (int argc, char** argv)
     stopEvent = cEvent+1;
   }
 
-  //find front mppcs and frame mppcs
-  std::vector<int> frontMppcs;
-  std::vector<int> frameMppcs;
-  std::vector<int> relevantMppcs;
-  //front mppcs
-  int trigger0 = (int) (mppcI0 * sqrt(numOfCh) + mppcJ0);
-  int trigger1 = (int) (mppcI1 * sqrt(numOfCh) + mppcJ1);
-  frontMppcs.push_back(trigger0); //push first crystal mppc to the frontMppcs
-  if(trigger0 != trigger1){ // if the second crystal is in front of another mppc...
-    frontMppcs.push_back(trigger1); //... push also that mppc id into the frontMppcs vector
-  }
-  //frameMppcs (actually frame plus front)
-  //frame of mppc0
-  for(int iMPPC = mppcI0 -1; iMPPC < mppcI0+2; iMPPC++)
-  {
-    if( (iMPPC >= 0) && (iMPPC <= sqrt(numOfCh)) )
-    {
-      for(int jMPPC = mppcJ0-1; jMPPC < mppcJ0+2 ; jMPPC++)
-      {
-        if( (jMPPC >= 0) && (jMPPC <= sqrt(numOfCh)) )
-        {
-          int thisChannel = iMPPC * sqrt(numOfCh) + jMPPC;
-          // std::cout << "thisChannel " << thisChannel << std::endl;
-          bool isThere = false;
-          for(int a = 0; a < frameMppcs.size(); a++) //check if id is already there
-          {
-            // std::cout << "frameMppcs[a] " << frameMppcs[a] << " thisChannel " << thisChannel << std::endl;
-            if(frameMppcs[a] == thisChannel)
-              isThere = true;
-          }
-          frameMppcs.push_back(thisChannel);
-        }
-      }
-    }
-  }
-  //frame of mppc1
-  for(int iMPPC = mppcI1 -1; iMPPC < mppcI1+2; iMPPC++)
-  {
-    if( (iMPPC >= 0) && (iMPPC <= sqrt(numOfCh)) )
-    {
-      for(int jMPPC = mppcJ1-1; jMPPC < mppcJ1+2 ; jMPPC++)
-      {
-        if( (jMPPC >= 0) && (jMPPC <= sqrt(numOfCh)) )
-        {
-          int thisChannel = iMPPC * sqrt(numOfCh) + jMPPC;
-          // std::cout << "thisChannel " << thisChannel << std::endl;
-          bool isThere = false;
-          for(int a = 0; a < frameMppcs.size(); a++) //check if id is already there
-          {
-            // std::cout << "frameMppcs[a] " << frameMppcs[a] << " thisChannel " << thisChannel << std::endl;
-            if(frameMppcs[a] == thisChannel)
-              isThere = true;
-          }
-          frameMppcs.push_back(thisChannel);
-        }
-      }
-    }
-  }
-  //now the relevantMppcs. Intersection of the two frame groups and front group
-  for(int iFront = 0; iFront < frontMppcs.size(); iFront++) //first the two front
-  {
-    relevantMppcs.push_back(frontMppcs[iFront]);
-  }
-  for(int iFrame = 0; iFrame < frameMppcs.size(); iFrame++) //run on all frames and add if it's not already there
-  {
-    bool isThere = false;
-    for(int a = 0; a < relevantMppcs.size(); a++) //check if id is already there
-    {
-      if(relevantMppcs[a] == frameMppcs[iFrame]){
-        isThere = true;
-      }
-    }
-    if(!isThere){
-      relevantMppcs.push_back(frameMppcs[iFrame]);
-    }
-  }
 
-  //TESTING - use all channels. CAREFUL: then also u,v,w need to be calculated on all channels here (which is automatically the case
-  // since they are calculated on the relevantMppcs) and in the calibraton file (at least for the w(z), that's sure).
-  bool hardcodeMppcs = true; //TEMPORARY
-  if(hardcodeMppcs)
-  {
-    relevantMppcs.clear();
-    frontMppcs.clear();
-    relevantMppcs.push_back(0);
-    relevantMppcs.push_back(1);
-    relevantMppcs.push_back(2);
-    relevantMppcs.push_back(3);
-    relevantMppcs.push_back(4);
-    relevantMppcs.push_back(5);
-    relevantMppcs.push_back(6);
-    relevantMppcs.push_back(7);
-    relevantMppcs.push_back(8);
-    relevantMppcs.push_back(9);
-    relevantMppcs.push_back(10);
-    relevantMppcs.push_back(11);
-    relevantMppcs.push_back(12);
-    relevantMppcs.push_back(13);
-    relevantMppcs.push_back(14);
-    relevantMppcs.push_back(15);
-    frontMppcs.push_back(5);
-    frontMppcs.push_back(6);
-  }
-
-  for(int i = 0; i < relevantMppcs.size(); i++){
-    std::cout << relevantMppcs[i] << " " ;
-  }
-  std::cout << std::endl;
-
-  for(int i = 0; i < frontMppcs.size(); i++){
-    std::cout << frontMppcs[i] << " " ;
-  }
-  std::cout << std::endl;
 
   for(int iEvent = startEvent; iEvent < stopEvent ; iEvent++)
   // for(int iEvent = 0; iEvent < nEntries ; iEvent++)
@@ -808,61 +948,49 @@ int main (int argc, char** argv)
   {
     tree->GetEvent(iEvent);
 
-    // calculate the u,v,w that we measure (we already know about the totalEnergyDeposited. it is worth to mention here that in reality
-    // the check on the energy deposited is necessarily less accurate, given the energy resolution of the detector, but we will deal with that later)
-    // u,v,w calculated with only near channels
+    int mppcI0 ;
+    int mppcJ0 ;
+    int mppcI1 ;
+    int mppcJ1 ;
+    int cry0N  ;
+    int cry1N  ;
+    // int mppcI0 = 1;
+    // int mppcJ0 = 2;
+    // int mppcI1 = 1;
+    // int mppcJ1 = 2;
+    // int cry0N = 28;
+    // int cry1N = 29;
+    // double cry0x = -0.8;
+    // double cry0y = 0.8;
+    // double cry1x = -0.8;
+    // double cry1y = 2.4;
+    // int cry0N = 28;
+    // int cry1N = 26;
 
-    // to implement the different mppc modality, we need to define the
-    // front mppc and framemppc. Front are the 2 (or more) directly coupled to the crystals, frame the
-    // frame around each front
+    double cry0centerX ;
+    double cry0centerY ;
+    double cry1centerX ;
+    double cry1centerY ;
+    double correction0;
+    double correction1;
+    TGraph* wzgraph0;
+    TGraph* wzgraph1;
+    TGraphDelaunay*** gd0;
+    TGraphDelaunay*** gd1;
 
-    columsum = 0.0;
-    rowsum = 0.0;
-    total = 0.0;
-    frontSum = 0.0;
-    floodx = 0.0;
-    floody = 0.0;
-    floodz = 0.0;
-    // std::cout << "triggerChannel " << triggerChannel << std::endl;
-    //now scan the channels and accept them only if they are into the relevantMppcs. Also, sum the contribution of frontMppcs
-    for(int i = 0; i < numOfCh ; i++)
-    {
-      // check if it's rlevant and front
-      bool isRelevant = false;
-      bool isFront = false;
-      for(int a = 0; a < frontMppcs.size(); a++)
-      {
-        if(frontMppcs[a] == i)
-          isFront = true;
-      }
-      for(int a = 0; a < relevantMppcs.size(); a++)
-      {
-        if(relevantMppcs[a] == i)
-          isRelevant = true;
-      }
-
-      if(isRelevant)
-      {
-        columsum += detector[i]*ymppc[i];
-        rowsum += detector[i]*xmppc[i];
-        total += detector[i];
-        // std::cout << i << " " << detector[i] << std::endl;;
-      }
-      if(isFront)
-      {
-        frontSum += detector[i];
-      }
-      // std::cout  << " ";
-    }
-
-    // std::cout << std::endl;
-    floodx = rowsum/total;
-    floody = columsum/total;
-    // std::cout << "total " << total << std::endl;
-    if(total != 0.0) floodz = ((double) (frontSum/total));
-    // std::cout << "<-------------------------------------------------------------------"<<std::endl;
-    flood->Fill(floodx,floody);
-    // std::cout << "flood x,y,z " << floodx << "," << floody << "," << floodz << std::endl;
+    CrystalData* crystaldata[2]; //the data of the 2 crystals that will be considered
+    // double cry0x = cry0centerX;
+    // double cry0y = cry0centerY;
+    // double cry1x = cry1centerX;
+    // double cry1y = cry1centerY;
+    // double cry0centerX = -0.8;
+    // double cry0centerY = +0.8;
+    // double cry1centerX = -0.8;
+    // double cry1centerY = +2.4;
+    // double cry0x = cry0centerX;
+    // double cry0y = cry0centerY;
+    // double cry1x = cry1centerX;
+    // double cry1y = cry1centerY;
 
     // from this 2d plot we can easily select the limits in u,v for what we will consider interscatter events, then select energy cuts etc. for now, we want to check
     // "the model" for the selection will be on the simulation data (inaccessible in reality, of course)
@@ -997,12 +1125,297 @@ int main (int argc, char** argv)
     }
     else // restric only to two specific crystals
     {
-      if(averageDepEvents[0].id != cry0N) isCandidate = false;
-      if(averageDepEvents[1].id != cry1N) isCandidate = false;
+      if( averageDepEvents[0].time > averageDepEvents[1].time )
+      {
+        isCandidate = false;
+        std::cout << "averageDepEvents[0].time > averageDepEvents[1].time - WROOOOOOOOONG!!!!!!!!!!!!!!!!!!!!!" << std::endl;
+      }
+      else
+      {
+        if(specificCrystals) //chosen by the user
+        {
+          cry0N       = sp_cry0N      ;
+          cry1N       = sp_cry1N      ;
+
+          for(int iCry = 0 ; iCry < cryLateralNum; iCry++)
+          {
+            for(int jCry = 0 ; jCry < cryLateralNum; jCry++)
+            {
+
+              if( (iCry > (cryLatPerMppc-1)) && (iCry < (cryLateralNum - cryLatPerMppc)) && (jCry > (cryLatPerMppc-1)) && (jCry < (cryLateralNum - cryLatPerMppc)) ) // avoid frame channels
+              {
+                if(crystal[iCry][jCry]->id == cry0N)
+                {
+                  // firstOK = true;
+                  crystaldata[0] = crystal[iCry][jCry];
+                }
+                if(crystal[iCry][jCry]->id == cry1N)
+                {
+                  crystaldata[1] = crystal[iCry][jCry];
+                  // secondOK = true;
+                }
+              }
+            }
+          }
+          mppcI0      = crystaldata[0]->mppci ;
+          mppcJ0      = crystaldata[0]->mppcj ;
+          mppcI1      = crystaldata[1]->mppci ;
+          mppcJ1      = crystaldata[1]->mppcj ;
+          cry0centerX = crystaldata[0]->x;
+          cry0centerY = crystaldata[0]->y;
+          cry1centerX = crystaldata[1]->x;
+          cry1centerY = crystaldata[1]->y;
+          correction0 = crystaldata[0]->correction;
+          correction1 = crystaldata[1]->correction;
+          wzgraph0 = crystaldata[0]->wz;
+          wzgraph1 = crystaldata[1]->wz;
+          gd0 = crystaldata[0]->gd;
+          gd1 = crystaldata[1]->gd;
+          //but check if this event matched the choice of user...
+          if(averageDepEvents[0].id != cry0N) isCandidate = false;
+          if(averageDepEvents[1].id != cry1N) isCandidate = false;
+        }
+        else // the couple in this event
+        {
+
+          isCandidate = false;
+          bool firstOK = false;
+          bool secondOK = false;
+          //get the crystal from the big array of CrystalData
+          for(int iCry = 0 ; iCry < cryLateralNum; iCry++)
+          {
+            for(int jCry = 0 ; jCry < cryLateralNum; jCry++)
+            {
+
+              if( (iCry > (cryLatPerMppc-1)) && (iCry < (cryLateralNum - cryLatPerMppc)) && (jCry > (cryLatPerMppc-1)) && (jCry < (cryLateralNum - cryLatPerMppc)) ) // avoid frame channels
+              {
+                if(crystal[iCry][jCry]->id == averageDepEvents[0].id)
+                {
+                  firstOK = true;
+                  crystaldata[0] = crystal[iCry][jCry];
+                }
+                if(crystal[iCry][jCry]->id == averageDepEvents[1].id)
+                {
+                  crystaldata[1] = crystal[iCry][jCry];
+                  secondOK = true;
+                }
+              }
+
+            }
+          }
+          if(firstOK && secondOK)
+          {
+            isCandidate = true;
+            cry0N       = crystaldata[0]->id ;
+            cry1N       = crystaldata[1]->id ;
+            mppcI0      = crystaldata[0]->mppci ;
+            mppcJ0      = crystaldata[0]->mppcj ;
+            mppcI1      = crystaldata[1]->mppci ;
+            mppcJ1      = crystaldata[1]->mppcj ;
+            cry0centerX = crystaldata[0]->x;
+            cry0centerY = crystaldata[0]->y;
+            cry1centerX = crystaldata[1]->x;
+            cry1centerY = crystaldata[1]->y;
+            correction0 = crystaldata[0]->correction;
+            correction1 = crystaldata[1]->correction;
+            wzgraph0 = crystaldata[0]->wz;
+            wzgraph1 = crystaldata[1]->wz;
+            gd0 = crystaldata[0]->gd;
+            gd1 = crystaldata[1]->gd;
+          }
+        }
+      }
+      // if(averageDepEvents[0].id != cry0N) isCandidate = false;
+      // if(averageDepEvents[1].id != cry1N) isCandidate = false;
     }
+
+    //source selection (TEMPORARY)
+    if(frontSource)
+    {
+      if(fabs(sourcex) > 6.0 | fabs(sourcey) > 6.0) isCandidate = false;
+    }
+
 
     if(isCandidate) //let the fun begin
     {
+
+      // calculate the u,v,w that we measure (we already know about the totalEnergyDeposited. it is worth to mention here that in reality
+      // the check on the energy deposited is necessarily less accurate, given the energy resolution of the detector, but we will deal with that later)
+      // u,v,w calculated with only near channels
+
+      // to implement the different mppc modality, we need to define the
+      // front mppc and framemppc. Front are the 2 (or more) directly coupled to the crystals, frame the
+      // frame around each front
+
+      columsum = 0.0;
+      rowsum = 0.0;
+      total = 0.0;
+      frontSum = 0.0;
+      floodx = 0.0;
+      floody = 0.0;
+      floodz = 0.0;
+
+
+      //find front mppcs and frame mppcs
+      std::vector<int> frontMppcs;
+      std::vector<int> frameMppcs;
+      std::vector<int> relevantMppcs;
+      //front mppcs
+      int trigger0 = (int) (mppcI0 * sqrt(numOfCh) + mppcJ0);
+      int trigger1 = (int) (mppcI1 * sqrt(numOfCh) + mppcJ1);
+      frontMppcs.push_back(trigger0); //push first crystal mppc to the frontMppcs
+      if(trigger0 != trigger1){ // if the second crystal is in front of another mppc...
+        frontMppcs.push_back(trigger1); //... push also that mppc id into the frontMppcs vector
+      }
+      //frameMppcs (actually frame plus front)
+      //frame of mppc0
+      for(int iMPPC = mppcI0 -1; iMPPC < mppcI0+2; iMPPC++)
+      {
+        if( (iMPPC >= 0) && (iMPPC <= sqrt(numOfCh)) )
+        {
+          for(int jMPPC = mppcJ0-1; jMPPC < mppcJ0+2 ; jMPPC++)
+          {
+            if( (jMPPC >= 0) && (jMPPC <= sqrt(numOfCh)) )
+            {
+              int thisChannel = iMPPC * sqrt(numOfCh) + jMPPC;
+              // std::cout << "thisChannel " << thisChannel << std::endl;
+              bool isThere = false;
+              for(int a = 0; a < frameMppcs.size(); a++) //check if id is already there
+              {
+                // std::cout << "frameMppcs[a] " << frameMppcs[a] << " thisChannel " << thisChannel << std::endl;
+                if(frameMppcs[a] == thisChannel)
+                  isThere = true;
+              }
+              frameMppcs.push_back(thisChannel);
+            }
+          }
+        }
+      }
+      //frame of mppc1
+      for(int iMPPC = mppcI1 -1; iMPPC < mppcI1+2; iMPPC++)
+      {
+        if( (iMPPC >= 0) && (iMPPC <= sqrt(numOfCh)) )
+        {
+          for(int jMPPC = mppcJ1-1; jMPPC < mppcJ1+2 ; jMPPC++)
+          {
+            if( (jMPPC >= 0) && (jMPPC <= sqrt(numOfCh)) )
+            {
+              int thisChannel = iMPPC * sqrt(numOfCh) + jMPPC;
+              // std::cout << "thisChannel " << thisChannel << std::endl;
+              bool isThere = false;
+              for(int a = 0; a < frameMppcs.size(); a++) //check if id is already there
+              {
+                // std::cout << "frameMppcs[a] " << frameMppcs[a] << " thisChannel " << thisChannel << std::endl;
+                if(frameMppcs[a] == thisChannel)
+                  isThere = true;
+              }
+              frameMppcs.push_back(thisChannel);
+            }
+          }
+        }
+      }
+      //now the relevantMppcs. Intersection of the two frame groups and front group
+      for(int iFront = 0; iFront < frontMppcs.size(); iFront++) //first the two front
+      {
+        relevantMppcs.push_back(frontMppcs[iFront]);
+      }
+      for(int iFrame = 0; iFrame < frameMppcs.size(); iFrame++) //run on all frames and add if it's not already there
+      {
+        bool isThere = false;
+        for(int a = 0; a < relevantMppcs.size(); a++) //check if id is already there
+        {
+          if(relevantMppcs[a] == frameMppcs[iFrame]){
+            isThere = true;
+          }
+        }
+        if(!isThere){
+          relevantMppcs.push_back(frameMppcs[iFrame]);
+        }
+      }
+
+      //TESTING - use all channels. CAREFUL: then also u,v,w need to be calculated on all channels here (which is automatically the case
+      // since they are calculated on the relevantMppcs) and in the calibraton file (at least for the w(z), that's sure).
+      bool hardcodeMppcs = false; //TEMPORARY
+      if(hardcodeMppcs)
+      {
+        relevantMppcs.clear();
+        frontMppcs.clear();
+        relevantMppcs.push_back(0);
+        relevantMppcs.push_back(1);
+        relevantMppcs.push_back(2);
+        relevantMppcs.push_back(3);
+        relevantMppcs.push_back(4);
+        relevantMppcs.push_back(5);
+        relevantMppcs.push_back(6);
+        relevantMppcs.push_back(7);
+        relevantMppcs.push_back(8);
+        relevantMppcs.push_back(9);
+        relevantMppcs.push_back(10);
+        relevantMppcs.push_back(11);
+        relevantMppcs.push_back(12);
+        relevantMppcs.push_back(13);
+        relevantMppcs.push_back(14);
+        relevantMppcs.push_back(15);
+        frontMppcs.push_back(5);
+        frontMppcs.push_back(6);
+      }
+
+      for(int i = 0; i < relevantMppcs.size(); i++){
+        std::cout << relevantMppcs[i] << " " ;
+      }
+      std::cout << std::endl;
+
+      for(int i = 0; i < frontMppcs.size(); i++){
+        std::cout << frontMppcs[i] << " " ;
+      }
+      std::cout << std::endl;
+
+      std::cout << crystaldata[0]->id << " " << crystaldata[1]->id << std::endl;
+      // double floodz_0 = 0.0;
+      // double floodz_1 = 0.0;
+      // std::cout << "triggerChannel " << triggerChannel << std::endl;
+      //now scan the channels and accept them only if they are into the relevantMppcs. Also, sum the contribution of frontMppcs
+      for(int i = 0; i < numOfCh ; i++)
+      {
+        // check if it's rlevant and front
+        bool isRelevant = false;
+        bool isFront = false;
+        for(int a = 0; a < frontMppcs.size(); a++)
+        {
+          if(frontMppcs[a] == i)
+            isFront = true;
+        }
+        for(int a = 0; a < relevantMppcs.size(); a++)
+        {
+          if(relevantMppcs[a] == i)
+            isRelevant = true;
+        }
+
+        if(isRelevant)
+        {
+          columsum += detector[i]*ymppc[i];
+          rowsum += detector[i]*xmppc[i];
+          total += detector[i];
+          // std::cout << i << " " << detector[i] << std::endl;;
+        }
+        if(isFront)
+        {
+          frontSum += detector[i];
+        }
+        // std::cout  << " ";
+      }
+      // floodz_0 = detector[6] /  total;
+      // floodz_1 = detector[5] /  total;
+
+      // std::cout << std::endl;
+      floodx = rowsum/total;
+      floody = columsum/total;
+      // std::cout << "total " << total << std::endl;
+      if(total != 0.0) floodz = ((double) (frontSum/total));
+      // std::cout << "<-------------------------------------------------------------------"<<std::endl;
+      flood->Fill(floodx,floody);
+      // std::cout << "flood x,y,z " << floodx << "," << floody << "," << floodz << std::endl;
+
       //check
       // std::cout << totalEnergyDeposited << " " << averageDepEvents.size() << " " << averageDepEvents[0].id << " " <<  averageDepEvents[1].id << std::endl;
       foundCandidate++;
@@ -1031,8 +1444,8 @@ int main (int argc, char** argv)
       std::cout << "Source = " <<  source[0] << "," << source[1] << "," << source[2] << std::endl;
       Float_t realP0[3] = {averageDepEvents[0].x,averageDepEvents[0].y,averageDepEvents[0].z};
       Float_t realP1[3] = {averageDepEvents[1].x,averageDepEvents[1].y,averageDepEvents[1].z};
-      Float_t P0[3] = {cry0x,cry0y,averageDepEvents[0].z};
-      Float_t P1[3] = {cry1x,cry1y,averageDepEvents[1].z};
+      Float_t P0[3] = {cry0centerX,cry0centerY,averageDepEvents[0].z};
+      Float_t P1[3] = {cry1centerX,cry1centerY,averageDepEvents[1].z};
       Float_t P0_a[3];
       Float_t P1_a[3];
       Float_t P0_b[3];
@@ -1085,10 +1498,20 @@ int main (int argc, char** argv)
         Float_t recoV;
         Float_t totalProb_1_0;
         Float_t totalProb_0_1;
+        Float_t intersection0[3];
+        Float_t intersection1[3];
         Float_t min01 = INFINITY;
         Float_t min10 = INFINITY;
         Float_t z0Best_01,z1Best_01,z0Best_10,z1Best_10;
         // std::cout << "CASE A - 0-> 1 " << std::endl;
+
+        Float_t distance1[2];
+        Float_t comptonAngle[2];
+        Float_t distance2[2];
+        Float_t prob_dist1[2];
+        Float_t prob_compt[2];
+        Float_t prob_dist2[2];
+        Float_t prob_phelect[2];
 
         if(performAnalysis)
         {
@@ -1103,28 +1526,97 @@ int main (int argc, char** argv)
               zValue[1] = startZ1 + stepZ1*jDiv;
 
               //point 0 is always in crystal 0
+
               point0[0] = cry0centerX;
               point0[1] = cry0centerY;
-              // point0[0] = averageDepEvents[0].x;
-              // point0[1] = averageDepEvents[0].y;
+
+              if(usingRealXY)
+              {
+                point0[0] = averageDepEvents[0].x;
+                point0[1] = averageDepEvents[0].y;
+              }
               point0[2] = zValue[0];
+
 
               point1[0] = cry1centerX;
               point1[1] = cry1centerY;
-              // point1[0] = averageDepEvents[1].x;
-              // point1[1] = averageDepEvents[1].y;
+
+              if(usingRealXY)
+              {
+                point1[0] = averageDepEvents[1].x;
+                point1[1] = averageDepEvents[1].y;
+              }
               point1[2] = zValue[1];
 
               //calculate first the values of E for these 2 z
               eValue[0] = incidentEnergy - scatteredGammaEnergy(incidentEnergy,source,point0,point1);
               eValue[1] = scatteredGammaEnergy(incidentEnergy,source,point0,point1);
-
-              //calc w from z0 and z1
-              recoW = averageW(eValue[0],eValue[1],wzgraph0,zValue[0],wzgraph1,zValue[1]);
-
               //calc u0 and u1 from e0,e1 and w0,w1
               Float_t charge0 = eValue[0] * correction0;
               Float_t charge1 = eValue[1] * correction1;
+
+              //calc w from z0 and z1
+              //in case of two crystals on the same mppc, w is trivially the weighted sum of w from the two crystals (are we very sure?).
+              //otherwise the "w"  we can calculate from acquisition is a "pseudo w" given by ratio of two leading channels over all channels.
+              //to reconstruct that, we can simply generate the 2 positions in 0 and 1, use the w(z) relations ONLY to access the charge in all mppcs via pi_(w,E)
+              //for a given (z,E) impact in each crystal and reconstruct what would be the measured pseudo w.
+              // if(frontMppcs.size() == 1)
+                // recoW = averageW(eValue[0],eValue[1],wzgraph0,zValue[0],wzgraph1,zValue[1]);
+              // else  //two different mppcs
+              // {
+                // std::vector<double> recoDetector0;
+                // std::vector<double> recoDetector1;
+                std::vector<double> recoDetector;
+                for(int iPseudoMppc = 0 ; iPseudoMppc < sqrt(numOfCh) ; iPseudoMppc++)
+                {
+                  for(int jPseudoMppc = 0 ; jPseudoMppc < sqrt(numOfCh) ; jPseudoMppc++)
+                  {
+                    // recoDetector0.push_back(gd0[iPseudoMppc][jPseudoMppc]->ComputeZ(computeW(wzgraph0,zValue[0]),charge0));
+                    // recoDetector1.push_back(gd1[iPseudoMppc][jPseudoMppc]->ComputeZ(computeW(wzgraph1,zValue[1]),charge1));
+                    recoDetector.push_back(gd0[iPseudoMppc][jPseudoMppc]->ComputeZ(computeW(wzgraph0,zValue[0]),charge0) + gd1[iPseudoMppc][jPseudoMppc]->ComputeZ(computeW(wzgraph1,zValue[1]),charge1));
+                  }
+                }
+                double pseudo_front = 0.0;
+                double pseudo_total = 0.0;
+
+                //now we have the two pseudo detector counts. we can sum them as before
+                for(int i = 0; i < numOfCh ; i++)
+                {
+                  // check if it's relevant and front
+                  bool isRelevant = false;
+                  bool isFront = false;
+                  for(int a = 0; a < frontMppcs.size(); a++)
+                  {
+                    if(frontMppcs[a] == i)
+                      isFront = true;
+                  }
+                  for(int a = 0; a < relevantMppcs.size(); a++)
+                  {
+                    if(relevantMppcs[a] == i)
+                      isRelevant = true;
+                  }
+
+                  if(isRelevant)
+                  {
+                    // columsum += detector[i]*ymppc[i];
+                    // rowsum += detector[i]*xmppc[i];
+                    pseudo_total += recoDetector[i];
+                    // std::cout << i << " " << recoDetector[i] << std::endl;;
+                  }
+                  if(isFront)
+                  {
+                    pseudo_front += recoDetector[i];
+                  }
+                  // std::cout  << " ";
+                }
+
+                double pseudo_w = 0.0;
+                if(pseudo_total != 0) pseudo_w = pseudo_front / pseudo_total;
+
+                recoW = pseudo_w;
+              // }
+
+
 
               //now the sum to find u0 and u1 have to be modified to use always the relevantMppcs
               if(interpolationWay == 2)
@@ -1158,40 +1650,102 @@ int main (int argc, char** argv)
                 wuvDiff.push_back(sqrt(pow((u - recoU)/12.0,2)+pow(w - recoW,2)+pow((v -recoV)/(12.0),2)));
                 wuDiff.push_back(sqrt(pow((u - recoU)/12.0,2)+pow(w - recoW,2)));
                 wvDiff.push_back(sqrt(pow((v - recoV)/12.0,2)+pow(w - recoW,2)));
-                if(min01 > sqrt(pow((v - recoV)/12.0,2)+pow(w - recoW,2)))
+                // if(min01 > sqrt(pow((v - recoV)/12.0,2)+pow(w - recoW,2)))
+                // if(min01 > sqrt(pow((u - recoU)/12.0,2)+pow(w - recoW,2)+pow((v -recoV)/(12.0),2)))
+                // {
+                  // min01 = sqrt(pow((v - recoV)/12.0,2)+pow(w - recoW,2));
+                  // min01 = sqrt(pow((u - recoU)/12.0,2)+pow(w - recoW,2)+pow((v -recoV)/(12.0),2));
+                  // z0Best_01 = zValue[0];
+                  // z1Best_01 = zValue[1];
+                  // RecoEn01[0] = eValue[0];
+                  // RecoEn01[1] = eValue[1];
+
+                // }
+
+
+                //intersection source and plane z = -7.5
+                double intersection[3];
+                //   double zmin = -7.5;
+                //   double zmax = 7.5;
+                //   double xmin = -6.365;
+                //   double xmax = +6.365;
+                //   double ymin = -6.365;
+                //   double ymax = +6.365;
+
+                CVec3 B1,B2,L1,L2,Hit;
+                B1.x = -6.365;
+                B1.y = -6.365;
+                B1.z = -7.5;
+                B2.x = +6.365;
+                B2.y = +6.365;
+                B2.z =  7.5;
+                L1.x = source[0];
+                L1.y = source[1];
+                L1.z = source[2];
+                L2.x = point0[0];
+                L2.y = point0[1];
+                L2.z = point0[2];
+
+                int foundHit = CheckLineBox( B1, B2, L1, L2, Hit);
+                intersection[0] = Hit.x;
+                intersection[1] = Hit.y;
+                intersection[2] = Hit.z;
+
+                // if(foundHit)
+                // {
+                //   std::cout <<  "Inters.\t" << intersection[0] << " " << intersection[1] << " " << intersection[2] << std::endl;
+                // }
+                // std::cout <<  "Inters.\t" << intersection0[0] << " " << intersection0[1] << " " << intersection0[2] << std::endl;
+                Float_t disTravel1_0 = distance3D(intersection[0],intersection[1],intersection[2],point0[0], point0[1], point0[2]);
+                // std::cout << "point0\t" << point0[0] << " " << point0[1] << " " << point0[2] << std::endl;
+
+                Float_t p_travel1 = simTravel1(disTravel1_0, lambdaLYSO->Eval(0.511));
+
+                Float_t p_compton = simCompton(angle3D(source,point0,point1));
+
+                Float_t comptonPhotoelDistance = distance3D(point0[0], point0[1], point0[2],point1[0], point1[1], point1[2]);
+
+                Float_t p_travel2 = simTravel1(comptonPhotoelDistance, lambdaLYSO->Eval(eValue[1]));
+
+                Float_t p_photoelect = simPhotoelectric(photoelectricCrossSectionLYSO->Eval(eValue[1]));
+
+
+
+                // std::cout << std::endl;
+                if(min01 > sqrt(pow((u - recoU)/12.0,2)+pow(w - recoW,2)+pow((v -recoV)/(12.0),2)))
                 {
-                  min01 = sqrt(pow((v - recoV)/12.0,2)+pow(w - recoW,2));
+                  min01 = sqrt(pow((u - recoU)/12.0,2)+pow(w - recoW,2)+pow((v -recoV)/(12.0),2));
                   z0Best_01 = zValue[0];
                   z1Best_01 = zValue[1];
                   RecoEn01[0] = eValue[0];
                   RecoEn01[1] = eValue[1];
-                }
 
-
-                //intersection source and plane z = -7.5
-                Float_t v_sp0[3] = {source[0]-point0[0],source[1]-point0[1],source[2]-point0[2]};
-                Float_t y_int = ((-7.5 - point0[2]) / (v_sp0[2])) * v_sp0[1] + point0[1];
-                Float_t x_int = point0[0] + ( (y_int - point0[1])/(v_sp0[1]) )*v_sp0[0];
-                Float_t intersection0[3] = {x_int,y_int,-7.5};
-                // std::cout <<  "Inters.\t" << intersection0[0] << " " << intersection0[1] << " " << intersection0[2] << std::endl;
-                Float_t disTravel1_0 = distance3D(intersection0[0],intersection0[1],intersection0[2],point0[0], point0[1], point0[2]);
-                // std::cout << "point0\t" << point0[0] << " " << point0[1] << " " << point0[2] << std::endl;
-                // std::cout <<  "disTravel1_0\t" << disTravel1_0 << std::endl;
-                Float_t p_travel1 = simTravel1(disTravel1_0, lambdaLYSO->Eval(0.511));
-                // std::cout <<  "p_travel1\t" << p_travel1 << std::endl;
-                // std::cout <<  "angle\t\t" << angle3D(source,point0,point1) << std::endl;
-                Float_t p_compton = simCompton(angle3D(source,point0,point1));
-                // std::cout <<  "p_compton\t" << p_compton << std::endl;
-                Float_t comptonPhotoelDistance = distance3D(point0[0], point0[1], point0[2],point1[0], point1[1], point1[2]);
-                // std::cout <<  "comptonPhotoelDistance\t" << comptonPhotoelDistance << std::endl;
-                Float_t p_travel2 = simTravel1(comptonPhotoelDistance, lambdaLYSO->Eval(eValue[1]));
-                // std::cout <<  "p_travel2\t" << p_travel2 << std::endl;
-                Float_t p_photoelect = simPhotoelectric(photoelectricCrossSectionLYSO->Eval(eValue[1]));
-                // std::cout <<  "p_photoelect\t" << p_photoelect << std::endl;
-
-                // std::cout << std::endl;
-                if(min01 > sqrt(pow((v - recoV)/12.0,2)+pow(w - recoW,2)))
                   totalProb_0_1  = p_travel1*p_compton*p_travel2*p_photoelect;
+                  // totalProb_0_1
+
+                  intersection0[0] = intersection[0];
+                  intersection0[1] = intersection[1];
+                  intersection0[2] = intersection[2];
+
+
+                  distance1[0]    = disTravel1_0;
+                  comptonAngle[0] = angle3D(source,point0,point1);
+                  distance2[0]    = comptonPhotoelDistance;
+                  prob_dist1[0]   = p_travel1;
+                  prob_compt[0]   = p_compton;
+                  prob_dist2[0]   = p_travel2;
+                  prob_phelect[0] = p_photoelect;
+                  // if(verbose)
+                  // {
+                  //   std::cout <<  "disTravel1_0\t" << disTravel1_0 << std::endl;
+                  //   std::cout <<  "angle\t\t" << angle3D(source,point0,point1) << std::endl;
+                  //   std::cout <<  "comptonPhotoelDistance\t" << comptonPhotoelDistance << std::endl;
+                  //   std::cout <<  "p_travel1\t" << p_travel1 << std::endl;
+                  //   std::cout <<  "p_compton\t" << p_compton << std::endl;
+                  //   std::cout <<  "p_travel2\t" << p_travel2 << std::endl;
+                  //   std::cout <<  "p_photoelect\t" << p_photoelect << std::endl;
+                  // }
+                }
               }
             }
           }
@@ -1236,16 +1790,28 @@ int main (int argc, char** argv)
                 zValue[1] = startZ1 + stepZ1*jDiv;
 
                 //point 0 is always in crystal 0
+
                 point0[0] = cry0centerX;
                 point0[1] = cry0centerY;
-                // point0[0] = averageDepEvents[0].x;
-                // point0[1] = averageDepEvents[0].y;
+
+                if(usingRealXY)
+                {
+                  point0[0] = averageDepEvents[0].x;
+                  point0[1] = averageDepEvents[0].y;
+                }
+
                 point0[2] = zValue[0];
 
                 point1[0] = cry1centerX;
                 point1[1] = cry1centerY;
-                // point1[0] = averageDepEvents[1].x;
-                // point1[1] = averageDepEvents[1].y;
+
+
+                if(usingRealXY)
+                {
+                  point1[0] = averageDepEvents[1].x;
+                  point1[1] = averageDepEvents[1].y;
+                }
+
                 point1[2] = zValue[1];
 
                 // std::cout << zValue[0] << " " << zValue[1] << std::endl;
@@ -1254,11 +1820,69 @@ int main (int argc, char** argv)
                 eValue[1] = incidentEnergy - scatteredGammaEnergy(incidentEnergy,source,point1,point0);
 
                 //calc w from z0 and z1
-                recoW = averageW(eValue[0],eValue[1],wzgraph0,zValue[0],wzgraph1,zValue[1]);
+                // recoW = averageW(eValue[0],eValue[1],wzgraph0,zValue[0],wzgraph1,zValue[1]);
+
+
 
                 //calc u0 and u1 from e0,e1 and w0,w1
                 Float_t charge0 = eValue[0] * correction0;
                 Float_t charge1 = eValue[1] * correction1;
+
+                // if(frontMppcs.size() == 1)
+                  // recoW = averageW(eValue[0],eValue[1],wzgraph0,zValue[0],wzgraph1,zValue[1]);
+                // else  //two different mppcs
+                // {
+                  // std::vector<double> recoDetector0;
+                  // std::vector<double> recoDetector1;
+                  std::vector<double> recoDetector;
+                  for(int iPseudoMppc = 0 ; iPseudoMppc < sqrt(numOfCh) ; iPseudoMppc++)
+                  {
+                    for(int jPseudoMppc = 0 ; jPseudoMppc < sqrt(numOfCh) ; jPseudoMppc++)
+                    {
+                      // recoDetector0.push_back(gd0[iPseudoMppc][jPseudoMppc]->ComputeZ(computeW(wzgraph0,zValue[0]),charge0));
+                      // recoDetector1.push_back(gd1[iPseudoMppc][jPseudoMppc]->ComputeZ(computeW(wzgraph1,zValue[1]),charge1));
+                      recoDetector.push_back(gd0[iPseudoMppc][jPseudoMppc]->ComputeZ(computeW(wzgraph0,zValue[0]),charge0) + gd1[iPseudoMppc][jPseudoMppc]->ComputeZ(computeW(wzgraph1,zValue[1]),charge1));
+                    }
+                  }
+                  double pseudo_front = 0.0;
+                  double pseudo_total = 0.0;
+
+                  //now we have the two pseudo detector counts. we can sum them as before
+                  for(int i = 0; i < numOfCh ; i++)
+                  {
+                    // check if it's rlevant and front
+                    bool isRelevant = false;
+                    bool isFront = false;
+                    for(int a = 0; a < frontMppcs.size(); a++)
+                    {
+                      if(frontMppcs[a] == i)
+                        isFront = true;
+                    }
+                    for(int a = 0; a < relevantMppcs.size(); a++)
+                    {
+                      if(relevantMppcs[a] == i)
+                        isRelevant = true;
+                    }
+
+                    if(isRelevant)
+                    {
+                      // columsum += detector[i]*ymppc[i];
+                      // rowsum += detector[i]*xmppc[i];
+                      pseudo_total += recoDetector[i];
+                      // std::cout << i << " " << recoDetector[i] << std::endl;;
+                    }
+                    if(isFront)
+                    {
+                      pseudo_front += recoDetector[i];
+                    }
+                    // std::cout  << " ";
+                  }
+
+                  double pseudo_w = 0.0;
+                  if(pseudo_total != 0) pseudo_w = pseudo_front / pseudo_total;
+
+                  recoW = pseudo_w;
+                // }
                 // std::cout << "eValue/charge\t" << eValue[0] << " " << charge0 << " " << eValue[1] <<  " " << charge1 << std::endl;
 
                 if(interpolationWay == 2)
@@ -1295,27 +1919,60 @@ int main (int argc, char** argv)
                   wuvDiff_10.push_back(sqrt(pow((u - recoU)/12.0,2)+pow(w - recoW,2)+pow((v -recoV)/(12.0),2)));
                   wuDiff_10.push_back(sqrt(pow((u - recoU)/12.0,2)+pow(w - recoW,2)));
                   wvDiff_10.push_back(sqrt(pow((v - recoV)/12.0,2)+pow(w - recoW,2)));
-                  if(min10 > sqrt(pow((v - recoV)/12.0,2)+pow(w - recoW,2)))
-                  {
-                    min10 = sqrt(pow((v - recoV)/12.0,2)+pow(w - recoW,2));
-                    z0Best_10 = zValue[0];
-                    z1Best_10 = zValue[1];
-                    RecoEn10[0] = eValue[0];
-                    RecoEn10[1] = eValue[1];
-                  }
+                  // if( min10 > sqrt(pow((u - recoU)/12.0,2)+pow(w - recoW,2)+pow((v -recoV)/(12.0),2)) )
+                  // {
+                    // min10 = sqrt(pow((u - recoU)/12.0,2)+pow(w - recoW,2)+pow((v -recoV)/(12.0),2));
+                    // z0Best_10 = zValue[0];
+                    // z1Best_10 = zValue[1];
+                    // RecoEn10[0] = eValue[0];
+                    // RecoEn10[1] = eValue[1];
+                  // }
 
-                  Float_t v_sp1[3] = {source[0]-point1[0],source[1]-point1[1],source[2]-point1[2]};
-                  Float_t y_int = ((-7.5 - point1[2]) / (v_sp1[2])) * v_sp1[1] + point1[1];
-                  Float_t x_int = point1[0] + ( (y_int - point1[1])/(v_sp1[1]) )*v_sp1[0];
-                  Float_t intersection1[3] = {x_int,y_int,-7.5};
+                  // Float_t v_sp1[3] = {source[0]-point1[0],source[1]-point1[1],source[2]-point1[2]};
+                  // Float_t y_int = ((-7.5 - point1[2]) / (v_sp1[2])) * v_sp1[1] + point1[1];
+                  // Float_t x_int = point1[0] + ( (y_int - point1[1])/(v_sp1[1]) )*v_sp1[0];
+                  // Float_t intersection1[3] = {x_int,y_int,-7.5};
+
+                  double intersection[3];
+                  //   double zmin = -7.5;
+                  //   double zmax = 7.5;
+                  //   double xmin = -6.365;
+                  //   double xmax = +6.365;
+                  //   double ymin = -6.365;
+                  //   double ymax = +6.365;
+
+                  CVec3 B1,B2,L1,L2,Hit;
+                  B1.x = -6.365;
+                  B1.y = -6.365;
+                  B1.z = -7.5;
+                  B2.x = +6.365;
+                  B2.y = +6.365;
+                  B2.z =  7.5;
+                  L1.x = source[0];
+                  L1.y = source[1];
+                  L1.z = source[2];
+                  L2.x = point1[0];
+                  L2.y = point1[1];
+                  L2.z = point1[2];
+
+                  int foundHit = CheckLineBox( B1, B2, L1, L2, Hit);
+                  intersection[0] = Hit.x;
+                  intersection[1] = Hit.y;
+                  intersection[2] = Hit.z;
+
+                  // if(foundHit)
+                  // {
+                  //   std::cout <<  "Inters.\t" << intersection[0] << " " << intersection[1] << " " << intersection[2] << std::endl;
+                  // }
+                  // findFirstIntersection(&intersection,v_sp1);
                   // std::cout <<  "Inters.\t" << intersection1[0] << " " << intersection1[1] << " " << intersection1[2] << std::endl;
 
-                  Float_t disTravel1_0 = distance3D(intersection1[0],intersection1[1],intersection1[2],point1[0], point1[1], point1[2]);
+                  Float_t disTravel1_0 = distance3D(intersection[0],intersection[1],intersection[2],point1[0], point1[1], point1[2]);
                   // std::cout << "point1\t" << point1[0] << " " << point1[1] << " " << point1[2] << std::endl;
-                  // std::cout <<  "disTravel1_0\t" << disTravel1_0 << std::endl;
+                  //
                   // disTravel1_0 = distance3D(0 + paramT0*(point1[0] - 0),0 + paramT0*(point1[1] - 0),-7.5, point1[0], point1[1], point1[2]);
                   Float_t p_travel1 = simTravel1(disTravel1_0, lambdaLYSO->Eval(0.511));
-                  // std::cout <<  "p_travel1\t" << p_travel1 << std::endl;
+                  //
                   // std::cout <<  "angle\t\t" << angle3D(source,point1,point0) << std::endl;
                   Float_t p_compton = simCompton(angle3D(source,point1,point0));
                   // std::cout <<  "p_compton\t" << p_compton << std::endl;
@@ -1325,8 +1982,42 @@ int main (int argc, char** argv)
                   // std::cout <<  "p_travel2\t" << p_travel2 << std::endl;
                   Float_t p_photoelect = simPhotoelectric(photoelectricCrossSectionLYSO->Eval(eValue[0]));
                   // std::cout <<  "p_photoelect\t" << p_photoelect << std::endl;
-                  if(min10 > sqrt(pow((v - recoV)/12.0,2)+pow(w - recoW,2)))
+
+
+
+
+
+                  if(min10 > sqrt(pow((u - recoU)/12.0,2)+pow(w - recoW,2)+pow((v -recoV)/(12.0),2)))
+                  {
+                    min10 = sqrt(pow((u - recoU)/12.0,2)+pow(w - recoW,2)+pow((v -recoV)/(12.0),2));
+                    z0Best_10 = zValue[0];
+                    z1Best_10 = zValue[1];
+                    RecoEn10[0] = eValue[0];
+                    RecoEn10[1] = eValue[1];
+
                     totalProb_1_0 = p_travel1*p_compton*p_travel2*p_photoelect;
+                    intersection1[0] = intersection[0];
+                    intersection1[1] = intersection[1];
+                    intersection1[2] = intersection[2];
+
+                    distance1[1]    = disTravel1_0;
+                    comptonAngle[1] = angle3D(source,point0,point1);
+                    distance2[1]    = comptonPhotoelDistance;
+                    prob_dist1[1]   = p_travel1;
+                    prob_compt[1]   = p_compton;
+                    prob_dist2[1]   = p_travel2;
+                    prob_phelect[1] = p_photoelect;
+                    // if(verbose)
+                    // {
+                    //   std::cout <<  "disTravel1_0\t" << disTravel1_0 << std::endl;
+                    //   std::cout <<  "angle\t\t" << angle3D(source,point1,point0) << std::endl;
+                    //   std::cout <<  "comptonPhotoelDistance\t" << comptonPhotoelDistance << std::endl;
+                    //   std::cout <<  "p_travel1\t" << p_travel1 << std::endl;
+                    //   std::cout <<  "p_compton\t" << p_compton << std::endl;
+                    //   std::cout <<  "p_travel2\t" << p_travel2 << std::endl;
+                    //   std::cout <<  "p_photoelect\t" << p_photoelect << std::endl;
+                    // }
+                  }
                 }
               }
             }
@@ -1342,10 +2033,52 @@ int main (int argc, char** argv)
           std::cout << "CASE 0->1, E " << RecoEn01[0] << " " << RecoEn01[1] << std::endl;
           std::cout << "CASE 1->0, E " << RecoEn10[0] << " " << RecoEn10[1] << std::endl;
           std::cout << std::endl;
+          std::cout << "Source " << source[0] << " " << source[1] << " " << source[2] << std::endl;
+          std::cout << "CASE 0->1, point0 " << cry0centerX << " " << cry0centerY << " " << z0Best_01 << std::endl;
+          std::cout << "CASE 0->1, intersection " << intersection0[0] << " " << intersection0[1] << " " << intersection0[2] << std::endl;
+          std::cout << "CASE 1->0, point1 " << cry1centerX << " " << cry1centerY << " " << z1Best_10 << std::endl;
+          std::cout << "CASE 1->0, intersection " << intersection1[0] << " " << intersection1[1] << " " << intersection1[2] << std::endl;
+          if(verbose)
+          {
+            std::cout << "--------------------------------" << std::endl;
+            std::cout << "VERBOSE OUTUT" << std::endl;
+            std::cout << "--------------------------------" << std::endl;
+            std::cout << std::endl;
+            std::cout << "SOURCE = (" << sourcex << "," << sourcey << "," << sourcez << ")" << std::endl;
+            std::cout << "CASE 0->1" << std::endl;
+            std::cout <<  "intersection = (" << intersection0[0] << "," << intersection0[1] << "," << intersection0[2] << ")" << std::endl;
+            std::cout <<  "point0 (first)  = (" << cry0centerX << "," << cry0centerY << "," << z0Best_01 << ")" << std::endl;
+            std::cout <<  "point1 (second) = (" << cry1centerX << "," << cry1centerY << "," << z1Best_01 << ")" << std::endl;
+            std::cout <<  "distance1    = " << distance1[0] << std::endl;
+            std::cout <<  "angle        = " << comptonAngle[0] << std::endl;
+            std::cout <<  "distance2    = " << distance2[0] << std::endl;
+            std::cout <<  "prob_dist1   = " << prob_dist1[0] << std::endl;
+            std::cout <<  "prob_compt   = " << prob_compt[0] << std::endl;
+            std::cout <<  "prob_dist2   = " << prob_dist2[0] << std::endl;
+            std::cout <<  "prob_phelect = " << prob_phelect[0] << std::endl;
+            std::cout << std::endl;
+            std::cout << "CASE 1->0" << std::endl;
+            std::cout <<  "intersection = (" << intersection1[0] << "," << intersection1[1] << "," << intersection1[2] << ")" << std::endl;
+            std::cout <<  "point0 (second) = (" << cry0centerX << "," << cry0centerY << "," << z0Best_10 << ")" << std::endl;
+            std::cout <<  "point1 (first)  = (" << cry1centerX << "," << cry1centerY << "," << z1Best_10 << ")" << std::endl;
+            std::cout <<  "distance1    = " << distance1[1] << std::endl;
+            std::cout <<  "angle        = " << comptonAngle[1] << std::endl;
+            std::cout <<  "distance2    = " << distance2[1] << std::endl;
+            std::cout <<  "prob_dist1   = " << prob_dist1[1] << std::endl;
+            std::cout <<  "prob_compt   = " << prob_compt[1] << std::endl;
+            std::cout <<  "prob_dist2   = " << prob_dist2[1] << std::endl;
+            std::cout <<  "prob_phelect = " << prob_phelect[1] << std::endl;
+            std::cout << "--------------------------------" << std::endl;
+          }
+
           std::cout <<  "P(CASE_A)\tP(CASE_B)\tP(CASE_A)/P(CASE_B)"<< std::endl;
           std::cout << totalProb_0_1 << "\t\t" << totalProb_1_0 << "\t\t" << totalProb_0_1/totalProb_1_0 << std::endl;
           histoProb->Fill(totalProb_0_1/totalProb_1_0);
           std::cout << "|--------------------------------------|"<< std::endl;
+
+          if(totalProb_0_1/totalProb_1_0 > 1.0) goodCounter++;
+          if(prob_compt[0]/prob_compt[1] > 1.0) goodCounterOnlyCompton++;
+          if((prob_compt[0]*prob_dist1[0]*prob_dist2[0])/(prob_compt[1]*prob_dist1[1]*prob_dist2[1]) > 1.0) goodCounterNoPhotEl++;
         }
         else // don't perform analysis, just output the event values
         {
@@ -1387,6 +2120,11 @@ int main (int argc, char** argv)
   std::cout << "Multi cry [511 KeV deposition] events = "<< multipleCounter << std::endl;
   std::cout << "Returned = " << globalReturned << std::endl;
   std::cout << "Candidates = "<< foundCandidate << std::endl;
+  std::cout << "Good predictions = " << goodCounter << "\t accuracy (" << 100.0*((double) goodCounter)/((double) (foundCandidate)) << " +/- " << 100.0*((double) goodCounter)/((double) (foundCandidate))*sqrt(pow(1.0/sqrt(goodCounter),2) + pow(1.0/sqrt(foundCandidate),2) ) << ")%" << std::endl;
+  std::cout << "Good predictions [only Compton] = " << goodCounterOnlyCompton << "\t accuracy (" << 100.0*((double) goodCounterOnlyCompton)/((double) (foundCandidate)) << " +/- " << 100.0*((double) goodCounterOnlyCompton)/((double) (foundCandidate))*sqrt(pow(1.0/sqrt(goodCounterOnlyCompton),2) + pow(1.0/sqrt(foundCandidate),2) ) << ")%" << std::endl;
+  std::cout << "Good predictions [no PhotEl]= " << goodCounterNoPhotEl << "\t accuracy (" << 100.0*((double) goodCounterNoPhotEl)/((double) (foundCandidate)) << " +/- " << 100.0*((double) goodCounterNoPhotEl)/((double) (foundCandidate))*sqrt(pow(1.0/sqrt(goodCounterNoPhotEl),2) + pow(1.0/sqrt(foundCandidate),2) ) << ")%" << std::endl;
+
+  // std::cout << "Prediction accuracy = (" << 100.0*((double) goodCounter)/((double) (foundCandidate)) << " +/- " << 100.0*((double) goodCounter)/((double) (foundCandidate))*sqrt(pow(1.0/sqrt(goodCounter),2) + pow(1.0/sqrt(foundCandidate),2) ) << ")%" << std::endl;
 
   TCanvas *c_uDiff = new TCanvas();
   TGraph2D *g_uDiff = new TGraph2D();
@@ -1419,8 +2157,8 @@ int main (int argc, char** argv)
   photoelectricCrossSectionLYSO->Write();
   lambdaLYSO->Write();
   histoProb->Write();
-  wzgraph0->Write();
-  wzgraph1->Write();
+  delta_z01->Write();
+  delta_z10->Write();
 
   if(performAnalysis && !allAnalysis)
   {
@@ -1575,39 +2313,68 @@ int main (int argc, char** argv)
     RealEnergy_DetectorCoord->Write();
   }
 
-  delta_z01->Write();
-  delta_z10->Write();
 
   if(performAnalysis)
   {
-    if(interpolationWay == 2)
+
+
+
+    for(int iCry = 0 ; iCry < cryLateralNum; iCry++)
     {
-      TCanvas *C_spectrum;
-      for(int iMPPC = mppcI0 -1; iMPPC < mppcI0+2; iMPPC++)
+      for(int jCry = 0 ; jCry < cryLateralNum; jCry++)
       {
-        for(int jMPPC = mppcJ0-1; jMPPC < mppcJ0+2 ; jMPPC++)
+
+        if( (iCry > (cryLatPerMppc-1)) && (iCry < (cryLateralNum - cryLatPerMppc)) && (jCry > (cryLatPerMppc-1)) && (jCry < (cryLateralNum - cryLatPerMppc)) ) // avoid frame channels
         {
-          C_spectrum = new TCanvas("C_spectrum","C_spectrum",800,800);
-          C_spectrum->SetName(camp0[iMPPC][jMPPC]->GetName());
-          C_spectrum->cd();
-          camp0[iMPPC][jMPPC]->Draw("p0");
-          // f28[iMPPC][jMPPC]->Draw("surf same");
-          C_spectrum->Write();
-          delete C_spectrum;
-
-
-          C_spectrum = new TCanvas("C_spectrum","C_spectrum",800,800);
-          C_spectrum->SetName(camp1[iMPPC][jMPPC]->GetName());
-          C_spectrum->cd();
-          camp1[iMPPC][jMPPC]->Draw("p0");
-          // f28[iMPPC][jMPPC]->Draw("surf same");
-          C_spectrum->Write();
-          delete C_spectrum;
-          // g28[iMPPC][jMPPC]->Write();
+          crystal[iCry][jCry]->wz->Write();
+          for(int iMPPC = 0; iMPPC < sqrt(numOfCh); iMPPC++)
+          {
+            for(int jMPPC = 0; jMPPC < sqrt(numOfCh) ; jMPPC++)
+            {
+              crystal[iCry][jCry]->gd[iMPPC][jMPPC]->Write();
+            }
+          }
         }
       }
     }
   }
+
+
+  // if(performAnalysis)
+  // {
+  //   if(interpolationWay == 2)
+  //   {
+  //     TCanvas *C_spectrum;
+  //     for(int iMPPC = mppcI0 -1; iMPPC < mppcI0+2; iMPPC++)
+  //     {
+  //       for(int jMPPC = mppcJ0-1; jMPPC < mppcJ0+2 ; jMPPC++)
+  //       {
+  //         C_spectrum = new TCanvas("C_spectrum","C_spectrum",800,800);
+  //         C_spectrum->SetName(camp0[iMPPC][jMPPC]->GetName());
+  //         C_spectrum->cd();
+  //         camp0[iMPPC][jMPPC]->Draw("p0");
+  //         // f28[iMPPC][jMPPC]->Draw("surf same");
+  //         C_spectrum->Write();
+  //         delete C_spectrum;
+  //
+  //
+  //         C_spectrum = new TCanvas("C_spectrum","C_spectrum",800,800);
+  //         C_spectrum->SetName(camp1[iMPPC][jMPPC]->GetName());
+  //         C_spectrum->cd();
+  //         camp1[iMPPC][jMPPC]->Draw("p0");
+  //         // f28[iMPPC][jMPPC]->Draw("surf same");
+  //         C_spectrum->Write();
+  //         delete C_spectrum;
+  //         // g28[iMPPC][jMPPC]->Write();
+  //       }
+  //     }
+  //   }
+  // }
+
+
+
+
+
 
   fOut->Close();
 
@@ -1637,7 +2404,7 @@ Float_t angle3D(Float_t a[3], Float_t b[3], Float_t c[3])
   return angle;
 }
 
-//compton scattered energy
+// compton scattered energy
 // in our model, case A is when first crystal hit is crystal 0 (crystal 28 in this dataset)
 // case B when first is crystal 1 (crystal 29 in this dataset). So, the args of this function will be
 // energy = 0.511
@@ -1716,6 +2483,25 @@ Float_t computeU(TGraphDelaunay ***gd,Double_t *xmppc,Float_t charge,Float_t w,s
   }
   //   }
   // }
+  // if(sum == 0)
+  // {
+  //   for(int i = 0; i < relevantMppcs.size(); i++)
+  //   {
+  //     int iMPPC = ( (int) relevantMppcs[i]) / ( (int) sqrt(numOfCh) );
+  //     int jMPPC = ( (int) relevantMppcs[i]) % ( (int) sqrt(numOfCh) );
+  //     int indexMPPC = relevantMppcs[i];
+  //     std::cout << "relevantMppcs[i] = " << relevantMppcs[i] << std::endl;
+  //     std::cout << "iMPPC = " << iMPPC << std::endl;
+  //     std::cout << "jMPPC = " << jMPPC << std::endl;
+  //     std::cout << "indexMPPC = " << indexMPPC << std::endl;
+  //     // int indexMPPC = iMPPC*sqrt(numOfCh) + jMPPC;
+  //     u += gd[iMPPC][jMPPC]->ComputeZ(w,charge) * xmppc[indexMPPC];
+  //     std::cout << w << " "<< charge << " " << gd[iMPPC][jMPPC]->ComputeZ(w,charge) << " " << xmppc[indexMPPC] << std::endl;
+  //     sum += gd[iMPPC][jMPPC]->ComputeZ(w,charge);
+  //     std::cout << indexMPPC << " " << u << " " << sum << std::endl;
+  //   }
+  // }
+  // u = u/sum;
   if(sum >0) u = u/sum;
   else u = 0;
   return u;
@@ -1792,3 +2578,111 @@ Float_t simPhotoelectric(Float_t csPE)
   Float_t probPhotoelectric = csPE;
   return probPhotoelectric;
 }
+
+// void findFirstIntersection(Float_t& intersection,Float_t source[3], Float_t point1[3]);
+// {
+//   //check intersections
+//   // box limits
+//   double zmin = -7.5;
+//   double zmax = 7.5;
+//   double xmin = -6.365;
+//   double xmax = +6.365;
+//   double ymin = -6.365;
+//   double ymax = +6.365;
+//   //zplanetop
+//   double inter0[3],inter1[3];
+//   inter0[0] = ;
+//   inter0[1] = ;
+//   inter0[2] = ;
+//
+//
+// }
+
+int inline GetIntersection( float fDst1, float fDst2, CVec3 P1, CVec3 P2, CVec3 &Hit) {
+if ( (fDst1 * fDst2) >= 0.0f) return 0;
+if ( fDst1 == fDst2) return 0;
+Hit = P1 + (P2-P1) * ( -fDst1/(fDst2-fDst1) );
+return 1;
+}
+
+int inline InBox( CVec3 Hit, CVec3 B1, CVec3 B2, const int Axis) {
+if ( Axis==1 && Hit.z > B1.z && Hit.z < B2.z && Hit.y > B1.y && Hit.y < B2.y) return 1;
+if ( Axis==2 && Hit.z > B1.z && Hit.z < B2.z && Hit.x > B1.x && Hit.x < B2.x) return 1;
+if ( Axis==3 && Hit.x > B1.x && Hit.x < B2.x && Hit.y > B1.y && Hit.y < B2.y) return 1;
+return 0;
+}
+
+// returns true if line (L1, L2) intersects with the box (B1, B2)
+// returns intersection point in Hit
+int CheckLineBox( CVec3 B1, CVec3 B2, CVec3 L1, CVec3 L2, CVec3 &Hit)
+{
+if (L2.x < B1.x && L1.x < B1.x) return false;
+if (L2.x > B2.x && L1.x > B2.x) return false;
+if (L2.y < B1.y && L1.y < B1.y) return false;
+if (L2.y > B2.y && L1.y > B2.y) return false;
+if (L2.z < B1.z && L1.z < B1.z) return false;
+if (L2.z > B2.z && L1.z > B2.z) return false;
+if (L1.x > B1.x && L1.x < B2.x &&
+    L1.y > B1.y && L1.y < B2.y &&
+    L1.z > B1.z && L1.z < B2.z)
+    {Hit = L1;
+    return true;}
+if ( (GetIntersection( L1.x-B1.x, L2.x-B1.x, L1, L2, Hit) && InBox( Hit, B1, B2, 1 ))
+  || (GetIntersection( L1.y-B1.y, L2.y-B1.y, L1, L2, Hit) && InBox( Hit, B1, B2, 2 ))
+  || (GetIntersection( L1.z-B1.z, L2.z-B1.z, L1, L2, Hit) && InBox( Hit, B1, B2, 3 ))
+  || (GetIntersection( L1.x-B2.x, L2.x-B2.x, L1, L2, Hit) && InBox( Hit, B1, B2, 1 ))
+  || (GetIntersection( L1.y-B2.y, L2.y-B2.y, L1, L2, Hit) && InBox( Hit, B1, B2, 2 ))
+  || (GetIntersection( L1.z-B2.z, L2.z-B2.z, L1, L2, Hit) && InBox( Hit, B1, B2, 3 )))
+	return true;
+
+return false;
+}
+
+// void reconstructArray(std::vector<double>& recoDetector,Float_t energy,TGraph* w0,Float_t z0,std::vector<int>& relevantMppcs,int numOfCh)
+// {
+//   // Float_t u = 0.0;
+//   // Float_t sum = 0.0;
+//   // for(int iMPPC = mppcI0 -1; iMPPC < mppcI0+2; iMPPC++)
+//   // {
+//   //   for(int jMPPC = mppcJ0-1; jMPPC < mppcJ0+2 ; jMPPC++)
+//   //   {
+//   for(int i = 0; i < relevantMppcs.size(); i++)
+//   {
+//     int iMPPC = ( (int) relevantMppcs[i]) / ( (int) sqrt(numOfCh) );
+//     int jMPPC = ( (int) relevantMppcs[i]) % ( (int) sqrt(numOfCh) );
+//     int indexMPPC = relevantMppcs[i];
+//     // std::cout << "relevantMppcs[i] = " << relevantMppcs[i] << std::endl;
+//     // std::cout << "iMPPC = " << iMPPC << std::endl;
+//     // std::cout << "jMPPC = " << jMPPC << std::endl;
+//     // std::cout << "indexMPPC = " << indexMPPC << std::endl;
+//     // int indexMPPC = iMPPC*sqrt(numOfCh) + jMPPC;
+//     u += gd[iMPPC][jMPPC]->ComputeZ(w,charge)
+//     // std::cout << w << " "<< charge << " " << gd[iMPPC][jMPPC]->ComputeZ(w,charge) << " " << xmppc[indexMPPC] << std::endl;
+//     // sum += gd[iMPPC][jMPPC]->ComputeZ(w,charge);
+//     // std::cout << indexMPPC << " " << u << " " << sum << std::endl;
+//   }
+//   //   }
+//   // }
+//   // if(sum == 0)
+//   // {
+//   //   for(int i = 0; i < relevantMppcs.size(); i++)
+//   //   {
+//   //     int iMPPC = ( (int) relevantMppcs[i]) / ( (int) sqrt(numOfCh) );
+//   //     int jMPPC = ( (int) relevantMppcs[i]) % ( (int) sqrt(numOfCh) );
+//   //     int indexMPPC = relevantMppcs[i];
+//   //     std::cout << "relevantMppcs[i] = " << relevantMppcs[i] << std::endl;
+//   //     std::cout << "iMPPC = " << iMPPC << std::endl;
+//   //     std::cout << "jMPPC = " << jMPPC << std::endl;
+//   //     std::cout << "indexMPPC = " << indexMPPC << std::endl;
+//   //     // int indexMPPC = iMPPC*sqrt(numOfCh) + jMPPC;
+//   //     u += gd[iMPPC][jMPPC]->ComputeZ(w,charge) * xmppc[indexMPPC];
+//   //     std::cout << w << " "<< charge << " " << gd[iMPPC][jMPPC]->ComputeZ(w,charge) << " " << xmppc[indexMPPC] << std::endl;
+//   //     sum += gd[iMPPC][jMPPC]->ComputeZ(w,charge);
+//   //     std::cout << indexMPPC << " " << u << " " << sum << std::endl;
+//   //   }
+//   // }
+//   // u = u/sum;
+//   // if(sum >0) u = u/sum;
+//   // else u = 0;
+//   // return u;
+// }
