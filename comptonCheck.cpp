@@ -210,7 +210,7 @@ public:
       TGraphDelaunay*** gd; //pointers to the pi_(w,E) for this crystal
       Float_t correction;
     };
-
+    
     //function to compare deposition event struct vectors using the field time
     bool compareByTime(const enDep &a,const enDep  &b)
     {
@@ -1352,60 +1352,60 @@ public:
             std::vector<double> recoTrue;
             // some debugging output
             if(verbose){
-            std::cout << std::endl;
-            std::cout << "------------------------------------" << std::endl;
-            std::cout << "             TRUE EVENT             " << std::endl;
-            std::cout << "------------------------------------" << std::endl;
-            std::cout << "zValue "
-            << zValue[0] << "\t"
-            << zValue[1] << "\n"
-            << "eValue "
-            << eValue[0] << "\t"
-            << eValue[1] << "\n"
-            << "charge "
-            << charge0 << "\t"
-            << charge1 << "\n"
-            << "correction "
-            << correction0 << "\t"
-            << correction1 << "\n"
-            << "w "
-            << computeW(wzgraph1,zValue[1]) << "\t"
-            << computeW(wzgraph0,zValue[0]) << "\t"
-            << std::endl;
-            double tot0 = 0.0;
-            double tot1 = 0.0;
+              std::cout << std::endl;
+              std::cout << "------------------------------------" << std::endl;
+              std::cout << "             TRUE EVENT             " << std::endl;
+              std::cout << "------------------------------------" << std::endl;
+              std::cout << "zValue "
+              << zValue[0] << "\t"
+              << zValue[1] << "\n"
+              << "eValue "
+              << eValue[0] << "\t"
+              << eValue[1] << "\n"
+              << "charge "
+              << charge0 << "\t"
+              << charge1 << "\n"
+              << "correction "
+              << correction0 << "\t"
+              << correction1 << "\n"
+              << "w "
+              << computeW(wzgraph1,zValue[1]) << "\t"
+              << computeW(wzgraph0,zValue[0]) << "\t"
+              << std::endl;
+              double tot0 = 0.0;
+              double tot1 = 0.0;
 
 
 
 
-            for(int iPseudoMppc = 0 ; iPseudoMppc < sqrt(numOfCh) ; iPseudoMppc++)
-            {
-              for(int jPseudoMppc = 0 ; jPseudoMppc < sqrt(numOfCh) ; jPseudoMppc++)
+              for(int iPseudoMppc = 0 ; iPseudoMppc < sqrt(numOfCh) ; iPseudoMppc++)
               {
-                // recoDetector0.push_back(gd0[iPseudoMppc][jPseudoMppc]->ComputeZ(computeW(wzgraph0,zValue[0]),charge0));
-                // recoDetector1.push_back(gd1[iPseudoMppc][jPseudoMppc]->ComputeZ(computeW(wzgraph1,zValue[1]),charge1));
-                int ch = (int) iPseudoMppc*sqrt(numOfCh) + jPseudoMppc;
-                tot0 += gd0[iPseudoMppc][jPseudoMppc]->ComputeZ(computeW(wzgraph0,zValue[0]),charge0);
-                tot1 += gd1[iPseudoMppc][jPseudoMppc]->ComputeZ(computeW(wzgraph1,zValue[0]),charge1);
-                // totDet += detector[ch];
-                std::cout << "channel "<< iPseudoMppc << "," << jPseudoMppc << "=" << iPseudoMppc*sqrt(numOfCh) + jPseudoMppc << "\t"
-                << detector[ch] << "\t"
-                << gd0[iPseudoMppc][jPseudoMppc]->ComputeZ(computeW(wzgraph0,zValue[0]),charge0) << "\t"
-                << gd1[iPseudoMppc][jPseudoMppc]->ComputeZ(computeW(wzgraph1,zValue[0]),charge1) << "\t"
-                << gd0[iPseudoMppc][jPseudoMppc]->ComputeZ(computeW(wzgraph0,zValue[0]),charge0) + gd1[iPseudoMppc][jPseudoMppc]->ComputeZ(computeW(wzgraph1,zValue[0]),charge1) << "\t"
-                << std::endl;
+                for(int jPseudoMppc = 0 ; jPseudoMppc < sqrt(numOfCh) ; jPseudoMppc++)
+                {
+                  // recoDetector0.push_back(gd0[iPseudoMppc][jPseudoMppc]->ComputeZ(computeW(wzgraph0,zValue[0]),charge0));
+                  // recoDetector1.push_back(gd1[iPseudoMppc][jPseudoMppc]->ComputeZ(computeW(wzgraph1,zValue[1]),charge1));
+                  int ch = (int) iPseudoMppc*sqrt(numOfCh) + jPseudoMppc;
+                  tot0 += gd0[iPseudoMppc][jPseudoMppc]->ComputeZ(computeW(wzgraph0,zValue[0]),charge0);
+                  tot1 += gd1[iPseudoMppc][jPseudoMppc]->ComputeZ(computeW(wzgraph1,zValue[0]),charge1);
+                  // totDet += detector[ch];
+                  std::cout << "channel "<< iPseudoMppc << "," << jPseudoMppc << "=" << iPseudoMppc*sqrt(numOfCh) + jPseudoMppc << "\t"
+                  << detector[ch] << "\t"
+                  << gd0[iPseudoMppc][jPseudoMppc]->ComputeZ(computeW(wzgraph0,zValue[0]),charge0) << "\t"
+                  << gd1[iPseudoMppc][jPseudoMppc]->ComputeZ(computeW(wzgraph1,zValue[0]),charge1) << "\t"
+                  << gd0[iPseudoMppc][jPseudoMppc]->ComputeZ(computeW(wzgraph0,zValue[0]),charge0) + gd1[iPseudoMppc][jPseudoMppc]->ComputeZ(computeW(wzgraph1,zValue[0]),charge1) << "\t"
+                  << std::endl;
 
-                recoTrue.push_back(gd0[iPseudoMppc][jPseudoMppc]->ComputeZ(computeW(wzgraph0,zValue[0]),charge0) + gd1[iPseudoMppc][jPseudoMppc]->ComputeZ(computeW(wzgraph1,zValue[1]),charge1));
+                  recoTrue.push_back(gd0[iPseudoMppc][jPseudoMppc]->ComputeZ(computeW(wzgraph0,zValue[0]),charge0) + gd1[iPseudoMppc][jPseudoMppc]->ComputeZ(computeW(wzgraph1,zValue[1]),charge1));
 
 
+                }
               }
-            }
-            std::cout << totDet << "\t"
-                      << tot0 << "\t"
-                      << tot1
-                      << std::endl;
-            std::cout << "------------------------------------" << std::endl;
-            std::cout << std::endl;
+              std::cout << totDet << "\t"
+              << tot0 << "\t"
+              << tot1
+              << std::endl;
+              std::cout << "------------------------------------" << std::endl;
+              std::cout << std::endl;
             }
 
 
@@ -1741,17 +1741,17 @@ public:
                 for(int iii = 0 ; iii < reco01.size() ; iii++)
                 {
                   std::cout << "channel " << iii << "\t"
-                            << detector[iii] << "\t"
-                            << recoTrue[iii] << "\t"
-                            << MeasureProb(detector[iii],recoTrue[iii],sqrt(detector[iii])) << " | "
-                            << pow(fabs(detector[iii]-recoTrue[iii]),2)/pow(sqrt(detector[iii]),2) << "\t"
-                            << reco01[iii] << "\t"
-                            << reco10[iii] << "\t\t"
-                            << MeasureProb(detector[iii],reco01[iii],sqrt(detector[iii])) << " | "
-                            << pow(fabs(detector[iii]-reco01[iii]),2)/pow(sqrt(detector[iii]),2) << "\t\t\t"
-                            << MeasureProb(detector[iii],reco10[iii],sqrt(detector[iii])) << " | "
-                            << pow(fabs(detector[iii]-reco10[iii]),2)/pow(sqrt(detector[iii]),2)
-                            << std::endl;
+                  << detector[iii] << "\t"
+                  << recoTrue[iii] << "\t"
+                  << MeasureProb(detector[iii],recoTrue[iii],sqrt(detector[iii])) << " | "
+                  << pow(fabs(detector[iii]-recoTrue[iii]),2)/pow(sqrt(detector[iii]),2) << "\t"
+                  << reco01[iii] << "\t"
+                  << reco10[iii] << "\t\t"
+                  << MeasureProb(detector[iii],reco01[iii],sqrt(detector[iii])) << " | "
+                  << pow(fabs(detector[iii]-reco01[iii]),2)/pow(sqrt(detector[iii]),2) << "\t\t\t"
+                  << MeasureProb(detector[iii],reco10[iii],sqrt(detector[iii])) << " | "
+                  << pow(fabs(detector[iii]-reco10[iii]),2)/pow(sqrt(detector[iii]),2)
+                  << std::endl;
                 }
               }
 
