@@ -1,5 +1,5 @@
 // compile with
-// g++ -o ../build/extractPoints extractPoints.cpp `root-config --cflags --glibs` && cp structDictionary.C ../build/
+// g++ -o ../build/convertToZ convertToZ.cpp `root-config --cflags --glibs` && cp structDictionary.C ../build/
 
 #include "TROOT.h"
 #include "TTree.h"
@@ -39,9 +39,9 @@ struct CrystalData
   double y;
   int mppci;
   int mppcj;
-  TGraph* wz; //w(z) graph for this crystal
-  TGraph* calibrationGraph;
-  TGraphDelaunay*** gd; //pointers to the pi_(w,E) for this crystal
+  // TGraph* wz; //w(z) graph for this crystal
+  TGraph* calibrationGraph; //z(w) graph for this crystal
+  // TGraphDelaunay*** gd; //pointers to the pi_(w,E) for this crystal
   Float_t correction;
 };
 
@@ -51,8 +51,8 @@ int main (int argc, char** argv)
 {
   if(argc < 2) //check input, provide usage explainations
   {
-    std::cout << "USAGE:\t\t\t extractPoints calibration.root" << std::endl;
-    std::cout << "calibration.root \t\t output of ModuleCalibration" << std::endl;
+    std::cout << "USAGE:\t\t\t convertToZ out0.root ... outN.root" << std::endl;
+    std::cout << "a file calibration.root if assumed" << std::endl;
     std::cout << std::endl;
     return 1;
   }
@@ -89,9 +89,19 @@ int main (int argc, char** argv)
   int numOfCry = 64;//this needs to be input somewhere...
   int numOfCh = 16;//this needs to be input somewhere...
 
+  //input ttrees
+  TChain *tree =  new TChain("tree"); // read input files
+  for (int i = 1 ; i < argc ; i++)
+  {
+    std::cout << "Adding file " << argv[i] << std::endl;
+    tree->Add(argv[i]);
+  }
+
+  //calibration file part
   CrystalData*** crystal;
   std::string mppcLabel [16] = {"A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P"};
-  std::string calibrationFileName = argv[1];
+  // std::string calibrationFileName = argv[1];
+  std::string calibrationFileName = "calibration.root";
   TFile *calibrationFile = TFile::Open(calibrationFileName.c_str()); // hardcoded calibration file, output of ModuleCalibration on the out* files..
   int cryLateralNum = (int) sqrt(numOfCry);
   int cryLatPerMppc = ((int) sqrt(numOfCry)) / ((int) sqrt(numOfCh));
@@ -123,17 +133,12 @@ int main (int argc, char** argv)
         ssmppc << "MPPC " << mppcLabel[crystal[iCry][jCry]->mppcj] << crystal[iCry][jCry]->mppci+1 << " - 0.0-" << crystal[iCry][jCry]->mppci << "."<< crystal[iCry][jCry]->mppcj;
         std::stringstream sscryfolder;
         sscryfolder << "Module 0.0/" << ssmppc.str() << "/" << sscrystal.str();
-        // std::stringstream sswPlot;
-        // sswPlot << "w(z) Plot - " << sscrystal.str();
-        // std::cout << sscryfolder.str().c_str() << std::endl;
         std::stringstream sswPlot;
         sswPlot << "Calibration Plot - " << sscrystal.str();
+        // std::cout << sscryfolder.str().c_str() << std::endl;
         calibrationFile->cd(sscryfolder.str().c_str());
         TCanvas *canvas = (TCanvas*) gDirectory->Get(sswPlot.str().c_str());
         crystal[iCry][jCry]->calibrationGraph = (TGraph*) canvas->GetPrimitive(sswPlot.str().c_str());
-        // if(!crystal[iCry][jCry]->calibrationGraph) std::cout << "vvvvvvvvvvv"<< std::endl;
-        // TCanvas *canvas = (TCanvas*) gDirectory->Get(sswPlot.str().c_str());
-        // crystal[iCry][jCry]->wz = (TGraph*) canvas->GetPrimitive(sswPlot.str().c_str());
         // TGraphDelaunay ***gd;
         // crystal[iCry][jCry]->gd = new TGraphDelaunay**[(int) sqrt(numOfCh)];
         // for(int igd = 0; igd < sqrt(numOfCh) ; igd++) crystal[iCry][jCry]->gd[igd] = new TGraphDelaunay* [(int) sqrt(numOfCh)];
@@ -141,52 +146,33 @@ int main (int argc, char** argv)
         // camp = new TGraph2D**[(int) sqrt(numOfCh)];
         // for(int igd = 0; igd < sqrt(numOfCh) ; igd++) camp[igd] = new TGraph2D* [(int) sqrt(numOfCh)];
 
+        //retrieve the calibrationGraph
+
+
         //calculate the TGraphDelaunays (after sampling)
         for(int iMPPC = 0; iMPPC < sqrt(numOfCh); iMPPC++)
         {
           for(int jMPPC = 0; jMPPC < sqrt(numOfCh) ; jMPPC++)
           {
             std::stringstream sstream;
-
-            sstream << "Pi(z,p_tot)[" << iMPPC <<  "][" << jMPPC <<  "]_" << crystal[iCry][jCry]->id;
-
-            // TCanvas *canv = (TCanvas*) gDirectory->Get(sstream.str().c_str());
-            TGraph2D* graph2d = (TGraph2D*) gDirectory-> Get(sstream.str().c_str()); //get the 3d graph
+            sstream << "Graph_Pi(E,w)[" << iMPPC <<  "][" << jMPPC <<  "]_" << crystal[iCry][jCry]->id;
+            TCanvas *canv = (TCanvas*) gDirectory->Get(sstream.str().c_str());
+            TGraph2D* graph2d = (TGraph2D*) canv-> GetPrimitive(sstream.str().c_str()); //get the 3d graph
 
             // int Npoints = graph2d->GetN();
 
             Double_t *x = graph2d->GetX();
             Double_t *y = graph2d->GetY();
             Double_t *z = graph2d->GetZ();
-
             std::ofstream myfile;
             std::stringstream fileStream;
-            fileStream << "mat_[" << iMPPC <<  "][" << jMPPC <<  "]_" << crystal[iCry][jCry]->id << ".dat";
-            // fileStream << "Gr_[" << iMPPC <<  "][" << jMPPC <<  "]_" << crystal[iCry][jCry]->id << ".dat";
-            // fileStreamConvertedToZ << "Conv_[" << iMPPC <<  "][" << jMPPC <<  "]_" << crystal[iCry][jCry]->id << ".dat";
+            fileStream << "Gr_[" << iMPPC <<  "][" << jMPPC <<  "]_" << crystal[iCry][jCry]->id << ".dat";
             myfile.open (fileStream.str().c_str(),std::ios::out);
-            // myfileConv.open (fileStreamConvertedToZ.str().c_str(),std::ios::out);
             for(int i = 0 ; i < graph2d->GetN() ; i++){
-              // std::cout << "vvvvvvvvvvv"<< std::endl;
-              myfile << x[i] ;
-              // std::cout << "vvvvvvvvvvv"<< std::endl;
-              myfile << " "  ;
-              // std::cout << "vvvvvvvvvvv"<< std::endl;
-              myfile << y[i] ;
-              // std::cout << "vvvvvvvvvvv"<< std::endl;
-              myfile << " "  ;
-              // std::cout << "vvvvvvvvvvv"<< std::endl;
-              myfile << z[i] ;
-              // std::cout << "vvvvvvvvvvv"<< std::endl;
-              myfile << std::endl;
-              // myfileConv << crystal[iCry][jCry]->calibrationGraph->Eval(x[i]) << " " << y[i] << " " << z[i] << std::endl;
+              myfile << x[i] << " " << y[i] << " " << z[i] << std::endl;
             }
-
             myfile.close();
-            // myfileConv.close();
             sstream.str("");
-
-
              // std::cout <<  << std::endl;
 
             // sstream << "_camp";
