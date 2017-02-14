@@ -11,7 +11,7 @@
 
 // moduleCalibration.root   // name of the root file to analyze
 // calibration_params.txt   // OPTIONAL - name of the file with results of DOI tagging bench scan. The scan can have as many points as you want, for as many crystals as you like. In any case
-                            // only the non-edge modules will be considered and this data is used only to calcolate the sigma w in order to get a value for DOI res - if no value is given, DOI res is not analyzed
+// only the non-edge modules will be considered and this data is used only to calcolate the sigma w in order to get a value for DOI res - if no value is given, DOI res is not analyzed
 // pointsFromDoi            // OPTIONAL - the number of points in vertical DOI scan. By default is 1
 
 // So in order to perform a complete analysis, the DOI scan has to be already performed and analyzed following the procedure described in the doiAnalysis repostory, file procedure.txt
@@ -149,8 +149,8 @@ int main(int argc, char **argv)
 
 
   TString outputFileName = "output_" + rootFileNameNoExtension + ".root";
-//   if(argc > 3)
-//     outputFileName = argv[3];
+  //   if(argc > 3)
+  //     outputFileName = argv[3];
   TFile *fOut = new TFile(outputFileName,"RECREATE");
 
   //useful variables...
@@ -160,8 +160,10 @@ int main(int argc, char **argv)
   int nmppcy = 4;
   int ncrystalsx = 2;
   int ncrystalsy = 2;
-  std::string letter[4] = {"A","B","C","D"};
-  std::string number[4] = {"1","2","3","4"};
+  // std::string letter[4] = {"A","B","C","D"};  //standard ordering
+  // std::string number[4] = {"1","2","3","4"};  //standard ordering
+  std::string letter[4] = {"D","C","B","A"};  //standard ordering
+  std::string number[4] = {"4","3","2","1"};  //standard ordering
 
   std::vector<inputDoi_t> inputDoi;
   inputDoi_t tempInputDoi(pointsFromDoi);
@@ -173,18 +175,18 @@ int main(int argc, char **argv)
 
 
 
-// DEBUG
-//   for(int i = 0 ; i < inputDoi.size() ; i++)
-//   {
-//     std::cout << inputDoi[i].i << " " << inputDoi[i].j << " " << inputDoi[i].m << " " << inputDoi[i].q << " ";
-//     for(int k = 0 ; k < pointsFromDoi ; k++)
-//     {
-//       std::cout << inputDoi[i].w[k] << " " << inputDoi[i].sw[k] << " ";
-// //       std::cout << inputDoi[i].z[k] << " " << inputDoi[i].sz[k] << " ";
-//     }
-//
-//     std::cout << std::endl;
-//   }
+  // DEBUG
+  //   for(int i = 0 ; i < inputDoi.size() ; i++)
+  //   {
+  //     std::cout << inputDoi[i].i << " " << inputDoi[i].j << " " << inputDoi[i].m << " " << inputDoi[i].q << " ";
+  //     for(int k = 0 ; k < pointsFromDoi ; k++)
+  //     {
+  //       std::cout << inputDoi[i].w[k] << " " << inputDoi[i].sw[k] << " ";
+  // //       std::cout << inputDoi[i].z[k] << " " << inputDoi[i].sz[k] << " ";
+  //     }
+  //
+  //     std::cout << std::endl;
+  //   }
   double minSigma = 0.00;
   double maxSigma = 0.05;
   TH1F* sigmaWdoi = new TH1F("sigmaWdoi","Distribution of measured sigma w",50,minSigma,maxSigma);
@@ -194,7 +196,7 @@ int main(int argc, char **argv)
   double averageDoiResFWHM = 0;
   double averageDoiResFWHMerr = 0;
   double averageEnResFWHM = 0;
-//   double averageLO = 0;
+  //   double averageLO = 0;
 
 
   //-----------------------------//
@@ -233,18 +235,21 @@ int main(int argc, char **argv)
   {
     for(int j = 0 ; j < nmoduley*nmppcy*ncrystalsy ; j++)
     {
+      // std::cout << i << " " << j << " " << (ncrystalsx - 1) << " " << nmodulex*nmppcx*ncrystalsx - (ncrystalsx) << " | " << (ncrystalsy-1) << " " << nmoduley*nmppcy*ncrystalsy - (ncrystalsy) << std::endl;
       if(i > (ncrystalsx - 1) && i < nmodulex*nmppcx*ncrystalsx - (ncrystalsx) && j > (ncrystalsy-1) && j < nmoduley*nmppcy*ncrystalsy - (ncrystalsy)) //only crystals not from frame channels
       {
-	if(spectrum2d->GetBinContent(i+1,j+1))
+        if(spectrum2d->GetBinContent(i+1,j+1))
         {
-	  central->Fill(spectrum2d->GetBinContent(i+1,j+1));
-	  sumLO += spectrum2d->GetBinContent(i+1,j+1);
-	  validEntry++;
-	}
+          // std::cout << "in" << std::endl;
+          central->Fill(spectrum2d->GetBinContent(i+1,j+1));
+          sumLO += spectrum2d->GetBinContent(i+1,j+1);
+          validEntry++;
+        }
       }
       all->Fill(spectrum2d->GetBinContent(i+1,j+1));
     }
   }
+  // std::cout << sumLO << " " << validEntry << std::endl;
   hs = new THStack("hs","");
   double averageLO = sumLO/validEntry ;
 
@@ -254,10 +259,10 @@ int main(int argc, char **argv)
     {
       if(i > (ncrystalsx - 1) && i < nmodulex*nmppcx*ncrystalsx - (ncrystalsx) && j > (ncrystalsy-1) && j < nmoduley*nmppcy*ncrystalsy - (ncrystalsy)) //only crystals not from frame channels
       {
-	if(spectrum2d->GetBinContent(i+1,j+1))
+        if(spectrum2d->GetBinContent(i+1,j+1))
         {
-	  stdLO += (1.0/validEntry)*sqrt(pow(spectrum2d->GetBinContent(i+1,j+1)-averageLO,2));
-	}
+          stdLO += (1.0/validEntry)*sqrt(pow(spectrum2d->GetBinContent(i+1,j+1)-averageLO,2));
+        }
       }
     }
   }
@@ -340,12 +345,12 @@ int main(int argc, char **argv)
     {
       if(i > (ncrystalsx - 1) && i < nmodulex*nmppcx*ncrystalsx - (ncrystalsx) && j > (ncrystalsy-1) && j < nmoduley*nmppcy*ncrystalsy - (ncrystalsy)) //only crystals not from frame channels
       {
-	if(spectrum2d->GetBinContent(i+1,j+1))
+        if(spectrum2d->GetBinContent(i+1,j+1))
         {
-	  central->Fill(spectrum2d->GetBinContent(i+1,j+1));
-	  sumEN_corr += spectrum2d->GetBinContent(i+1,j+1);
-	  validEntry++;
-	}
+          central->Fill(spectrum2d->GetBinContent(i+1,j+1));
+          sumEN_corr += spectrum2d->GetBinContent(i+1,j+1);
+          validEntry++;
+        }
       }
       all->Fill(spectrum2d->GetBinContent(i+1,j+1));
     }
@@ -359,10 +364,10 @@ int main(int argc, char **argv)
     {
       if(i > (ncrystalsx - 1) && i < nmodulex*nmppcx*ncrystalsx - (ncrystalsx) && j > (ncrystalsy-1) && j < nmoduley*nmppcy*ncrystalsy - (ncrystalsy)) //only crystals not from frame channels
       {
-	if(spectrum2d->GetBinContent(i+1,j+1))
+        if(spectrum2d->GetBinContent(i+1,j+1))
         {
-	  stdEN_corr += (1.0/validEntry)*sqrt(pow(spectrum2d->GetBinContent(i+1,j+1)-averageEN_corr,2));
-	}
+          stdEN_corr += (1.0/validEntry)*sqrt(pow(spectrum2d->GetBinContent(i+1,j+1)-averageEN_corr,2));
+        }
       }
     }
   }
@@ -412,7 +417,7 @@ int main(int argc, char **argv)
   delete cc;
   delete legend;
 
-    std::cout << "En. Res Corrected Central Channels [FWHM] = " << averageEN_corr << "\t+/- " << stdEN_corr << std::endl;
+  std::cout << "En. Res Corrected Central Channels [FWHM] = " << averageEN_corr << "\t+/- " << stdEN_corr << std::endl;
 
   //-----------------------------//
   //         DOI
@@ -460,19 +465,19 @@ int main(int argc, char **argv)
           }
         }
       }
-//       fOut->cd();
-//       TF1 *gaussF = new TF1("gaussF","[0]*exp(-0.5*((x-[1])/[2])**2)",minSigma,maxSigma);
-//       gaussF->SetParameter(1,sigmaWdoiCentral->GetMean());
-//       gaussF->SetParameter(2,sigmaWdoiCentral->GetRMS());
-//       sigmaWdoiCentral->Fit("gaussF","RQ");
-//       //     averageSigma = gaussF->GetParameter(1);
-//       //     averageSigmaError = gaussF->GetParError(1);
-//
-//       averageSigma = sigmaWdoiCentral->GetMean();
-//       averageSigmaError = sigmaWdoiCentral->GetRMS()/TMath::Sqrt(sigmaWdoiCentral->GetEntries());
-//
-//
-//       sigmaWdoiCentral->Write();
+      //       fOut->cd();
+      //       TF1 *gaussF = new TF1("gaussF","[0]*exp(-0.5*((x-[1])/[2])**2)",minSigma,maxSigma);
+      //       gaussF->SetParameter(1,sigmaWdoiCentral->GetMean());
+      //       gaussF->SetParameter(2,sigmaWdoiCentral->GetRMS());
+      //       sigmaWdoiCentral->Fit("gaussF","RQ");
+      //       //     averageSigma = gaussF->GetParameter(1);
+      //       //     averageSigmaError = gaussF->GetParError(1);
+      //
+      //       averageSigma = sigmaWdoiCentral->GetMean();
+      //       averageSigmaError = sigmaWdoiCentral->GetRMS()/TMath::Sqrt(sigmaWdoiCentral->GetEntries());
+      //
+      //
+      //       sigmaWdoiCentral->Write();
     }
 
     int calibGraphCounter = 0;
@@ -484,43 +489,43 @@ int main(int argc, char **argv)
     {
       for(int jModule = 0; jModule < nmoduley ; jModule++)
       {
-	for(int iMppc = 1; iMppc < nmppcx -1 ; iMppc++) // don't run on frame mppcs
-	{
-	  for(int jMppc = 1; jMppc < nmppcy -1; jMppc++)// don't run on frame mppcs
-	  {
-	    for(int iCry = 0; iCry < ncrystalsx ; iCry++)
-	    {
-	      for(int jCry = 0; jCry < ncrystalsy ; jCry++)
-	      {
-		int cryI = (iModule*nmppcx*ncrystalsx)+(iMppc*ncrystalsx)+(iCry);
-		int cryJ = (jModule*nmppcy*ncrystalsy)+(jMppc*ncrystalsy)+(jCry);
-		int crystalNumber = (cryI*ncrystalsx*nmppcx + cryJ);
-		std::stringstream MppcDirStream;
-		MppcDirStream << "MPPC " << letter[jMppc] << number[iMppc] << " - 0.0-" << iMppc << "." << jMppc;
-		std::stringstream CrystalDirStream;
-		CrystalDirStream << "Crystal " <<  crystalNumber;
-		std::stringstream directory;
-		directory << "Module 0.0/" << MppcDirStream.str() << "/" << CrystalDirStream.str();
-// 		std::cout << directory.str() << std::endl;
-		f->cd();
-		bool dir_exists = f->cd(directory.str().c_str()); //try to open the dir in root file
+        for(int iMppc = 1; iMppc < nmppcx -1 ; iMppc++) // don't run on frame mppcs
+        {
+          for(int jMppc = 1; jMppc < nmppcy -1; jMppc++)// don't run on frame mppcs
+          {
+            for(int iCry = 0; iCry < ncrystalsx ; iCry++)
+            {
+              for(int jCry = 0; jCry < ncrystalsy ; jCry++)
+              {
+                int cryI = (iModule*nmppcx*ncrystalsx)+(iMppc*ncrystalsx)+(iCry);
+                int cryJ = (jModule*nmppcy*ncrystalsy)+(jMppc*ncrystalsy)+(jCry);
+                int crystalNumber = (cryI*ncrystalsx*nmppcx + cryJ);
+                std::stringstream MppcDirStream;
+                MppcDirStream << "MPPC " << letter[jMppc] << number[iMppc] << " - 0.0-" << iMppc << "." << jMppc;
+                std::stringstream CrystalDirStream;
+                CrystalDirStream << "Crystal " <<  crystalNumber;
+                std::stringstream directory;
+                directory << "Module 0.0/" << MppcDirStream.str() << "/" << CrystalDirStream.str();
+                // 		std::cout << directory.str() << std::endl;
+                f->cd();
+                bool dir_exists = f->cd(directory.str().c_str()); //try to open the dir in root file
 
-// 		int iCrystal = (iModule*nmppcx*ncrystalsx)+(iMppc*ncrystalsx)+(iCry);
-// 		int jCrystal = (jModule*nmppcy*ncrystalsy)+(jMppc*ncrystalsy)+(jCry);
+                // 		int iCrystal = (iModule*nmppcx*ncrystalsx)+(iMppc*ncrystalsx)+(iCry);
+                // 		int jCrystal = (jModule*nmppcy*ncrystalsy)+(jMppc*ncrystalsy)+(jCry);
 
 
-// 		int CentralCalibGraphCounter = 0;
+                // 		int CentralCalibGraphCounter = 0;
 
-		TCanvas* C_graph;
-		TGraph *calibGraph;
+                TCanvas* C_graph;
+                TGraph *calibGraph;
                 TCanvas* C_sigma;
                 TH1F* sigmaHisto;
 
-		if(dir_exists)
-		{
-		  std::stringstream stream;
-		  stream << "Calibration Plot - Crystal " << crystalNumber;
-		  C_graph = (TCanvas*) gDirectory->Get(stream.str().c_str());
+                if(dir_exists)
+                {
+                  std::stringstream stream;
+                  stream << "Calibration Plot - Crystal " << crystalNumber;
+                  C_graph = (TCanvas*) gDirectory->Get(stream.str().c_str());
 
 
                   if(simulationRun)
@@ -529,7 +534,7 @@ int main(int argc, char **argv)
                     sname << "Sigma W from SIM - Crystal " << crystalNumber;
                     C_sigma = (TCanvas*) gDirectory->Get(sname.str().c_str());
                     if(C_sigma)
-                      sigmaHisto = (TH1F*) C_sigma->GetPrimitive(sname.str().c_str());
+                    sigmaHisto = (TH1F*) C_sigma->GetPrimitive(sname.str().c_str());
                     if(sigmaHisto)
                     {
                       TF1 *gaussFunc = new TF1("gaussFunc","[0]*exp(-0.5*((x-[1])/[2])**2)");
@@ -542,67 +547,68 @@ int main(int argc, char **argv)
 
                   }
 
-		  if(C_graph)
-		    calibGraph = (TGraph*) C_graph->GetPrimitive(stream.str().c_str());
+                  if(C_graph)
+                  calibGraph = (TGraph*) C_graph->GetPrimitive(stream.str().c_str());
 
 
 
-		  if(calibGraph) //if calibration plot exist
-		  {
-		    calibGraphCounter++;
-// 		    std::cout << calibGraph->GetName() << std::endl;
-		    TCanvas* C_new = new TCanvas(stream.str().c_str(),stream.str().c_str(),1200,800);
+                  if(calibGraph) //if calibration plot exist
+                  {
+                    calibGraphCounter++;
+                    // 		    std::cout << calibGraph->GetName() << std::endl;
+                    TCanvas* C_new = new TCanvas(stream.str().c_str(),stream.str().c_str(),1200,800);
 
-		    double crystaLenght = calibGraph->Eval(0);
-		    double yTopLimit    = crystaLenght - crystaLenght*0.10;
-		    double yBottomLimit = 0 + crystaLenght*0.10;
+                    double crystaLenght = calibGraph->Eval(0);
+                    double yTopLimit    = crystaLenght - crystaLenght*0.10;
+                    double yBottomLimit = 0 + crystaLenght*0.10;
 
 
-		    double minBound = -1;
-		    double maxBound = -1;
+                    double minBound = -1;
+                    double maxBound = -1;
 
-		    //sample the calib plot and find the xlimits
-		    int samples = 1000;
-		    for(int nSample = 0 ; nSample < samples; nSample++)
-		    {
-		      double y = calibGraph->Eval((1.0/samples)*nSample);
-		      if((minBound == -1) && (y < yTopLimit))
-			minBound = (1.0/samples)*nSample;
-		      if((maxBound == -1) && (y < yBottomLimit))
-			maxBound = (1.0/samples)*nSample;
-		    }
+                    //sample the calib plot and find the xlimits
+                    int samples = 1000;
+                    for(int nSample = 0 ; nSample < samples; nSample++)
+                    {
+                      double y = calibGraph->Eval((1.0/samples)*nSample);
+                      if((minBound == -1) && (y < yTopLimit))
+                      minBound = (1.0/samples)*nSample;
+                      if((maxBound == -1) && (y < yBottomLimit))
+                      maxBound = (1.0/samples)*nSample;
+                    }
 
-// 		    std::cout << minBound << " " << maxBound << std::endl;
-		    TF1 *lineFitSigma = new TF1("lineFitSigma","[0]*x + [1]",minBound,maxBound);
-		    lineFitSigma->SetLineColor(kRed);
+                    // 		    std::cout << minBound << " " << maxBound << std::endl;
+                    TF1 *lineFitSigma = new TF1("lineFitSigma","[0]*x + [1]",minBound,maxBound);
+                    lineFitSigma->SetLineColor(kRed);
 
-		    calibGraph->Draw("AL");
-		    calibGraph->Fit(lineFitSigma,"RQ");
+                    calibGraph->Draw("AL");
+                    calibGraph->Fit(lineFitSigma,"RQ");
 
-		    averageM += TMath::Abs(lineFitSigma->GetParameter(0));
-		    averageMErr += TMath::Power(TMath::Abs(lineFitSigma->GetParError(0)),2);
+                    averageM += TMath::Abs(lineFitSigma->GetParameter(0));
+                    averageMErr += TMath::Power(TMath::Abs(lineFitSigma->GetParError(0)),2);
 
-		    fOut->cd();
-		    C_new->Write();
-		  }
-		}
-	      }
-	    }
-	  }
-	}
+                    fOut->cd();
+                    C_new->Write();
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     }
 
     fOut->cd();
-//     TF1 *gaussF = new TF1("gaussF","[0]*exp(-0.5*((x-[1])/[2])**2)",minSigma,maxSigma);
-//     gaussF->SetParameter(1,sigmaWdoiCentral->GetMean());
-//     gaussF->SetParameter(2,sigmaWdoiCentral->GetRMS());
-//     sigmaWdoiCentral->Fit("gaussF","RQ");
+    //     TF1 *gaussF = new TF1("gaussF","[0]*exp(-0.5*((x-[1])/[2])**2)",minSigma,maxSigma);
+    //     gaussF->SetParameter(1,sigmaWdoiCentral->GetMean());
+    //     gaussF->SetParameter(2,sigmaWdoiCentral->GetRMS());
+    //     sigmaWdoiCentral->Fit("gaussF","RQ");
     averageSigma = sigmaWdoiCentral->GetMean();
     averageSigmaError = sigmaWdoiCentral->GetRMS()/TMath::Sqrt(sigmaWdoiCentral->GetEntries());
     sigmaWdoiCentral->Write();
 
     averageMErr = TMath::Sqrt(averageMErr);
+    // std::cout << averageM << " " << averageSigma << " " << calibGraphCounter << std::endl;
     averageDoiResFWHM = 2.355 * (averageM * averageSigma) / calibGraphCounter;
     averageDoiResFWHMerr = averageDoiResFWHM * TMath::Sqrt( TMath::Power(averageMErr/averageM,2) + TMath::Power(averageSigmaError/averageSigma,2) );
 
@@ -619,9 +625,9 @@ int main(int argc, char **argv)
   resultsFile << "[ADC Ch.]\t[ADC Ch.]\t[%]\t\t[%]\t\t[mm]\t\t[mm]" << std::endl;
   resultsFile << averageLO << "\t" <<"\t" << stdLO << "\t" << "\t"<<  averageEN_corr << "\t\t"<< stdEN_corr << "\t" << averageDoiResFWHM << "\t"<< "\t" << averageDoiResFWHMerr << std::endl;
 
-//   std::cout << "Light Output Central Channels [ADC Ch.] = " << averageLO << " +/- " << stdLO << std::endl;
-//   std::cout << "En. Res Corrected Central Channels FWHM [%] = " << averageEN_corr << " +/- " << stdEN_corr << std::endl;
-//   std::cout << "DOI Resolution FWHM Central Channels [mm] = " << averageDoiResFWHM << " +/- " << averageDoiResFWHMerr << std::endl;
+  //   std::cout << "Light Output Central Channels [ADC Ch.] = " << averageLO << " +/- " << stdLO << std::endl;
+  //   std::cout << "En. Res Corrected Central Channels FWHM [%] = " << averageEN_corr << " +/- " << stdEN_corr << std::endl;
+  //   std::cout << "DOI Resolution FWHM Central Channels [mm] = " << averageDoiResFWHM << " +/- " << averageDoiResFWHMerr << std::endl;
 
 
   fOut->Close();

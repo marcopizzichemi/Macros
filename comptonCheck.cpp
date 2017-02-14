@@ -208,6 +208,7 @@ struct CrystalData
   int mppcj;
   TGraph* wz; //w(z) graph for this crystal
   TGraphDelaunay*** gd; //pointers to the pi_(w,E) for this crystal
+  TF2*** quadratic; //quadratic function describing the pi_(z,p_tot), fitted by matlab on the calibration data
   Float_t correction; //
 };
 
@@ -403,23 +404,29 @@ int main (int argc, char** argv)
   bool usingRealXY = false;
   bool frontSource = true; // puts the source just on top of the matrix
   bool avoidLastMM = false; // this will refuse to analyze events where gamma interacted in first mm or last mm of the crystal (z cut actually hardcoded below)
-  int divisions = 100;
+  int divisions = 40;
   Float_t startZ0;
   Float_t stopZ0;
   Float_t startZ1;
   Float_t stopZ1;
-  startZ0 = startZ1 = -7.49;  //crystal limits. if you go to +/-7.5 it crashes. why?
-  stopZ0 = stopZ1 = 7.49;
+  startZ0 = startZ1 = -7.5;  //crystal limits. +/-7.5 is reality
+  stopZ0 = stopZ1 = 7.5;
   // int sp_mppcI0 = 2;
   // int sp_mppcJ0 = 1;
   // int sp_mppcI1 = 2;
   // int sp_mppcJ1 = 1;
-  int sp_cry0N = 28;
-  int sp_cry1N = 29;
+  int sp_cry0N = 19;
+  int sp_cry1N = 35;
   // double sp_cry0centerX = -0.8;
   // double sp_cry0centerY = +0.8;
   // double sp_cry1centerX = -0.8;
   // double sp_cry1centerY = +2.4;
+  double quadraticFunctionMinZ = 0.0;
+  double quadraticFunctionMaxZ = 15.0;
+  double quadraticFunctionMinPtot = 0.0;
+  double quadraticFunctionMaxPtot = 6000.0;
+  double MinumimDetectableEnergy = 0.05;
+  bool minimumEnergy = true;
 
 
   //----------------------------------------------------------------------//
@@ -427,7 +434,7 @@ int main (int argc, char** argv)
   //                        3D surfaces INTERPOLATION                     //
   //                                                                      //
   //----------------------------------------------------------------------//
-  int interpolationWay = 0;  // 0 = TGraphDelaunay on sampled data , 1 = TGraphDelaunay on fit surfaces produced by matlab
+  int interpolationWay = 2;  // 0 = TGraphDelaunay on sampled data , 1 = TGraphDelaunay on fit surfaces produced by matlab, 2 = TF2 of quadratic functions fitted by matlab
 
 
   //----------------------------------------------------------------------//
@@ -546,6 +553,9 @@ int main (int argc, char** argv)
         crystal[iCry][jCry]->gd = new TGraphDelaunay**[(int) sqrt(numOfCh)];
         for(int igd = 0; igd < sqrt(numOfCh) ; igd++) crystal[iCry][jCry]->gd[igd] = new TGraphDelaunay* [(int) sqrt(numOfCh)];
 
+        crystal[iCry][jCry]->quadratic = new TF2**[(int) sqrt(numOfCh)];
+        for(int igd = 0; igd < sqrt(numOfCh) ; igd++) crystal[iCry][jCry]->quadratic[igd] = new TF2* [(int) sqrt(numOfCh)];
+
 
         TGraph2D ***camp;
         camp = new TGraph2D**[(int) sqrt(numOfCh)];
@@ -556,17 +566,16 @@ int main (int argc, char** argv)
         {
           for(int jMPPC = 0; jMPPC < sqrt(numOfCh) ; jMPPC++)
           {
-
-
-            // if(interpolationWay == 0)
-            // {
-            //
-            // }
-            std::stringstream sstream;
-            sstream << "camp_[" << iMPPC <<  "][" << jMPPC <<  "]_" << crystal[iCry][jCry]->id;
-            camp[iMPPC][jMPPC] = new TGraph2D();
-            camp[iMPPC][jMPPC]->SetName(sstream.str().c_str());
             int campPoint = 0;
+
+            if(interpolationWay == 0 | interpolationWay == 1)
+            {
+              std::stringstream sstream;
+              sstream << "camp_[" << iMPPC <<  "][" << jMPPC <<  "]_" << crystal[iCry][jCry]->id;
+              camp[iMPPC][jMPPC] = new TGraph2D();
+              camp[iMPPC][jMPPC]->SetName(sstream.str().c_str());
+              sstream.str("");
+            }
 
             if(interpolationWay == 0)
             {
@@ -625,16 +634,62 @@ int main (int argc, char** argv)
             }
             else if(interpolationWay == 2) // get the tf2 from matlab interpolation done with quadratic functions
             {
-              
-            }
 
-            // std::cout << crystal[iCry][jCry]->id << " " << iMPPC << " " << jMPPC << std::endl;
-            crystal[iCry][jCry]->gd[iMPPC][jMPPC] = new TGraphDelaunay(camp[iMPPC][jMPPC]);
-            crystal[iCry][jCry]->gd[iMPPC][jMPPC]->SetMaxIter(100000);
-            crystal[iCry][jCry]->gd[iMPPC][jMPPC]->SetMarginBinsContent(0);
-            crystal[iCry][jCry]->gd[iMPPC][jMPPC]->ComputeZ(0,0);
-            crystal[iCry][jCry]->gd[iMPPC][jMPPC]->FindAllTriangles();
-            sstream.str("");
+              std::stringstream matlabQuadFileName;
+              matlabQuadFileName << "par_mat_[" << iMPPC <<  "][" << jMPPC <<  "]_" << crystal[iCry][jCry]->id << ".dat";
+              // std::cout << matlabQuadFileName.str() << std::endl;
+              ifstream matlabFile(matlabQuadFileName.str().c_str());
+
+              if(matlabFile.good())
+              {
+                std::string p0,p1,p2,p3,p4,p5;
+                getline ( matlabFile, p0, ',' );
+                // std::cout << p0 << std::endl;
+                getline ( matlabFile, p1, ',' );
+                // std::cout << p1 << std::endl;
+                getline ( matlabFile, p2, ',' );
+                // std::cout << p2 << std::endl;
+                getline ( matlabFile, p3, ',' );
+                // std::cout << p3 << std::endl;
+                getline ( matlabFile, p4, ',' );
+                // std::cout << p4 << std::endl;
+                getline ( matlabFile, p5 );
+                // std::cout << p5 << std::endl;
+
+                // std::cout << valueX  << " " << valueY << " " << valueZ << std::endl;
+                std::stringstream sstream;
+                sstream << "quad_[" << iMPPC <<  "][" << jMPPC <<  "]_" << crystal[iCry][jCry]->id;
+
+                crystal[iCry][jCry]->quadratic[iMPPC][jMPPC] = new TF2(sstream.str().c_str(),"[0] + [1]*x + [2]*y + [3]*x*x + [4]*x*y + [5]*y*y");
+
+                crystal[iCry][jCry]->quadratic[iMPPC][jMPPC]->SetParameter(0,atof(p0.c_str()));
+                crystal[iCry][jCry]->quadratic[iMPPC][jMPPC]->SetParameter(1,atof(p1.c_str()));
+                crystal[iCry][jCry]->quadratic[iMPPC][jMPPC]->SetParameter(2,atof(p2.c_str()));
+                crystal[iCry][jCry]->quadratic[iMPPC][jMPPC]->SetParameter(3,atof(p3.c_str()));
+                crystal[iCry][jCry]->quadratic[iMPPC][jMPPC]->SetParameter(4,atof(p4.c_str()));
+                crystal[iCry][jCry]->quadratic[iMPPC][jMPPC]->SetParameter(5,atof(p5.c_str()));
+                // std::cout << "pre cry "<< crystal[iCry][jCry]->id << " " << iMPPC << "," << jMPPC << " ";
+                // for(int cOut = 0 ; cOut < 6 ; cOut++)
+                // {
+                //   std::cout << crystal[iCry][jCry]->quadratic[iMPPC][jMPPC]->GetParameter(cOut) << " ";
+                // }
+                // std::cout  << std::endl;
+                sstream.str("");
+                // crystal[iCry][jCry]->quadratic[iMPPC][jMPPC] = quadFit;
+                // camp[iMPPC][jMPPC]->SetPoint(campPoint,atof(valueX.c_str()),atof(valueY.c_str()),atof(valueZ.c_str()));
+                // campPoint++;
+              }
+              matlabFile.close();
+            }
+            if(interpolationWay == 0 | interpolationWay == 1)
+            {
+              // std::cout << crystal[iCry][jCry]->id << " " << iMPPC << " " << jMPPC << std::endl;
+              crystal[iCry][jCry]->gd[iMPPC][jMPPC] = new TGraphDelaunay(camp[iMPPC][jMPPC]);
+              crystal[iCry][jCry]->gd[iMPPC][jMPPC]->SetMaxIter(100000);
+              crystal[iCry][jCry]->gd[iMPPC][jMPPC]->SetMarginBinsContent(0);
+              crystal[iCry][jCry]->gd[iMPPC][jMPPC]->ComputeZ(0,0);
+              crystal[iCry][jCry]->gd[iMPPC][jMPPC]->FindAllTriangles();
+            }
 
           }
         }
@@ -698,6 +753,16 @@ int main (int argc, char** argv)
   long int tripleCounter = 0;
   long int multipleCounter = 0;
   long int globalReturned = 0;
+  long int extendedChiGood = 0;
+  long int extendedChiGoodGain = 0;
+  long int extendedChiBad = 0;
+  long int extendedChiInsane = 0;
+  long int extendedChiMistake = 0;
+
+  long int chiRightProbRight = 0;
+  long int chiWrongProbRight = 0;
+  long int chiRightProbWrong = 0;
+  long int chiWrongProbWrong = 0;
   TH2F *flood = new TH2F("FloodHisto","FloodHisto",1000,-7,7,1000,-7,7);
   flood->GetXaxis()->SetTitle("u");
   flood->GetYaxis()->SetTitle("v");
@@ -732,6 +797,36 @@ int main (int argc, char** argv)
   delta_z10->GetXaxis()->SetTitle("delta z0 [mm]");
   delta_z10->GetYaxis()->SetTitle("delta z1 [mm]");
 
+  TH1F *delta_z0_01 = new TH1F("delta_z0_01","delta_z0_01",200,-15,15);
+  delta_z0_01->SetTitle("Delta z0 if 0->1 (z0_reco - z0_real)");
+  delta_z0_01->GetXaxis()->SetTitle("delta z0 [mm]");
+  // delta_z01->GetYaxis()->SetTitle("delta z1 [mm]");
+
+  TH1F *delta_z1_01 = new TH1F("delta_z1_01","delta_z1_01",200,-15,15);
+  delta_z1_01->SetTitle("Delta z1 if 0->1 (z1_reco - z1_real)");
+  delta_z1_01->GetXaxis()->SetTitle("delta z1 [mm]");
+
+
+  TH1F *delta_z0_10 = new TH1F("delta_z0_10","delta_z0_10",200,-15,15);
+  delta_z0_10->SetTitle("Delta z0 if 1->0 (z0_reco - z0_real)");
+  delta_z0_10->GetXaxis()->SetTitle("delta z0 [mm]");
+  // delta_z01->GetYaxis()->SetTitle("delta z1 [mm]");
+
+  TH1F *delta_z1_10 = new TH1F("delta_z1_10","delta_z1_10",200,-15,15);
+  delta_z1_10->SetTitle("Delta z1 if 1->0 (z1_reco - z1_real)");
+  delta_z1_10->GetXaxis()->SetTitle("delta z1 [mm]");
+
+  TH1F *delta_z_Average_01 = new TH1F("delta_z_Average_01","delta_z_Average_01",200,-15,15);
+  delta_z_Average_01->SetTitle("sqrt((Delta_z0)^2 + (Delta_z1)^2) for 0->1");
+  delta_z_Average_01->GetXaxis()->SetTitle("[mm]");
+
+  TH1F *delta_z_Average_10 = new TH1F("delta_z_Average_10","delta_z_Average_10",200,-15,15);
+  delta_z_Average_10->SetTitle("sqrt((Delta_z0)^2 + (Delta_z1)^2) for 1->0");
+  delta_z_Average_10->GetXaxis()->SetTitle("[mm]");
+
+
+  TH1F *histoDeltaChiRight = new TH1F("histoDeltaChiRight","histoDeltaChiRight",100,0,10);
+  TH1F *histoDeltaChiWrong = new TH1F("histoDeltaChiWrong","histoDeltaChiWrong",100,0,10);
 
   std::vector<float> z0_v;
   std::vector<float> z1_v;
@@ -830,6 +925,8 @@ int main (int argc, char** argv)
     TGraph* wzgraph1;
     TGraphDelaunay*** gd0;
     TGraphDelaunay*** gd1;
+    TF2*** quad0;
+    TF2*** quad1;
 
     CrystalData* crystaldata[2]; //the data of the 2 crystals that will be considered
     // double cry0x = cry0centerX;
@@ -1024,8 +1121,16 @@ int main (int argc, char** argv)
           correction1 = crystaldata[1]->correction;
           wzgraph0 = crystaldata[0]->wz;
           wzgraph1 = crystaldata[1]->wz;
-          gd0 = crystaldata[0]->gd;
-          gd1 = crystaldata[1]->gd;
+          if(interpolationWay == 0 | interpolationWay == 1)
+          {
+            gd0 = crystaldata[0]->gd;
+            gd1 = crystaldata[1]->gd;
+          }
+          else if(interpolationWay == 2)
+          {
+            quad0 = crystaldata[0]->quadratic;
+            quad1 = crystaldata[1]->quadratic;
+          }
           //but check if this event matched the choice of user...
           if(averageDepEvents[0].id != cry0N) isCandidate = false;
           if(averageDepEvents[1].id != cry1N) isCandidate = false;
@@ -1077,8 +1182,16 @@ int main (int argc, char** argv)
             correction1 = crystaldata[1]->correction;
             wzgraph0 = crystaldata[0]->wz;
             wzgraph1 = crystaldata[1]->wz;
-            gd0 = crystaldata[0]->gd;
-            gd1 = crystaldata[1]->gd;
+            if(interpolationWay == 0 | interpolationWay == 1)
+            {
+              gd0 = crystaldata[0]->gd;
+              gd1 = crystaldata[1]->gd;
+            }
+            else if(interpolationWay == 2)
+            {
+              quad0 = crystaldata[0]->quadratic;
+              quad1 = crystaldata[1]->quadratic;
+            }
           }
         }
       }
@@ -1098,6 +1211,13 @@ int main (int argc, char** argv)
       {
         isCandidate = false;
       }
+    }
+
+    //minimum detectable energy
+    if(minimumEnergy)
+    {
+      if(averageDepEvents[0].energy < MinumimDetectableEnergy) isCandidate = false;
+      if(averageDepEvents[1].energy < MinumimDetectableEnergy) isCandidate = false;
     }
 
     if(isCandidate) //let the fun begin
@@ -1124,15 +1244,19 @@ int main (int argc, char** argv)
       std::vector<int> frontMppcs;
       std::vector<int> frameMppcs;
       std::vector<int> relevantMppcs;
+      std::vector<int> crossMppcs;
       //front mppcs
       int trigger0 = (int) (mppcI0 * sqrt(numOfCh) + mppcJ0);
       int trigger1 = (int) (mppcI1 * sqrt(numOfCh) + mppcJ1);
       frontMppcs.push_back(trigger0); //push first crystal mppc to the frontMppcs
+      crossMppcs.push_back(trigger0); //push first crystal mppc to the crossMppcs
       if(trigger0 != trigger1){ // if the second crystal is in front of another mppc...
         frontMppcs.push_back(trigger1); //... push also that mppc id into the frontMppcs vector
+        crossMppcs.push_back(trigger1); //... push also that mppc id into the crossMppcs vector
       }
       //frameMppcs (actually frame plus front)
       //frame of mppc0
+      // cross of mppc0
       for(int iMPPC = mppcI0 -1; iMPPC < mppcI0+2; iMPPC++)
       {
         if( (iMPPC >= 0) && (iMPPC <= sqrt(numOfCh)) )
@@ -1151,6 +1275,8 @@ int main (int argc, char** argv)
                 isThere = true;
               }
               frameMppcs.push_back(thisChannel);
+
+
             }
           }
         }
@@ -1178,6 +1304,9 @@ int main (int argc, char** argv)
           }
         }
       }
+
+
+
       //now the relevantMppcs. Intersection of the two frame groups and front group
       for(int iFront = 0; iFront < frontMppcs.size(); iFront++) //first the two front
       {
@@ -1460,19 +1589,46 @@ int main (int argc, char** argv)
               // recoDetector0.push_back(gd0[iPseudoMppc][jPseudoMppc]->ComputeZ(computeW(wzgraph0,zValue[0]),charge0));
               // recoDetector1.push_back(gd1[iPseudoMppc][jPseudoMppc]->ComputeZ(computeW(wzgraph1,zValue[1]),charge1));
               int ch = (int) iPseudoMppc*sqrt(numOfCh) + jPseudoMppc;
-              tot0 += gd0[iPseudoMppc][jPseudoMppc]->ComputeZ(computeW(wzgraph0,zValue[0]),charge0);
-              tot1 += gd1[iPseudoMppc][jPseudoMppc]->ComputeZ(computeW(wzgraph1,zValue[0]),charge1);
+              if(interpolationWay == 0 | interpolationWay == 1)
+              {
+                tot0 += gd0[iPseudoMppc][jPseudoMppc]->ComputeZ(computeW(wzgraph0,zValue[0]),charge0);
+                tot1 += gd1[iPseudoMppc][jPseudoMppc]->ComputeZ(computeW(wzgraph1,zValue[0]),charge1);
               // totDet += detector[ch];
-              std::cout << "channel "<< iPseudoMppc << "," << jPseudoMppc << "=" << iPseudoMppc*sqrt(numOfCh) + jPseudoMppc << "\t"
-              << detector[ch] << "\t"
-              << gd0[iPseudoMppc][jPseudoMppc]->ComputeZ(computeW(wzgraph0,zValue[0]),charge0) << "\t"
-              << gd1[iPseudoMppc][jPseudoMppc]->ComputeZ(computeW(wzgraph1,zValue[0]),charge1) << "\t"
-              << gd0[iPseudoMppc][jPseudoMppc]->ComputeZ(computeW(wzgraph0,zValue[0]),charge0) + gd1[iPseudoMppc][jPseudoMppc]->ComputeZ(computeW(wzgraph1,zValue[0]),charge1) << "\t"
-              << std::endl;
+                std::cout << "channel "<< iPseudoMppc << "," << jPseudoMppc << "=" << iPseudoMppc*sqrt(numOfCh) + jPseudoMppc << "\t"
+                         << detector[ch] << "\t"
+                         << gd0[iPseudoMppc][jPseudoMppc]->ComputeZ(computeW(wzgraph0,zValue[0]),charge0) << "\t"
+                         << gd1[iPseudoMppc][jPseudoMppc]->ComputeZ(computeW(wzgraph1,zValue[0]),charge1) << "\t"
+                         << gd0[iPseudoMppc][jPseudoMppc]->ComputeZ(computeW(wzgraph0,zValue[0]),charge0) + gd1[iPseudoMppc][jPseudoMppc]->ComputeZ(computeW(wzgraph1,zValue[0]),charge1) << "\t"
+                         << std::endl;
+                recoTrue.push_back(gd0[iPseudoMppc][jPseudoMppc]->ComputeZ(computeW(wzgraph0,zValue[0]),charge0) + gd1[iPseudoMppc][jPseudoMppc]->ComputeZ(computeW(wzgraph1,zValue[1]),charge1));
+              }
+              if(interpolationWay == 2)
+              {
+                std::cout << "cry0 " << iPseudoMppc << "," << jPseudoMppc << " ";
+                for(int cOut = 0 ; cOut < 6 ; cOut++)
+                {
+                  std::cout << quad0[iPseudoMppc][jPseudoMppc]->GetParameter(cOut) << " ";
+                }
+                std::cout  << std::endl;
 
-              recoTrue.push_back(gd0[iPseudoMppc][jPseudoMppc]->ComputeZ(computeW(wzgraph0,zValue[0]),charge0) + gd1[iPseudoMppc][jPseudoMppc]->ComputeZ(computeW(wzgraph1,zValue[1]),charge1));
+                std::cout << "cry1 " << iPseudoMppc << "," << jPseudoMppc << " ";
+                for(int cOut = 0 ; cOut < 6 ; cOut++)
+                {
+                  std::cout << quad1[iPseudoMppc][jPseudoMppc]->GetParameter(cOut) << " ";
+                }
+                std::cout  << std::endl;
 
-
+                tot0 += quad0[iPseudoMppc][jPseudoMppc]->Eval(-zValue[0]+7.5,charge0);
+                tot1 += quad1[iPseudoMppc][jPseudoMppc]->Eval(-zValue[1]+7.5,charge1);
+              // totDet += detector[ch];
+                std::cout << "channel "<< iPseudoMppc << "," << jPseudoMppc << "=" << iPseudoMppc*sqrt(numOfCh) + jPseudoMppc << "\t"
+                         << detector[ch] << "\t"
+                         << quad0[iPseudoMppc][jPseudoMppc]->Eval(-zValue[0]+7.5,charge0) << "\t"
+                         << quad1[iPseudoMppc][jPseudoMppc]->Eval(-zValue[1]+7.5,charge1) << "\t"
+                         << quad0[iPseudoMppc][jPseudoMppc]->Eval(-zValue[0]+7.5,charge0) + quad1[iPseudoMppc][jPseudoMppc]->Eval(-zValue[1]+7.5,charge1) << "\t"
+                         << std::endl;
+                recoTrue.push_back(quad0[iPseudoMppc][jPseudoMppc]->Eval(-zValue[0]+7.5,charge0) + quad1[iPseudoMppc][jPseudoMppc]->Eval(-zValue[1]+7.5,charge1));
+              }
             }
           }
           std::cout << totDet << "\t"
@@ -1526,9 +1682,17 @@ int main (int argc, char** argv)
               {
                 for(int jPseudoMppc = 0 ; jPseudoMppc < sqrt(numOfCh) ; jPseudoMppc++)
                 {
+                  if(interpolationWay == 0 | interpolationWay == 1)
+                  {
+                    recoDetector.push_back(gd0[iPseudoMppc][jPseudoMppc]->ComputeZ(computeW(wzgraph0,zValue[0]),charge0) + gd1[iPseudoMppc][jPseudoMppc]->ComputeZ(computeW(wzgraph1,zValue[1]),charge1));
+                  }
+                  else if(interpolationWay == 2)
+                  {
+                    recoDetector.push_back(quad0[iPseudoMppc][jPseudoMppc]->Eval(-zValue[0]+7.5,charge0) + quad1[iPseudoMppc][jPseudoMppc]->Eval(-zValue[1]+7.5,charge1));
+                  }
                   // recoDetector0.push_back(gd0[iPseudoMppc][jPseudoMppc]->ComputeZ(computeW(wzgraph0,zValue[0]),charge0));
                   // recoDetector1.push_back(gd1[iPseudoMppc][jPseudoMppc]->ComputeZ(computeW(wzgraph1,zValue[1]),charge1));
-                  recoDetector.push_back(gd0[iPseudoMppc][jPseudoMppc]->ComputeZ(computeW(wzgraph0,zValue[0]),charge0) + gd1[iPseudoMppc][jPseudoMppc]->ComputeZ(computeW(wzgraph1,zValue[1]),charge1));
+
                 }
               }
               //LIKELIHOOD
@@ -1550,6 +1714,7 @@ int main (int argc, char** argv)
                 {
                   zpair_prob *= MeasureProb(detector[i],recoDetector[i],sqrt(detector[i]));
                   chiSquare += pow(fabs(detector[i]-recoDetector[i]),2)/pow(sqrt(detector[i]),2);
+                  // chiSquare += pow(fabs(detector[i]-recoDetector[i]),2)/pow(0.12*detector[i]/2.355,2) ;
                 }
               }
 
@@ -1674,7 +1839,15 @@ int main (int argc, char** argv)
                 {
                   // recoDetector0.push_back(gd0[iPseudoMppc][jPseudoMppc]->ComputeZ(computeW(wzgraph0,zValue[0]),charge0));
                   // recoDetector1.push_back(gd1[iPseudoMppc][jPseudoMppc]->ComputeZ(computeW(wzgraph1,zValue[1]),charge1));
-                  recoDetector.push_back(gd0[iPseudoMppc][jPseudoMppc]->ComputeZ(computeW(wzgraph0,zValue[0]),charge0) + gd1[iPseudoMppc][jPseudoMppc]->ComputeZ(computeW(wzgraph1,zValue[1]),charge1));
+                  // recoDetector.push_back(gd0[iPseudoMppc][jPseudoMppc]->ComputeZ(computeW(wzgraph0,zValue[0]),charge0) + gd1[iPseudoMppc][jPseudoMppc]->ComputeZ(computeW(wzgraph1,zValue[1]),charge1));
+                  if(interpolationWay == 0 | interpolationWay == 1)
+                  {
+                    recoDetector.push_back(gd0[iPseudoMppc][jPseudoMppc]->ComputeZ(computeW(wzgraph0,zValue[0]),charge0) + gd1[iPseudoMppc][jPseudoMppc]->ComputeZ(computeW(wzgraph1,zValue[1]),charge1));
+                  }
+                  else if(interpolationWay == 2)
+                  {
+                    recoDetector.push_back(quad0[iPseudoMppc][jPseudoMppc]->Eval(-zValue[0]+7.5,charge0) + quad1[iPseudoMppc][jPseudoMppc]->Eval(-zValue[1]+7.5,charge1));
+                  }
                 }
               }
               double pseudo_front = 0.0;
@@ -1698,6 +1871,7 @@ int main (int argc, char** argv)
                 {
                   zpair_prob *= MeasureProb(detector[i],recoDetector[i],sqrt(detector[i]));
                   chiSquare += pow(fabs(detector[i]-recoDetector[i]),2)/pow(sqrt(detector[i]),2);
+                  // chiSquare += pow(fabs(detector[i]-recoDetector[i]),2)/pow(0.12*detector[i]/2.355,2) ;
                 }
               }
               z0_like_10.push_back(zValue[0]);
@@ -1764,8 +1938,14 @@ int main (int argc, char** argv)
 
 
           delta_z10->Fill(z0Best_10-averageDepEvents[0].z,z1Best_10-averageDepEvents[1].z);
-          // delta_z_Average->Fill();
 
+
+          delta_z0_01->Fill(z0Best_01-averageDepEvents[0].z);
+          delta_z1_01->Fill(z1Best_01-averageDepEvents[1].z);
+          delta_z0_10->Fill(z0Best_10-averageDepEvents[0].z);
+          delta_z1_10->Fill(z1Best_10-averageDepEvents[1].z);
+          delta_z_Average_01->Fill(sqrt(pow(z0Best_01-averageDepEvents[0].z,2) + pow(z1Best_01-averageDepEvents[1].z,2)));
+          delta_z_Average_10->Fill(sqrt(pow(z0Best_10-averageDepEvents[0].z,2) + pow(z1Best_10-averageDepEvents[1].z,2)));
 
           std::cout << std::endl;
           std::cout << "Real Z " << averageDepEvents[0].z << " " << averageDepEvents[1].z << std::endl;
@@ -1835,13 +2015,53 @@ int main (int argc, char** argv)
 
           std::cout <<  "P(CASE_A)\tP(CASE_B)\tP(CASE_A)/P(CASE_B)"<< std::endl;
           std::cout << totalProb_0_1 << "\t\t" << totalProb_1_0 << "\t\t" << totalProb_0_1/totalProb_1_0 << std::endl;
+          std::cout << "Chi^2 CASE_A = "<< minChi01 << std::endl;
+          std::cout << "Chi^2 CASE_B = "<< minChi10 << std::endl;
           histoProb->Fill(totalProb_0_1/totalProb_1_0);
           std::cout << "|--------------------------------------|"<< std::endl;
 
           if(minChi01 < minChi10) goodChi++;
-          if(totalProb_0_1/totalProb_1_0 > 1.0) goodCounter++;
+
+          bool AoutOfCrystals =false;
+          bool BoutOfCrystals =false;
+          if(z0Best_01 > 7.5 | z0Best_01 < -7.5) AoutOfCrystals = true;
+          if(z1Best_01 > 7.5 | z1Best_01 < -7.5) AoutOfCrystals = true;
+          if(z0Best_10 > 7.5 | z0Best_10 < -7.5) BoutOfCrystals = true;
+          if(z1Best_10 > 7.5 | z1Best_10 < -7.5) BoutOfCrystals = true;
+          if(!AoutOfCrystals && !BoutOfCrystals) // if they are both reconstructed inside, check the chi^2
+          {
+            if(minChi01 < minChi10) extendedChiGood++;
+            else extendedChiBad++;
+          }
+          if(!AoutOfCrystals && BoutOfCrystals) // if case b goes outside, decide for A regardless of chi^2
+          {
+            extendedChiGoodGain++;
+          }
+          if(AoutOfCrystals && !BoutOfCrystals) // if case a goes outside and b does not, it would be a real mistake
+          {
+            extendedChiMistake++;
+          }
+          if(AoutOfCrystals && BoutOfCrystals) // if both go outside, big problem
+          {
+            extendedChiInsane++;
+          }
+
+          if(totalProb_0_1/totalProb_1_0 > 1.0)
+          {
+            goodCounter++;
+            if(minChi01 < minChi10) chiRightProbRight++;
+            else chiWrongProbRight++;
+          }
+          else
+          {
+            if(minChi01 < minChi10) chiRightProbWrong++;
+            else chiWrongProbWrong++;
+          }
           if(prob_compt[0]/prob_compt[1] > 1.0) goodCounterOnlyCompton++;
           if((prob_compt[0]*prob_dist1[0]*prob_dist2[0])/(prob_compt[1]*prob_dist1[1]*prob_dist2[1]) > 1.0) goodCounterNoPhotEl++;
+
+          if(minChi01 < minChi10) histoDeltaChiRight->Fill(minChi10 - minChi01);
+          else histoDeltaChiWrong->Fill(minChi01 - minChi10);
         }
         else // don't perform analysis, just set 0 and 1 to real points and do the math
         {
@@ -1889,6 +2109,23 @@ int main (int argc, char** argv)
   std::cout << "Good predictions [only Compton] = " << goodCounterOnlyCompton << "\t accuracy (" << 100.0*((double) goodCounterOnlyCompton)/((double) (foundCandidate)) << " +/- " << 100.0*((double) goodCounterOnlyCompton)/((double) (foundCandidate))*sqrt(pow(1.0/sqrt(goodCounterOnlyCompton),2) + pow(1.0/sqrt(foundCandidate),2) ) << ")%" << std::endl;
   std::cout << "Good predictions [no PhotEl]= " << goodCounterNoPhotEl << "\t accuracy (" << 100.0*((double) goodCounterNoPhotEl)/((double) (foundCandidate)) << " +/- " << 100.0*((double) goodCounterNoPhotEl)/((double) (foundCandidate))*sqrt(pow(1.0/sqrt(goodCounterNoPhotEl),2) + pow(1.0/sqrt(foundCandidate),2) ) << ")%" << std::endl;
 
+  std::cout << "Extended Chi^2:"         << std::endl
+            << "extendedChiGood\t\t= "   << extendedChiGood    << std::endl
+            << "extendedChiGoodGain\t= " << extendedChiGoodGain    << std::endl
+            << "extendedChiBad\t\t= "    << extendedChiBad     << std::endl
+            << "extendedChiMistake\t= "  << extendedChiMistake << std::endl
+            << "extendedChiInsane\t= "   << extendedChiInsane  << std::endl
+            << "Sum\t\t\t= "             << extendedChiGood + extendedChiGoodGain + extendedChiBad + extendedChiMistake + extendedChiInsane << std::endl
+            << "candidates\t\t= "        << foundCandidate << std::endl;
+
+  std::cout << "Good predictions [ext Chi^2] " << extendedChiGood+extendedChiGoodGain << "\t accuracy (" << 100.0*((double) (extendedChiGood+extendedChiGoodGain))/((double) (foundCandidate)) << " +/- " << 100.0*((double) (extendedChiGood+extendedChiGoodGain))/((double) (foundCandidate))*sqrt(pow(1.0/sqrt(extendedChiGood+extendedChiGoodGain),2) + pow(1.0/sqrt(foundCandidate),2) ) << ")%" << std::endl;
+
+  std::cout << "COMPARISON CHI-PROB"    << std::endl
+            << "chiRightProbRight\t= "  << chiRightProbRight    << std::endl
+            << "chiRightProbWrong\t= "  << chiRightProbWrong    << std::endl
+            << "chiWrongProbRight\t= "  << chiWrongProbRight    << std::endl
+            << "chiWrongProbWrong\t= "  << chiWrongProbWrong    << std::endl;
+
   // std::cout << "Prediction accuracy = (" << 100.0*((double) goodCounter)/((double) (foundCandidate)) << " +/- " << 100.0*((double) goodCounter)/((double) (foundCandidate))*sqrt(pow(1.0/sqrt(goodCounter),2) + pow(1.0/sqrt(foundCandidate),2) ) << ")%" << std::endl;
 
   TCanvas *c_uDiff = new TCanvas();
@@ -1932,8 +2169,17 @@ int main (int argc, char** argv)
   photoelectricCrossSectionLYSO->Write();
   lambdaLYSO->Write();
   histoProb->Write();
+  histoDeltaChiRight->Write();
+  histoDeltaChiWrong->Write();
   delta_z01->Write();
   delta_z10->Write();
+  delta_z0_01->Write();
+  delta_z1_01->Write();
+  delta_z0_10->Write();
+  delta_z1_10->Write();
+  delta_z_Average_01->Write();
+  delta_z_Average_10->Write();
+
 
   if(performAnalysis && !allAnalysis)
   {
