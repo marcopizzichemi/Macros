@@ -153,6 +153,7 @@ int main (int argc, char** argv)
   Float_t RealX,RealY,RealZ;
   Short_t CrystalsHit;
   Short_t NumbOfInteractions;
+  Float_t TotalEnergyDeposited_out;
 
   TTree* t1 = new TTree("adc","adc");
 
@@ -173,6 +174,7 @@ int main (int argc, char** argv)
   t1->Branch("RealZ",&RealZ,"RealZ/F");
   t1->Branch("CrystalsHit",&CrystalsHit,"CrystalsHit/S");
   t1->Branch("NumbOfInteractions",&NumbOfInteractions,"NumbOfInteractions/S");
+  t1->Branch("TotalEnergyDeposited",&TotalEnergyDeposited_out,"TotalEnergyDeposited/F");
 
 
 
@@ -229,28 +231,8 @@ int main (int argc, char** argv)
       RealY += (energyDeposition->at(eEvent).DepositionY * energyDeposition->at(eEvent).EnergyDeposited)/totalEnergyDeposited;
       RealZ += (energyDeposition->at(eEvent).DepositionZ * energyDeposition->at(eEvent).EnergyDeposited)/totalEnergyDeposited;
     }
-
+    TotalEnergyDeposited_out = totalEnergyDeposited;
     CrystalsHit = crystals.size();
-
-
-    // calculate a weigthed energy deposition in x,y,z
-    // for(int i = 0; i < numOfCry ; i++) //first total energy deposited
-    // {
-    //   NumbOfInteractions += px[i]->size();
-    //   if(px[i]->size()) CrystalsHit++;
-    //   for(int j = 0; j < px[i]->size(); j++)
-    //   {
-    //     RealX += (px[i]->at(j) * pEdep[i]->at(j))/totalEnergyDeposited;
-    //   }
-    //   for(int j = 0; j < px[i]->size(); j++)
-    //   {
-    //     RealY += (py[i]->at(j) * pEdep[i]->at(j))/totalEnergyDeposited;
-    //   }
-    //   for(int j = 0; j < px[i]->size(); j++)
-    //   {
-    //     RealZ += (pz[i]->at(j) * pEdep[i]->at(j))/totalEnergyDeposited;
-    //   }
-    // }
 
     if(NumbOfInteractions > 0) // discard events with no energy deposition (they would never trigger the detectors anyway..)
     {
@@ -269,98 +251,6 @@ int main (int argc, char** argv)
 
 
   }
-
-  // std::cout << std::endl;
-  // std::cout << "1 cry [511 KeV deposition] events = "    << singleCounter << std::endl;
-  // std::cout << "2 cry [511 KeV deposition] events = "    << doubleCounter << std::endl;
-  // std::cout << "3 cry [511 KeV deposition] events = "    << tripleCounter << std::endl;
-  // std::cout << "Multi cry [511 KeV deposition] events = "<< multipleCounter << std::endl;
-  // std::cout << "Candidates = "<< foundCandidate << std::endl;
-  //
-  // TF1 *line = new TF1("line","x",-7,7);
-  // line->SetLineColor(kRed);
-  // TF1 *line2 = new TF1("line2","x",0,2000);
-  // line2->SetLineColor(kRed);
-  //
-  //
-  //
-  // std::string outFile = "FileOut.root";
-  // TFile* fOut = new TFile(outFile.c_str(),"recreate");
-  //
-  // TCanvas *C_flood = new TCanvas("C_flood","C_flood",800,800);
-  // flood->Draw("COLZ");
-  // C_flood->Write();
-  // TCanvas *C_averageZvsRatio = new TCanvas("C_averageZvsRatio","C_averageZvsRatio",800,800);
-  // C_averageZvsRatio->cd();
-  // averageZvsRatio->Draw();
-  // C_averageZvsRatio->Write();
-  //
-  // TCanvas *C_normalizedZvsRatio = new TCanvas("C_normalizedZvsRatio","C_normalizedZvsRatio",800,800);
-  // C_normalizedZvsRatio->cd();
-  // normalizedZvsRatio->Draw();
-  // C_normalizedZvsRatio->Write();
-  //
-  // TCanvas *C_averageZvsWi = new TCanvas("C_averageZvsWi","C_averageZvsWi",800,800);
-  // C_averageZvsWi->cd();
-  // averageZvsWi->Draw();
-  // C_averageZvsWi->Write();
-  //
-  // TCanvas *C_wivsRatio = new TCanvas("C_wivsRatio","C_wivsRatio",800,800);
-  // C_wivsRatio->cd();
-  // wivsRatio->Draw();
-  // line->Draw("same");
-  // C_wivsRatio->Write();
-  //
-  // TCanvas *C_wMeasuredvsRatioW = new TCanvas("C_wMeasuredvsRatioW","C_wMeasuredvsRatioW",800,800);
-  // C_wMeasuredvsRatioW->cd();
-  // wMeasuredvsRatioW->Draw();
-  // line->Draw("same");
-  // C_wMeasuredvsRatioW->Write();
-  //
-  // TCanvas *C_uMeasuredVsRatioU = new TCanvas("C_uMeasuredVsRatioU","C_uMeasuredVsRatioU",800,800);
-  // C_uMeasuredVsRatioU->cd();
-  // uMeasuredVsRatioU->Draw();
-  // line->Draw("same");
-  // C_uMeasuredVsRatioU->Write();
-  //
-  // TCanvas *C_vMeasuredVsRatioV = new TCanvas("C_vMeasuredVsRatioV","C_vMeasuredVsRatioV",800,800);
-  // C_vMeasuredVsRatioV->cd();
-  // vMeasuredVsRatioV->Draw();
-  // line->Draw("same");
-  // C_vMeasuredVsRatioV->Write();
-  //
-  //
-  //
-  //
-  // TCanvas *C_kMeasuredvsRatioF = new TCanvas("C_kMeasuredvsRatioF","C_kMeasuredvsRatioF",800,800);
-  // C_kMeasuredvsRatioF->cd();
-  // kMeasuredvsRatioF->Draw();
-  // line->Draw("same");
-  // C_kMeasuredvsRatioF->Write();
-  //
-  // TCanvas *C_kMeasuredvsPmaxi = new TCanvas("C_kMeasuredvsPmaxi","C_kMeasuredvsPmaxi",800,800);
-  // C_kMeasuredvsPmaxi->cd();
-  // kMeasuredvsPmaxi->Draw();
-  // line->Draw("same");
-  // C_kMeasuredvsPmaxi->Write();
-  //
-  // TCanvas *C_pmaxiVsRatioF = new TCanvas("C_pmaxiVsRatioF","C_pmaxiVsRatioF",800,800);
-  // C_pmaxiVsRatioF->cd();
-  // pmaxiVsRatioF->Draw();
-  // line2->Draw("same");
-  // C_pmaxiVsRatioF->Write();
-
-
-  // t1->Write();
-
-  //   f1->Close();
-
-  // std::string outFile = "analysis_OUT.root";
-  // TFile* fOut = new TFile(outFile.c_str(),"recreate");
-
-  // flood->Write();
-  // positions->Write();
-  //   f1->Close();
   std::cout << std::endl;
   std::cout << "Writing output to file "<< outFileName << std::endl;
 
