@@ -21,6 +21,11 @@
 //moduleAnalysis moduleCalibration.root sim
 
 // in this case obviously no calibration_params file is needed, the sigmaW is calculated from the simulation data in the .root file
+
+//FIXME
+// 1. definitions of letter, number etc is hardcoded and can be inconsistent!
+// 1. num mpps, cry etc is hardcoded!
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
@@ -160,10 +165,10 @@ int main(int argc, char **argv)
   int nmppcy = 4;
   int ncrystalsx = 2;
   int ncrystalsy = 2;
-  // std::string letter[4] = {"A","B","C","D"};  //standard ordering
-  // std::string number[4] = {"1","2","3","4"};  //standard ordering
-  std::string letter[4] = {"D","C","B","A"};  //standard ordering
-  std::string number[4] = {"4","3","2","1"};  //standard ordering
+  std::string letter[4] = {"A","B","C","D"};  //standard ordering
+  std::string number[4] = {"1","2","3","4"};  //standard ordering
+  // std::string letter[4] = {"D","C","B","A"};  //mod ordering
+  // std::string number[4] = {"4","3","2","1"};  //mod ordering
 
   std::vector<inputDoi_t> inputDoi;
   inputDoi_t tempInputDoi(pointsFromDoi);
@@ -173,15 +178,20 @@ int main(int argc, char **argv)
     tempInputDoi.clear();
   }
 
+  // std::cout << inputDoi.size() << " " << pointsFromDoi << std::endl;
 
-
-  // DEBUG
+  // // DEBUG
   //   for(int i = 0 ; i < inputDoi.size() ; i++)
   //   {
-  //     std::cout << inputDoi[i].i << " " << inputDoi[i].j << " " << inputDoi[i].m << " " << inputDoi[i].q << " ";
+  //     std::cout << inputDoi[i].i << " "
+  //               << inputDoi[i].j << " "
+  //               << inputDoi[i].m << " "
+  //               << inputDoi[i].q << " "
+  //               << inputDoi[i].doires << " "
+  //               << inputDoi[i].avgs << " ";
   //     for(int k = 0 ; k < pointsFromDoi ; k++)
   //     {
-  //       std::cout << inputDoi[i].w[k] << " " << inputDoi[i].sw[k] << " ";
+  //       std::cout << inputDoi[i].w[k] << " " << inputDoi[i].sw[k] << " " << inputDoi[i].sqrt_nentries[k] << " " ;
   // //       std::cout << inputDoi[i].z[k] << " " << inputDoi[i].sz[k] << " ";
   //     }
   //
@@ -448,17 +458,19 @@ int main(int argc, char **argv)
       {
         for(int j = 0 ; j < nmoduley*nmppcy*ncrystalsy ; j++)
         {
+
           if(i > (ncrystalsx - 1) && i < nmodulex*nmppcx*ncrystalsx - (ncrystalsx) && j > (ncrystalsy-1) && j < nmoduley*nmppcy*ncrystalsy - (ncrystalsy)) //only crystals not from frame channels
           {
+            // std::cout << i << " " << j << std::endl;
             for(int k = 0; k < inputDoi.size(); k++)
             {
               int ik = inputDoi[k].i;
               int jk = inputDoi[k].j;
               if(i == ik && j == jk)
               {
-                for(int ik =0 ; ik < pointsFromDoi ; ik++)
+                for(int iik =0 ; iik < pointsFromDoi ; iik++)
                 {
-                  sigmaWdoiCentral->Fill(inputDoi[k].sw[ik] * inputDoi[k].sqrt_nentries[ik]);
+                  sigmaWdoiCentral->Fill(inputDoi[k].sw[iik] * inputDoi[k].sqrt_nentries[iik]);
                 }
               }
             }
