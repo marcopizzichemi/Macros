@@ -105,6 +105,21 @@ public:
 };
 
 
+void usage()
+{
+  std::cout << "\t\t" << "[ -i <moduleCalibration file - put sim if it's a simulation dataset> ] " << std::endl
+  << "\t\t" << "[ -k <calibration_params file> ] " << std::endl
+  << "\t\t" << "[ --points <points from doi scan> ] " << std::endl
+  << "\t\t" << "[ --nmodulex <number of modules in x> ] " << std::endl
+  << "\t\t" << "[ --nmoduley <number of modules in x> ] " << std::endl
+  << "\t\t" << "[ --nmppcx <number of mppc in x PER MODULE> ] " << std::endl
+  << "\t\t" << "[ --nmppcy <number of mppc in y PER MODULE> ] " << std::endl
+  << "\t\t" << "[ --ncrystalsx <number of crystals in x PER MPPC> ] " << std::endl
+  << "\t\t" << "[ --ncrystalsyx <number of crystals in y PER MPPC> ] " << std::endl
+  << "\t\t" << std::endl;
+}
+
+
 //----------------//
 //  MAIN PROGRAM  //
 //----------------//
@@ -112,52 +127,21 @@ int main(int argc, char **argv)
 {
   if(argc < 2) // check input from command line
   {
-    std::cout << "USAGE:\t\t moduleAnalysis moduleCalibration.root [calibration_params.txt] [pointsFromDoi]" << std::endl;
-    std::cout << std::endl;
+    std::cout	<< "Usage: " << argv[0] << std::endl;
+    usage();
     return 1;
   }
 
 
   //play with strings to extract the name
-  std::string rootFileName = argv[1];
-  std::string rootFileNameNoExtension = rootFileName.substr(0,rootFileName.length() -5 );
-
-  //file with spectra from module calibration
-  TFile *f = new TFile(rootFileName.c_str());
-  f->cd("Module 0.0");
-
-
+  std::string rootFileName;
   //file with doi tag m, q and points per crystal
   //if it is given, set a flag to calculate the doi precision
   bool doDoiPrecision = false;
   bool simulationRun = false;
   std::ifstream fDoiTag;
-  if(argc > 2)
-  {
-    doDoiPrecision = true;
-    std::string sim = "sim";
-    std::string argv2 = argv[2];
-    if(argv2.compare(sim) != 0)
-    {
-      fDoiTag.open(argv[2],std::ios::in);
-    }
-    else
-    {
-      simulationRun = true;
-    }
-  }
+  std::string doiFileName;
   int pointsFromDoi = 1;
-  if(argc > 3)
-  {
-    pointsFromDoi = atoi(argv[3]);
-  }
-
-
-  TString outputFileName = "output_" + rootFileNameNoExtension + ".root";
-  //   if(argc > 3)
-  //     outputFileName = argv[3];
-  TFile *fOut = new TFile(outputFileName,"RECREATE");
-
   //useful variables...
   int nmodulex = 1;
   int nmoduley = 1;
@@ -169,6 +153,97 @@ int main(int argc, char **argv)
   std::string number[4] = {"1","2","3","4"};  //standard ordering
   // std::string letter[4] = {"D","C","B","A"};  //mod ordering
   // std::string number[4] = {"4","3","2","1"};  //mod ordering
+
+  static struct option longOptions[] =
+  {
+			{ "points", required_argument, 0, 0 },
+      { "nmodulex", required_argument, 0, 0 },
+      { "nmoduley", required_argument, 0, 0 },
+      { "nmppcx", required_argument, 0, 0 },
+      { "nmppcy", required_argument, 0, 0 },
+      { "ncrystalsx", required_argument, 0, 0 },
+      { "ncrystalsy", required_argument, 0, 0 },
+			{ NULL, 0, 0, 0 }
+	};
+
+  while(1) {
+		int optionIndex = 0;
+		int c = getopt_long(argc, argv, "i:k:", longOptions, &optionIndex);
+		if (c == -1) {
+			break;
+		}
+		if (c == 'i'){
+			rootFileName = (char *)optarg;
+    }
+		else if (c == 'k'){
+      doiFileName = (char *)optarg;
+      doDoiPrecision = true;
+    }
+		else if (c == 0 && optionIndex == 0){
+      pointsFromDoi = atoi((char *)optarg);
+    }
+    else if (c == 0 && optionIndex == 1){
+      nmodulex = atoi((char *)optarg);
+    }
+    else if (c == 0 && optionIndex == 2){
+      nmoduley = atoi((char *)optarg);
+    }
+    else if (c == 0 && optionIndex == 3){
+      nmppcx = atoi((char *)optarg);
+    }
+    else if (c == 0 && optionIndex == 4){
+      nmppcy = atoi((char *)optarg);
+    }
+    else if (c == 0 && optionIndex == 5){
+      ncrystalsx = atoi((char *)optarg);
+    }
+    else if (c == 0 && optionIndex == 6){
+      ncrystalsy = atoi((char *)optarg);
+    }
+		else {
+      std::cout	<< "Usage: " << argv[0] << std::endl;
+			usage();
+			return 1;
+		}
+	}
+
+
+  std::string rootFileNameNoExtension = rootFileName.substr(0,rootFileName.length() -5 );
+
+  //file with spectra from module calibration
+  TFile *f = new TFile(rootFileName.c_str());
+  f->cd("Module 0.0");
+
+
+
+  if(doDoiPrecision)
+  {
+    // doDoiPrecision = true;
+    std::string sim = "sim";
+
+    if(doiFileName.compare(sim) != 0)
+    {
+      fDoiTag.open(doiFileName.c_str(),std::ios::in);
+    }
+    else
+    {
+      simulationRun = true;
+    }
+  }
+
+
+  // if(argc > 3)
+  // {
+  //   pointsFromDoi = atoi(argv[3]);
+  // }
+
+
+  TString outputFileName = "output_" + rootFileNameNoExtension + ".root";
+  //   if(argc > 3)
+  //     outputFileName = argv[3];
+  TFile *fOut = new TFile(outputFileName,"RECREATE");
+
+
 
   std::vector<inputDoi_t> inputDoi;
   inputDoi_t tempInputDoi(pointsFromDoi);
