@@ -149,8 +149,8 @@ int main(int argc, char **argv)
   int nmppcy = 4;
   int ncrystalsx = 2;
   int ncrystalsy = 2;
-  std::string letter[4] = {"A","B","C","D"};  //standard ordering
-  std::string number[4] = {"1","2","3","4"};  //standard ordering
+  std::string letter[14] = {"A","B","C","D","E","F","G","H","I","J","K","L","M","N"};  //standard ordering
+  std::string number[14] = {"1","2","3","4","5","6","7","8","9","10","11","12","13","14"};  //standard ordering
   // std::string letter[4] = {"D","C","B","A"};  //mod ordering
   // std::string number[4] = {"4","3","2","1"};  //mod ordering
 
