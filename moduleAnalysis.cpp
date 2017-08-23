@@ -325,7 +325,7 @@ int main(int argc, char **argv)
       {
         if(spectrum2d->GetBinContent(i+1,j+1))
         {
-          // std::cout << "in" << std::endl;
+          std::cout << i << " "<< j << " " << spectrum2d->GetBinContent(i+1,j+1) << std::endl;
           central->Fill(spectrum2d->GetBinContent(i+1,j+1));
           sumLO += spectrum2d->GetBinContent(i+1,j+1);
           validEntry++;
