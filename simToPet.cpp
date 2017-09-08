@@ -24,9 +24,17 @@
 
 #include "../code/struct.hh"
 
+// bool compareByTime(const enDep &a,const enDep  &b)
+// {
+//     return a.DepositionTime < b.DepositionTime;
+// }
+
 
 int main (int argc, char** argv)
 {
+
+
+
   gROOT->ProcessLine("#include <vector>"); //needed by ROOT to deal with standard vectors
 
   //HACK to use the dictionary easily
@@ -56,14 +64,26 @@ int main (int argc, char** argv)
   gROOT->ProcessLine(command.c_str());
 
 
+  bool saturation = false;
+
   //-------------------
-  // Input Files
+  // Input Files or Flags
   //-------------------
   TChain *tree =  new TChain("tree"); // read input files
   for (int i = 1 ; i < argc ; i++)
   {
-    std::cout << "Adding file " << argv[i] << std::endl;
-    tree->Add(argv[i]);
+    std::string argument(argv[i]);
+
+    if(argument.compare("--saturation") == 0)
+    {
+      std::cout << "SiPM saturation will be taken into account " << std::endl;
+      saturation = true;
+    }
+    else
+    {
+      std::cout << "Adding file " << argv[i] << std::endl;
+      tree->Add(argv[i]);
+    }
   }
   // find the number of channels directly from the tchain file
   // before creating the variables

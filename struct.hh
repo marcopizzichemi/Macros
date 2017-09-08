@@ -35,4 +35,6 @@ struct enDep
   float DepositionX;
   float DepositionY;
   float DepositionZ;
+  std::string ParticleName;
+  int PDGEncoding;
 };

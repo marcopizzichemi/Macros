@@ -257,7 +257,7 @@ int main(int argc, char **argv)
       {
         for(int h = 0 ; h < pointsFromDoi ; h++)
         {
-          tempInputDoi.z.push_back(inputZ[k].z[h]-1.2);
+          tempInputDoi.z.push_back(inputZ[k].z[h]);
           tempInputDoi.sz.push_back(0.2); //FIXME what is the correct value?
         }
       }
