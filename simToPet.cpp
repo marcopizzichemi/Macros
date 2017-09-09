@@ -224,7 +224,7 @@ int main (int argc, char** argv)
 
   sipm_t* sipm;
   sipm = new sipm_t[numOfCh];
-
+  TRandom3 *rand = new TRandom3(0);
   //initialize spads
   //they are in the same order of ch0, ch1, etc..
   //FIXME not general at all!!!
@@ -313,7 +313,7 @@ int main (int argc, char** argv)
                 if(hitj == n_spad_y) hitj = hitj -1;
 
                 //quantum efficiency test
-                TRandom3 *rand = new TRandom3(0);
+
                 double numb = rand->Uniform(1.0);
 
                 if(numb < qe)
@@ -332,7 +332,7 @@ int main (int argc, char** argv)
             }
             else // just qe test for each photon and sipm
             {
-              TRandom3 *rand = new TRandom3(0);
+              // TRandom3 *rand = new TRandom3(0);
               double numb = rand->Uniform(1.0);
               if(numb < qe)
               {
@@ -434,5 +434,6 @@ int main (int argc, char** argv)
   delete detector;
   delete charge;
   delete sipm;
+  delete rand;
   return 0;
 }
