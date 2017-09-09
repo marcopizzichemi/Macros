@@ -20,7 +20,7 @@
 #include "TH1F.h"
 #include "TCanvas.h"
 #include "TF1.h"
-
+#include "TRandom3.h"
 
 #include "../code/struct.hh"
 
@@ -28,6 +28,14 @@
 // {
 //     return a.DepositionTime < b.DepositionTime;
 // }
+
+struct sipm_t
+{
+  float detx;
+  float dety;
+  short int **spad;
+  int counts;
+};
 
 
 int main (int argc, char** argv)
@@ -132,6 +140,7 @@ int main (int argc, char** argv)
 
   // energy deposition, each gamma 511 event has a std::vector of struct (type enDep) with all the data of each energy deposition
   std::vector<enDep> *energyDeposition = 0;
+  // prepare also a vector for optical photons
 
   // Total number of photons detected in this event
   // for each TTree entry, a simple number saying how many optical photons entered that
@@ -196,6 +205,51 @@ int main (int argc, char** argv)
   t1->Branch("NumbOfInteractions",&NumbOfInteractions,"NumbOfInteractions/S");
   t1->Branch("TotalEnergyDeposited",&TotalEnergyDeposited_out,"TotalEnergyDeposited/F");
 
+  //saturation part
+  //create an array of spads
+  int n_spad_x = 60;
+  int n_spad_y = 60;
+  int n_dead_spad_x = 4;
+  int n_dead_spad_y = 4;
+  double qe = 0.3;
+
+  float xmppc[16] = {-4.8,-4.8,-4.8,-4.8,-1.6,-1.6,-1.6,-1.6,1.6,1.6,1.6,1.6,4.8,4.8,4.8,4.8};
+  float ymppc[16] = {-4.8,-1.6,1.6,4.8,-4.8,-1.6,1.6,4.8,-4.8,-1.6,1.6,4.8,-4.8,-1.6,1.6,4.8};
+
+  double detector_pitch = 3.2;
+  double det_size_x = 3.0;
+  double det_size_y = 3.0;
+  double spad_size_x = det_size_x / n_spad_x;
+  double spad_size_y = det_size_y / n_spad_y;
+
+  sipm_t* sipm;
+  sipm = new sipm_t[numOfCh];
+
+  //initialize spads
+  //they are in the same order of ch0, ch1, etc..
+  //FIXME not general at all!!!
+  for(int i = 0 ; i < numOfCh ; i++)
+  {
+    //set position of he sipm
+    sipm[i].detx = xmppc[i];
+    sipm[i].dety = ymppc[i];
+    //create the 2d array of spads
+    sipm[i].spad = new short int*[n_spad_x];
+    for(int j = 0; j < n_spad_x; j++)
+    {
+      sipm[i].spad[j] = new short int[n_spad_y];
+    }
+    //fill the array of spads with 0s
+    for(int iSpad = 0; iSpad < n_spad_x; iSpad++)
+    {
+      for(int jSpad = 0; jSpad < n_spad_y; jSpad++)
+      {
+        sipm[i].spad[iSpad][jSpad] = 0;
+      }
+    }
+    //set count to 0
+    sipm[i].counts = 0;
+  }
 
 
   //----------------------------------------//
@@ -216,14 +270,101 @@ int main (int argc, char** argv)
     CrystalsHit = 0;
 
 
+    for(int iPhot = 0; iPhot < photons->size(); iPhot++) // run on all opticals
+    {
+      // find which sipm was hit
+      for(int iSipm = 0; iSipm < numOfCh ; iSipm++)
+      {
+        if((photons->at(iPhot).PositionX > (sipm[iSipm].detx - det_size_x/2.0 )) && (photons->at(iPhot).PositionX < (sipm[iSipm].detx + det_size_x/2.0 )) )
+        {
+          if((photons->at(iPhot).PositionY > (sipm[iSipm].dety - det_size_y/2.0 )) && (photons->at(iPhot).PositionY < (sipm[iSipm].dety + det_size_y/2.0 )) )
+          {
+            if(saturation)
+            {
+              // find which spad was hit
+              // bring sipm hit to start in 0,0
+              float hitx = photons->at(iPhot).PositionX - sipm[iSipm].detx + (det_size_x/2.0);
+              float hity = photons->at(iPhot).PositionY - sipm[iSipm].dety + (det_size_y/2.0);
+              // find spad I and J
+              int hiti = (int) (hitx / spad_size_x);
+              int hitj = (int) (hity / spad_size_y);
+              // std::cout << photons->at(iPhot).PositionX << "\t"
+              //           << photons->at(iPhot).PositionY << "\t"
+              //           << sipm[iSipm].detx << "\t"
+              //           << sipm[iSipm].dety << "\t"
+              //           << hitx << "\t"
+              //           << hity << "\t"
+              //           << hiti << "\t"
+              //           << hitj << "\t"
+              //           << std::endl;
+              // ignore the NxN central spads
+              // 0-27 (28-29-20-31) 32-59
+              if( (hiti > ( n_spad_x/2 - n_dead_spad_x/2 - 1 ) ) &&
+              (hiti < ( n_spad_x/2 + n_dead_spad_x/2 - 1 ) ) &&
+              (hitj > ( n_spad_y/2 - n_dead_spad_y/2 - 1 ) ) &&
+              (hitj < ( n_spad_y/2 + n_dead_spad_y/2 - 1 ) ) )
+              {
+                // do nothing, this part of the sipm is not active
+              }
+              else // increment the counts of the sipm, if the spad was not hit yet
+              {
+                //HACK to avoid seg fault when the optical photon is exactly on the border (which makes the hiti of hitj being exatly 60 for example)
+                if(hiti == n_spad_x) hiti = hiti -1;
+                if(hitj == n_spad_y) hitj = hitj -1;
+
+                //quantum efficiency test
+                TRandom3 *rand = new TRandom3(0);
+                double numb = rand->Uniform(1.0);
+
+                if(numb < qe)
+                {
+                  if(sipm[iSipm].spad[hiti][hitj] == 0)
+                  {
+                    sipm[iSipm].counts++;
+                    sipm[iSipm].spad[hiti][hitj] = 1;
+                  }
+                  else
+                  {
+                    //ignore the hit, the spad has already fired and the optical photon is lost
+                  }
+                }
+              }
+            }
+            else // just qe test for each photon and sipm
+            {
+              TRandom3 *rand = new TRandom3(0);
+              double numb = rand->Uniform(1.0);
+              if(numb < qe)
+              {
+                sipm[iSipm].counts++;
+              }
+            }
+          }
+        }
+      }
+    }
+    // fill the charge vector
     for(int i = 0; i < numOfCh ; i++)
     {
-      //convert to ADC channels, as if it was data from a digitizer
-      //mppc gain = 1.25e6
-      //adc channel binning 156e-15 C
-      double adcCh = detector[i]*1.25e6*1.6e-19/156e-15;
-      charge[i] = (Short_t) adcCh; //potentially truncation error?
+      charge[i] = (Short_t) sipm[i].counts;
     }
+    // re-initialize the sipms counters
+    for(int i = 0 ; i < numOfCh ; i++)
+    {
+      //fill the array of spads with 0s
+      for(int iSpad = 0; iSpad < n_spad_x; iSpad++)
+      {
+        for(int jSpad = 0; jSpad < n_spad_y; jSpad++)
+        {
+          sipm[i].spad[iSpad][jSpad] = 0;
+        }
+      }
+      //set count to 0
+      sipm[i].counts = 0;
+    }
+
+
+
 
     RealX = RealY = RealZ = 0;
 
@@ -274,12 +415,24 @@ int main (int argc, char** argv)
   std::cout << std::endl;
   std::cout << "Writing output to file "<< outFileName << std::endl;
 
+
+
   TFile* fOut = new TFile(outFileName.c_str(),"recreate");
   t1->Write();
 
   fOut->Close();
 
-
-
+  //free memory
+  for(int i = 0 ; i < numOfCh ; i++)
+  {
+    for(int j = 0; j < n_spad_x; j++)
+    {
+      delete sipm[i].spad[j];
+    }
+    delete sipm[i].spad;
+  }
+  delete detector;
+  delete charge;
+  delete sipm;
   return 0;
 }
