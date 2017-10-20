@@ -68,6 +68,7 @@ struct inputSaturation_t
 struct channel_t
 {
   std::string label;
+  int plotPosition;
   std::vector<float> energy;
   std::vector<float> q;
   std::vector<float> sq;
@@ -105,10 +106,12 @@ int main(int argc, char **argv)
   TFile *fOut = new TFile(outputROOTfile.c_str(),"RECREATE");
 
   std::string label[16] = {"D1","C1","B1","A1","D2","C2","B2","A2","D3","C3","B3","A3","D4","C4","B4","A4"};
+  int plotPositions[16] = {1,5,9,13,2,6,10,14,3,7,11,15,4,8,12,16};
   channel_t mppc[16];
   for(int i = 0 ; i < 16 ; i++)
   {
     mppc[i].label = label[i];
+    mppc[i].plotPosition = plotPositions[i];
   }
 
   std::ifstream fSaturation;
@@ -215,6 +218,8 @@ int main(int argc, char **argv)
   }
 
   fOut->cd();
+  TCanvas * C_multi = new TCanvas("multi","multi",1200,1200);
+  C_multi->Divide(4,4);
   for(int i = 0 ; i < graphs.size() ; i++)
   {
     TCanvas * C_spectrum;
@@ -224,8 +229,18 @@ int main(int argc, char **argv)
     graphs[i]->Draw("A*");
     C_spectrum->Write();
     delete C_spectrum;
+
+    C_multi->cd(mppc[i].plotPosition);
+    std::stringstream sname;
+    sname << "Saturation " << mppc[i].label;
+    graphs[i]->SetName(sname.str().c_str());
+    graphs[i]->SetTitle(sname.str().c_str());
+    graphs[i]->GetXaxis()->SetTitle("Gamma Energy [KeV]");
+    graphs[i]->GetYaxis()->SetTitle("Charge [C]");
+    graphs[i]->Draw("A*");
   }
 
+  C_multi->Write();
   fOut->Close();
   saturation_parameters.close();
   fSaturation.close();

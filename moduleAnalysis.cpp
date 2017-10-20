@@ -115,7 +115,7 @@ void usage()
   << "\t\t" << "[ --nmppcx <number of mppc in x PER MODULE> ] " << std::endl
   << "\t\t" << "[ --nmppcy <number of mppc in y PER MODULE> ] " << std::endl
   << "\t\t" << "[ --ncrystalsx <number of crystals in x PER MPPC> ] " << std::endl
-  << "\t\t" << "[ --ncrystalsyx <number of crystals in y PER MPPC> ] " << std::endl
+  << "\t\t" << "[ --ncrystalsy <number of crystals in y PER MPPC> ] " << std::endl
   << "\t\t" << std::endl;
 }
 
@@ -207,8 +207,9 @@ int main(int argc, char **argv)
 		}
 	}
 
-
-  std::string rootFileNameNoExtension = rootFileName.substr(0,rootFileName.length() -5 );
+  std::size_t found = rootFileName.find_last_of("/");
+  std::string rootFileNameNoDir = rootFileName.substr(found+1);
+  std::string rootFileNameNoExtension = rootFileNameNoDir.substr(0,rootFileNameNoDir.length() -5 );
 
   //file with spectra from module calibration
   TFile *f = new TFile(rootFileName.c_str());
@@ -669,7 +670,8 @@ int main(int argc, char **argv)
                     lineFitSigma->SetLineColor(kRed);
 
                     calibGraph->Draw("AL");
-                    calibGraph->Fit(lineFitSigma,"RQ");
+                    calibGraph->SetTitle("");
+                    calibGraph->Fit(lineFitSigma,"RNQ");
 
                     averageM += TMath::Abs(lineFitSigma->GetParameter(0));
                     averageMErr += TMath::Power(TMath::Abs(lineFitSigma->GetParError(0)),2);

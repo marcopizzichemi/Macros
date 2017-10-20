@@ -16,6 +16,8 @@ struct optPhot
   float GlobalTime;
   int   PhotonType;
   float PhotonEnergy;
+  int TrackID;
+  int ParentID;
   int   OriginCrystalI;
   int   OriginCrystalJ;
   int   ExitFace;
@@ -35,6 +37,9 @@ struct enDep
   float DepositionX;
   float DepositionY;
   float DepositionZ;
+  int TrackID;
+  int ParentID;
+  std::string ProcessName;
   std::string ParticleName;
   int PDGEncoding;
 };
