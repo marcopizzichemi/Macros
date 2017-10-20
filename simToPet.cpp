@@ -21,6 +21,8 @@
 #include "TCanvas.h"
 #include "TF1.h"
 #include "TRandom3.h"
+#include <getopt.h>
+
 
 #include "../code/struct.hh"
 
@@ -35,11 +37,37 @@ struct sipm_t
   float dety;
   short int **spad;
   int counts;
+  std::vector<float> listOfTimestamps;
+  float timestamp;
 };
 
+bool compare_by_GlobalTime(const optPhot a, const optPhot b)
+{
+  return a.GlobalTime < b.GlobalTime;
+}
+
+void usage()
+{
+  std::cout << "\t\t" << "[ -i <input file>     name of input file] " << std::endl
+            << "\t\t" << "[ -o <output file>    name of output file] " << std::endl
+            << "\t\t" << "[ --photons <N>       average time on first N photons - default = 5]" << std::endl
+            << "\t\t" << "[ --saturation        flag to use saturation of mppc ] " << std::endl
+            << "\t\t" << "[ --nmppcx <N>        number of mppc in x             - default = 4]" << std::endl
+            << "\t\t" << "[ --nmppcy <N>        number of mppc in y             - default = 5]" << std::endl
+            << "\t\t" << "[ --pitchx <N>        distance between center of mppcs , in x [mm] - default = 3.2]" << std::endl
+            << "\t\t" << "[ --pitchy <N>        distance between center of mppcs , in y [mm] - default = 3.2]" << std::endl
+            << "\t\t" << std::endl;
+}
 
 int main (int argc, char** argv)
 {
+
+  if(argc < 2) // check input from command line
+  {
+    std::cout	<< "Usage: " << argv[0] << std::endl;
+    usage();
+    return 1;
+  }
 
 
 
@@ -73,29 +101,83 @@ int main (int argc, char** argv)
 
 
   bool saturation = false;
-
-  //-------------------
-  // Input Files or Flags
-  //-------------------
+  int numb_of_phot_for_time_average = 5;
+  std::string inputFileName = "";
+  std::string outputFileName = "";
+  bool inputGiven = false;
+  bool outputGiven = false;
   TChain *tree =  new TChain("tree"); // read input files
-  for (int i = 1 ; i < argc ; i++)
-  {
-    std::string argument(argv[i]);
+  // int nmodulex = 1;
+  // int nmoduley = 1;
+  int nmppcx = 4;
+  int nmppcy = 4;
+  float pitchx = 3.2;
+  float pitchy = 3.2;
+  // int ncrystalsx = 2;
+  // int ncrystalsy = 2;
 
-    if(argument.compare("--saturation") == 0)
-    {
+  static struct option longOptions[] =
+  {
+      { "photons", required_argument, 0, 0 },
+      { "saturation", no_argument, 0, 0 },
+      { "nmppcx", required_argument, 0, 0 },
+      { "nmppcy", required_argument, 0, 0 },
+      { "pitchx", required_argument, 0, 0 },
+      { "pitchy", required_argument, 0, 0 },
+			{ NULL, 0, 0, 0 }
+	};
+
+  while(1) {
+		int optionIndex = 0;
+		int c = getopt_long(argc, argv, "i:o:", longOptions, &optionIndex);
+		if (c == -1) {
+			break;
+		}
+		if (c == 'i'){
+			inputFileName = (char *)optarg;
+      std::cout << "Adding file " << inputFileName << std::endl;
+      tree->Add(inputFileName.c_str());
+      inputGiven = true;
+    }
+		else if (c == 'o'){
+      outputFileName = (char *)optarg;
+      outputGiven = true;
+    }
+		else if (c == 0 && optionIndex == 0){
+      numb_of_phot_for_time_average = atoi((char *)optarg);
+      std::cout << "Time average on first " << numb_of_phot_for_time_average << " photons"<< std::endl;
+    }
+    else if (c == 0 && optionIndex == 1){
       std::cout << "SiPM saturation will be taken into account " << std::endl;
       saturation = true;
     }
-    else
-    {
-      std::cout << "Adding file " << argv[i] << std::endl;
-      tree->Add(argv[i]);
+    else if (c == 0 && optionIndex == 2){
+      nmppcx = atoi((char *)optarg);
     }
+    else if (c == 0 && optionIndex == 3){
+      nmppcy = atoi((char *)optarg);
+    }
+    else if (c == 0 && optionIndex == 4){
+      pitchx = atof((char *)optarg);
+    }
+    else if (c == 0 && optionIndex == 5){
+      pitchx = atof((char *)optarg);
+    }
+		else {
+      std::cout	<< "Usage: " << argv[0] << std::endl;
+			usage();
+			return 1;
+		}
+	}
+
+  if(!inputGiven | !outputGiven)
+  {
+    std::cout	<< "Usage: " << argv[0] << std::endl;
+		usage();
+		return 1;
   }
-  // find the number of channels directly from the tchain file
-  // before creating the variables
-  // first, get the list of leaves
+
+
   TObjArray *leavescopy = tree->GetListOfLeaves();
   int nLeaves = leavescopy->GetEntries();
   std::vector<std::string> leavesName;
@@ -173,12 +255,16 @@ int main (int argc, char** argv)
 
   //output ttree
 
-  std::string outFileName = "treeout.root"; //+ std::string(argv[1]);
+  // std::string outFileName = "treeout.root"; //+ std::string(argv[1]);
   //output ttree
   long long int DeltaTimeTag,ExtendedTimeTag;
 
-  Short_t *charge; //adc type
-  charge = new Short_t[numOfCh];
+  UShort_t *charge; //adc type
+  charge = new UShort_t[numOfCh];
+  Float_t *timestamp;
+  timestamp = new Float_t[numOfCh];
+  UShort_t taggingCharge = 1;
+  Float_t taggingTimeStamp = 0;
   Float_t RealX,RealY,RealZ;
   Short_t CrystalsHit;
   Short_t NumbOfInteractions;
@@ -189,15 +275,35 @@ int main (int argc, char** argv)
   t1->Branch("ExtendedTimeTag",&ExtendedTimeTag,"ExtendedTimeTag/l"); 	//absolute time tag of the event
   t1->Branch("DeltaTimeTag",&DeltaTimeTag,"DeltaTimeTag/l"); 			//delta time from previous event
   //branches of the channels data
+  std::stringstream snames,stypes;
   for (int i = 0 ; i < numOfCh ; i++)
   {
     //empty the stringstreams
-    std::stringstream snames,stypes;
+
     charge[i] = 0;
+    timestamp[i] = 0;
     snames << "ch" << i;
-    stypes << "ch" << i << "/S";
+    stypes << "ch" << i << "/s";
     t1->Branch(snames.str().c_str(),&charge[i],stypes.str().c_str());
+    snames.str("");
+    stypes.str("");
+    snames << "t" << i;
+    stypes << "t" << i << "/F";
+    t1->Branch(snames.str().c_str(),&timestamp[i],stypes.str().c_str());
+    snames.str("");
+    stypes.str("");
   }
+  //create a fake additional channel, faking an external tagging crystal, for ModuleCalibration
+  snames << "ch" << numOfCh;
+  stypes << "ch" << numOfCh << "/s";
+  t1->Branch(snames.str().c_str(),&taggingCharge,stypes.str().c_str());
+  snames.str("");
+  stypes.str("");
+  snames << "t" << numOfCh;
+  stypes << "t" << numOfCh << "/F";
+  t1->Branch(snames.str().c_str(),&taggingTimeStamp,stypes.str().c_str());
+  snames.str("");
+  stypes.str("");
   t1->Branch("RealX",&RealX,"RealX/F");
   t1->Branch("RealY",&RealY,"RealY/F");
   t1->Branch("RealZ",&RealZ,"RealZ/F");
@@ -213,9 +319,49 @@ int main (int argc, char** argv)
   int n_dead_spad_y = 4;
   double qe = 0.3;
 
-  float xmppc[16] = {-4.8,-4.8,-4.8,-4.8,-1.6,-1.6,-1.6,-1.6,1.6,1.6,1.6,1.6,4.8,4.8,4.8,4.8};
-  float ymppc[16] = {-4.8,-1.6,1.6,4.8,-4.8,-1.6,1.6,4.8,-4.8,-1.6,1.6,4.8,-4.8,-1.6,1.6,4.8};
+  float *xmppc;
+  float *ymppc;
+  xmppc = new float[numOfCh];
+  ymppc = new float[numOfCh];
 
+  for(int i = 0; i < nmppcx; i++)
+  {
+    for(int j = 0 ; j < nmppcy;j++)
+    {
+      xmppc[i*nmppcy+j] = (i * pitchx) - (pitchx*nmppcx/2.0) + (pitchx/2.0);
+      ymppc[i*nmppcy+j] = (j * pitchy) - (pitchy*nmppcy/2.0) + (pitchy/2.0);
+    }
+  }
+  // float xmppc[16] = {-4.8,-4.8,-4.8,-4.8,-1.6,-1.6,-1.6,-1.6,1.6,1.6,1.6,1.6,4.8,4.8,4.8,4.8};
+  // float ymppc[16] = {-4.8,-1.6,1.6,4.8,-4.8,-1.6,1.6,4.8,-4.8,-1.6,1.6,4.8,-4.8,-1.6,1.6,4.8};
+
+  std::cout << "xmppc = {";
+  for(int i = 0 ; i < numOfCh ; i++)
+  {
+    std::cout << xmppc[i]<< ",";
+  }
+  std::cout << "}" << std::endl;
+
+  std::cout << "ymppc = {";
+  for(int i = 0 ; i < numOfCh ; i++)
+  {
+    std::cout << ymppc[i]<< ",";
+  }
+  std::cout << "}"<< std::endl;
+
+  // float xmppc[64] = {-11.2,-11.2,-11.2,-11.2,-11.2,-11.2,-11.2,-11.2,-8.0,-8.0,-8.0,-8.0,-8.0,-8.0,-8.0,-8.0,-4.8,-4.8,-4.8,-4.8,-4.8,-4.8,-4.8,-4.8,-1.6,-1.6,-1.6,-1.6,-1.6,-1.6,-1.6,-1.6,1.6,1.6,1.6,1.6,1.6,1.6,1.6,1.6,4.8,4.8,4.8,4.8,4.8,4.8,4.8,4.8,8.0,8.0,8.0,8.0,8.0,8.0,8.0,8.0,11.2,11.2,11.2,11.2,11.2,11.2,11.2,11.2};
+  // float ymppc[64] = {-11.2,-8.0,-4.8,-1.6,1.6,4.8,8.0,11.2,-11.2,-8.0,-4.8,-1.6,1.6,4.8,8.0,11.2,-11.2,-8.0,-4.8,-1.6,1.6,4.8,8.0,11.2,-11.2,-8.0,-4.8,-1.6,1.6,4.8,8.0,11.2,-11.2,-8.0,-4.8,-1.6,1.6,4.8,8.0,11.2,-11.2,-8.0,-4.8,-1.6,1.6,4.8,8.0,11.2,-11.2,-8.0,-4.8,-1.6,1.6,4.8,8.0,11.2,-11.2,-8.0,-4.8,-1.6,1.6,4.8,8.0,11.2};
+  // float *xmppc;
+  // float *ymppc;
+  // xmppc = new float[8*8];
+  // ymppc = new float[8*8];
+  // for(int iMppc = 0; iMppc < 8 ; iMppc++)
+  // {
+  //   for(int dd = 0; dd < 8 ; dd++)
+  //   {
+  //     xmppc[iMppc+dd] =  iMppc * 3.2;
+  //   }
+  // }
   double detector_pitch = 3.2;
   double det_size_x = 3.0;
   double det_size_y = 3.0;
@@ -230,6 +376,7 @@ int main (int argc, char** argv)
   //FIXME not general at all!!!
   for(int i = 0 ; i < numOfCh ; i++)
   {
+
     //set position of he sipm
     sipm[i].detx = xmppc[i];
     sipm[i].dety = ymppc[i];
@@ -269,6 +416,8 @@ int main (int argc, char** argv)
     NumbOfInteractions = 0;
     CrystalsHit = 0;
 
+    // sort the optical photons in time
+    std::sort(photons->begin(), photons->end(), compare_by_GlobalTime );
 
     for(int iPhot = 0; iPhot < photons->size(); iPhot++) // run on all opticals
     {
@@ -318,10 +467,11 @@ int main (int argc, char** argv)
 
                 if(numb < qe)
                 {
-                  if(sipm[iSipm].spad[hiti][hitj] == 0)
+                  if(sipm[iSipm].spad[hiti][hitj] == 0) // if this spad was not hit yet
                   {
                     sipm[iSipm].counts++;
                     sipm[iSipm].spad[hiti][hitj] = 1;
+                    sipm[iSipm].listOfTimestamps.push_back(photons->at(iPhot).GlobalTime); //add its time stamp to the sipm
                   }
                   else
                   {
@@ -337,17 +487,36 @@ int main (int argc, char** argv)
               if(numb < qe)
               {
                 sipm[iSipm].counts++;
+                sipm[iSipm].listOfTimestamps.push_back(photons->at(iPhot).GlobalTime); //add its time stamp to the sipm
               }
             }
           }
         }
       }
     }
-    // fill the charge vector
+    // calculate the global sipm parameters
     for(int i = 0; i < numOfCh ; i++)
     {
+      // fill the charge vector
       charge[i] = (Short_t) sipm[i].counts;
+      // calculate the sipm timestamp from average of first N timestamps
+      sipm[i].timestamp = 0.0;
+      int effectiveN = numb_of_phot_for_time_average;
+      if(numb_of_phot_for_time_average > sipm[i].listOfTimestamps.size())
+        effectiveN = sipm[i].listOfTimestamps.size();
+      for(int j = 0 ; j < effectiveN; j++)
+      {
+        sipm[i].timestamp +=  (gRandom->Gaus(sipm[i].listOfTimestamps[j],0.087) / effectiveN)*1e-9; // and convert to seconds
+      }
+      timestamp[i] = (Float_t) sipm[i].timestamp;
     }
+
+
+
+
+
+
+
     // re-initialize the sipms counters
     for(int i = 0 ; i < numOfCh ; i++)
     {
@@ -361,6 +530,8 @@ int main (int argc, char** argv)
       }
       //set count to 0
       sipm[i].counts = 0;
+      //clear time stamps;
+      sipm[i].listOfTimestamps.clear();
     }
 
 
@@ -413,11 +584,11 @@ int main (int argc, char** argv)
 
   }
   std::cout << std::endl;
-  std::cout << "Writing output to file "<< outFileName << std::endl;
+  std::cout << "Writing output to file "<< outputFileName << std::endl;
 
 
 
-  TFile* fOut = new TFile(outFileName.c_str(),"recreate");
+  TFile* fOut = new TFile(outputFileName.c_str(),"recreate");
   t1->Write();
 
   fOut->Close();
@@ -433,7 +604,8 @@ int main (int argc, char** argv)
   }
   delete detector;
   delete charge;
-  delete sipm;
+  delete timestamp;
+  // delete sipm;
   delete rand;
   return 0;
 }
