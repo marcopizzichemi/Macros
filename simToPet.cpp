@@ -36,9 +36,9 @@ struct sipm_t
   float detx;
   float dety;
   short int **spad;
-  int counts;
-  std::vector<float> listOfTimestamps;
-  float timestamp;
+  UShort_t counts;
+  std::vector<Float_t> listOfTimestamps;
+  Float_t timestamp;
 };
 
 bool compare_by_GlobalTime(const optPhot a, const optPhot b)
@@ -471,7 +471,7 @@ int main (int argc, char** argv)
                   {
                     sipm[iSipm].counts++;
                     sipm[iSipm].spad[hiti][hitj] = 1;
-                    sipm[iSipm].listOfTimestamps.push_back(photons->at(iPhot).GlobalTime); //add its time stamp to the sipm
+                    sipm[iSipm].listOfTimestamps.push_back((Float_t) photons->at(iPhot).GlobalTime); //add its time stamp to the sipm
                   }
                   else
                   {
@@ -487,7 +487,7 @@ int main (int argc, char** argv)
               if(numb < qe)
               {
                 sipm[iSipm].counts++;
-                sipm[iSipm].listOfTimestamps.push_back(photons->at(iPhot).GlobalTime); //add its time stamp to the sipm
+                sipm[iSipm].listOfTimestamps.push_back((Float_t) photons->at(iPhot).GlobalTime); //add its time stamp to the sipm
               }
             }
           }
@@ -498,7 +498,7 @@ int main (int argc, char** argv)
     for(int i = 0; i < numOfCh ; i++)
     {
       // fill the charge vector
-      charge[i] = (Short_t) sipm[i].counts;
+      charge[i] = (UShort_t) sipm[i].counts;
       // calculate the sipm timestamp from average of first N timestamps
       sipm[i].timestamp = 0.0;
       int effectiveN = numb_of_phot_for_time_average;
@@ -506,7 +506,7 @@ int main (int argc, char** argv)
         effectiveN = sipm[i].listOfTimestamps.size();
       for(int j = 0 ; j < effectiveN; j++)
       {
-        sipm[i].timestamp +=  (gRandom->Gaus(sipm[i].listOfTimestamps[j],0.087) / effectiveN)*1e-9; // and convert to seconds
+        sipm[i].timestamp +=  (Float_t) ((gRandom->Gaus(sipm[i].listOfTimestamps[j],0.087) / effectiveN)*1e-9); // and convert to seconds
       }
       timestamp[i] = (Float_t) sipm[i].timestamp;
     }
