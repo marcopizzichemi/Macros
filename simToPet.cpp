@@ -53,7 +53,7 @@ void usage()
             << "\t\t" << "[ --photons <N>       average time on first N photons - default = 5]" << std::endl
             << "\t\t" << "[ --saturation        flag to use saturation of mppc ] " << std::endl
             << "\t\t" << "[ --nmppcx <N>        number of mppc in x             - default = 4]" << std::endl
-            << "\t\t" << "[ --nmppcy <N>        number of mppc in y             - default = 5]" << std::endl
+            << "\t\t" << "[ --nmppcy <N>        number of mppc in y             - default = 4]" << std::endl
             << "\t\t" << "[ --pitchx <N>        distance between center of mppcs , in x [mm] - default = 3.2]" << std::endl
             << "\t\t" << "[ --pitchy <N>        distance between center of mppcs , in y [mm] - default = 3.2]" << std::endl
             << "\t\t" << std::endl;

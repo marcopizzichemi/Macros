@@ -24,7 +24,7 @@
 
 //FIXME
 // 1. definitions of letter, number etc is hardcoded and can be inconsistent!
-// 1. num mpps, cry etc is hardcoded!
+// 2. num mpps, cry etc is hardcoded!
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -107,8 +107,8 @@ public:
 
 void usage()
 {
-  std::cout << "\t\t" << "[ -i <moduleCalibration file - put sim if it's a simulation dataset> ] " << std::endl
-  << "\t\t" << "[ -k <calibration_params file> ] " << std::endl
+  std::cout << "\t\t" << "[ -i <moduleCalibration file  ] " << std::endl
+  << "\t\t" << "[ -k <calibration_params file>   - put sim if it's a simulation dataset>] " << std::endl
   << "\t\t" << "[ --points <points from doi scan> ] " << std::endl
   << "\t\t" << "[ --nmodulex <number of modules in x> ] " << std::endl
   << "\t\t" << "[ --nmoduley <number of modules in x> ] " << std::endl
@@ -304,6 +304,8 @@ int main(int argc, char **argv)
 
   TCanvas *c2 = (TCanvas*) gDirectory->Get("Photopeak positions vs. i,j");
   spectrum2d = (TH2F*)c2->GetPrimitive("Photopeak positions vs. i,j");
+  int nBinX = spectrum2d->GetNbinsX();
+  int nBinY = spectrum2d->GetNbinsY();
   all = new TH1F("all","",100,0,12000);
   all->GetXaxis()->SetTitle("Photopeak Position [ADC Channels]");
   //all->GetXaxis()->SetLabelSize(0.5);
@@ -317,9 +319,11 @@ int main(int argc, char **argv)
   central->SetFillColor(kRed);
 
   int validEntry = 0;
-  for(int i = 0 ; i < nmodulex*nmppcx*ncrystalsx ; i++)
+  // for(int i = 0 ; i < nmodulex*nmppcx*ncrystalsx ; i++)
+  for(int i = 0 ; i < nBinX ; i++)
   {
-    for(int j = 0 ; j < nmoduley*nmppcy*ncrystalsy ; j++)
+    // for(int j = 0 ; j < nmoduley*nmppcy*ncrystalsy ; j++)
+    for(int j = 0 ; j < nBinY ; j++)
     {
       // std::cout << i << " " << j << " " << (ncrystalsx - 1) << " " << nmodulex*nmppcx*ncrystalsx - (ncrystalsx) << " | " << (ncrystalsy-1) << " " << nmoduley*nmppcy*ncrystalsy - (ncrystalsy) << std::endl;
       if(i > (ncrystalsx - 1) && i < nmodulex*nmppcx*ncrystalsx - (ncrystalsx) && j > (ncrystalsy-1) && j < nmoduley*nmppcy*ncrystalsy - (ncrystalsy)) //only crystals not from frame channels
@@ -412,6 +416,8 @@ int main(int argc, char **argv)
 
   spectrum2d = new TH2F();
   spectrum2d = (TH2F*)c->GetPrimitive("Corrected Energy res FWHM vs. i,j");
+  nBinX = spectrum2d->GetNbinsX();
+  nBinY = spectrum2d->GetNbinsY();
   all = new TH1F("Corrected Energy res FWHM","",250,0,0.5);
   all->GetXaxis()->SetTitle("Corrected Energy Resolution FWHM");
   all->SetName("Corrected Energy Resolution FWHM");
@@ -425,9 +431,11 @@ int main(int argc, char **argv)
 
   validEntry = 0;
 
-  for(int i = 0 ; i < nmodulex*nmppcx*ncrystalsx ; i++)
+  // for(int i = 0 ; i < nmodulex*nmppcx*ncrystalsx ; i++)
+  for(int i = 0 ; i < nBinX ; i++)
   {
-    for(int j = 0 ; j < nmoduley*nmppcy*ncrystalsy ; j++)
+    // for(int j = 0 ; j < nmoduley*nmppcy*ncrystalsy ; j++)
+    for(int j = 0 ; j < nBinY ; j++)
     {
       if(i > (ncrystalsx - 1) && i < nmodulex*nmppcx*ncrystalsx - (ncrystalsx) && j > (ncrystalsy-1) && j < nmoduley*nmppcy*ncrystalsy - (ncrystalsy)) //only crystals not from frame channels
       {
@@ -444,9 +452,11 @@ int main(int argc, char **argv)
   hs = new THStack("hs","");
   double averageEN_corr = sumEN_corr/validEntry ;
 
-  for(int i = 0 ; i < nmodulex*nmppcx*ncrystalsx ; i++)
+  // for(int i = 0 ; i < nmodulex*nmppcx*ncrystalsx ; i++)
+  for(int i = 0 ; i < nBinX ; i++)
   {
-    for(int j = 0 ; j < nmoduley*nmppcy*ncrystalsy ; j++)
+    // for(int j = 0 ; j < nmoduley*nmppcy*ncrystalsy ; j++)
+    for(int j = 0 ; j < nBinY ; j++)
     {
       if(i > (ncrystalsx - 1) && i < nmodulex*nmppcx*ncrystalsx - (ncrystalsx) && j > (ncrystalsy-1) && j < nmoduley*nmppcy*ncrystalsy - (ncrystalsy)) //only crystals not from frame channels
       {
