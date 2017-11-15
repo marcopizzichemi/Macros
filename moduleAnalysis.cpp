@@ -24,7 +24,6 @@
 
 //FIXME
 // 1. definitions of letter, number etc is hardcoded and can be inconsistent!
-// 2. num mpps, cry etc is hardcoded!
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -108,14 +107,14 @@ public:
 void usage()
 {
   std::cout << "\t\t" << "[ -i <moduleCalibration file  ] " << std::endl
-  << "\t\t" << "[ -k <calibration_params file>   - put sim if it's a simulation dataset>] " << std::endl
-  << "\t\t" << "[ --points <points from doi scan> ] " << std::endl
-  << "\t\t" << "[ --nmodulex <number of modules in x> ] " << std::endl
-  << "\t\t" << "[ --nmoduley <number of modules in x> ] " << std::endl
-  << "\t\t" << "[ --nmppcx <number of mppc in x PER MODULE> ] " << std::endl
-  << "\t\t" << "[ --nmppcy <number of mppc in y PER MODULE> ] " << std::endl
-  << "\t\t" << "[ --ncrystalsx <number of crystals in x PER MPPC> ] " << std::endl
-  << "\t\t" << "[ --ncrystalsy <number of crystals in y PER MPPC> ] " << std::endl
+  << "\t\t" << "[ -k <calibration_params file>                          - put sim if it's a simulation dataset ] " << std::endl
+  << "\t\t" << "[ --points <points from doi scan>                       - default = 1 ] " << std::endl
+  << "\t\t" << "[ --nmodulex <number of modules in x>                   - default = 1 ] " << std::endl
+  << "\t\t" << "[ --nmoduley <number of modules in y>                   - default = 1 ] " << std::endl
+  << "\t\t" << "[ --nmppcx <number of mppc in x PER MODULE>             - default = 4 ] " << std::endl
+  << "\t\t" << "[ --nmppcy <number of mppc in y PER MODULE>             - default = 4 ] " << std::endl
+  << "\t\t" << "[ --ncrystalsx <number of crystals in x PER MPPC>       - default = 2 ] " << std::endl
+  << "\t\t" << "[ --ncrystalsy <number of crystals in y PER MPPC>       - default = 2 ] " << std::endl
   << "\t\t" << std::endl;
 }
 
@@ -131,7 +130,9 @@ int main(int argc, char **argv)
     usage();
     return 1;
   }
-
+  std::cout << std::endl;
+  std::cout << "-----> WARNING: did you check the letter[] and number[] in source code? It's still hardcoded!!! <-----" << std::endl;
+  std::cout << std::endl;
 
   //play with strings to extract the name
   std::string rootFileName;

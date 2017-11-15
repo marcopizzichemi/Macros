@@ -56,6 +56,7 @@ void usage()
             << "\t\t" << "[ --nmppcy <N>        number of mppc in y             - default = 4]" << std::endl
             << "\t\t" << "[ --pitchx <N>        distance between center of mppcs , in x [mm] - default = 3.2]" << std::endl
             << "\t\t" << "[ --pitchy <N>        distance between center of mppcs , in y [mm] - default = 3.2]" << std::endl
+            << "\t\t" << "[ --qe <N>            quantum efficiency of mppcs  - default = 0.3]" << std::endl
             << "\t\t" << std::endl;
 }
 
@@ -113,6 +114,7 @@ int main (int argc, char** argv)
   int nmppcy = 4;
   float pitchx = 3.2;
   float pitchy = 3.2;
+  double qe = 0.3;
   // int ncrystalsx = 2;
   // int ncrystalsy = 2;
 
@@ -124,6 +126,7 @@ int main (int argc, char** argv)
       { "nmppcy", required_argument, 0, 0 },
       { "pitchx", required_argument, 0, 0 },
       { "pitchy", required_argument, 0, 0 },
+      { "qe", required_argument, 0, 0 },
 			{ NULL, 0, 0, 0 }
 	};
 
@@ -162,6 +165,9 @@ int main (int argc, char** argv)
     }
     else if (c == 0 && optionIndex == 5){
       pitchx = atof((char *)optarg);
+    }
+    else if (c == 0 && optionIndex == 6){
+      qe = atof((char *)optarg);
     }
 		else {
       std::cout	<< "Usage: " << argv[0] << std::endl;
@@ -317,7 +323,7 @@ int main (int argc, char** argv)
   int n_spad_y = 60;
   int n_dead_spad_x = 4;
   int n_dead_spad_y = 4;
-  double qe = 0.3;
+
 
   float *xmppc;
   float *ymppc;
@@ -362,7 +368,7 @@ int main (int argc, char** argv)
   //     xmppc[iMppc+dd] =  iMppc * 3.2;
   //   }
   // }
-  double detector_pitch = 3.2;
+  // double detector_pitch = 3.2;
   double det_size_x = 3.0;
   double det_size_y = 3.0;
   double spad_size_x = det_size_x / n_spad_x;
@@ -397,7 +403,15 @@ int main (int argc, char** argv)
     //set count to 0
     sipm[i].counts = 0;
   }
-
+  for(int iSipm = 0; iSipm < numOfCh ; iSipm++)
+  {
+    std::cout << iSipm << " "
+              << sipm[iSipm].detx - det_size_x/2.0 << " "
+              << sipm[iSipm].detx + det_size_x/2.0 << " "
+              << sipm[iSipm].dety - det_size_y/2.0 << " "
+              << sipm[iSipm].dety + det_size_y/2.0 << " "
+              << std::endl;
+  }
 
   //----------------------------------------//
   //             LOOP ON EVENTS             //
