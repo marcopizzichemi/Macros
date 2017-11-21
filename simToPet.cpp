@@ -347,19 +347,19 @@ int main (int argc, char** argv)
   // float xmppc[16] = {-4.8,-4.8,-4.8,-4.8,-1.6,-1.6,-1.6,-1.6,1.6,1.6,1.6,1.6,4.8,4.8,4.8,4.8};
   // float ymppc[16] = {-4.8,-1.6,1.6,4.8,-4.8,-1.6,1.6,4.8,-4.8,-1.6,1.6,4.8,-4.8,-1.6,1.6,4.8};
 
-  std::cout << "xmppc = {";
-  for(int i = 0 ; i < numOfCh ; i++)
-  {
-    std::cout << xmppc[i]<< ",";
-  }
-  std::cout << "}" << std::endl;
-
-  std::cout << "ymppc = {";
-  for(int i = 0 ; i < numOfCh ; i++)
-  {
-    std::cout << ymppc[i]<< ",";
-  }
-  std::cout << "}"<< std::endl;
+  // std::cout << "xmppc = {";
+  // for(int i = 0 ; i < numOfCh ; i++)
+  // {
+  //   std::cout << xmppc[i]<< ",";
+  // }
+  // std::cout << "}" << std::endl;
+  //
+  // std::cout << "ymppc = {";
+  // for(int i = 0 ; i < numOfCh ; i++)
+  // {
+  //   std::cout << ymppc[i]<< ",";
+  // }
+  // std::cout << "}"<< std::endl;
 
   // float xmppc[64] = {-11.2,-11.2,-11.2,-11.2,-11.2,-11.2,-11.2,-11.2,-8.0,-8.0,-8.0,-8.0,-8.0,-8.0,-8.0,-8.0,-4.8,-4.8,-4.8,-4.8,-4.8,-4.8,-4.8,-4.8,-1.6,-1.6,-1.6,-1.6,-1.6,-1.6,-1.6,-1.6,1.6,1.6,1.6,1.6,1.6,1.6,1.6,1.6,4.8,4.8,4.8,4.8,4.8,4.8,4.8,4.8,8.0,8.0,8.0,8.0,8.0,8.0,8.0,8.0,11.2,11.2,11.2,11.2,11.2,11.2,11.2,11.2};
   // float ymppc[64] = {-11.2,-8.0,-4.8,-1.6,1.6,4.8,8.0,11.2,-11.2,-8.0,-4.8,-1.6,1.6,4.8,8.0,11.2,-11.2,-8.0,-4.8,-1.6,1.6,4.8,8.0,11.2,-11.2,-8.0,-4.8,-1.6,1.6,4.8,8.0,11.2,-11.2,-8.0,-4.8,-1.6,1.6,4.8,8.0,11.2,-11.2,-8.0,-4.8,-1.6,1.6,4.8,8.0,11.2,-11.2,-8.0,-4.8,-1.6,1.6,4.8,8.0,11.2,-11.2,-8.0,-4.8,-1.6,1.6,4.8,8.0,11.2};
@@ -409,15 +409,15 @@ int main (int argc, char** argv)
     //set count to 0
     sipm[i].counts = 0;
   }
-  for(int iSipm = 0; iSipm < numOfCh ; iSipm++)
-  {
-    std::cout << iSipm << " "
-              << sipm[iSipm].detx - det_size_x/2.0 << " "
-              << sipm[iSipm].detx + det_size_x/2.0 << " "
-              << sipm[iSipm].dety - det_size_y/2.0 << " "
-              << sipm[iSipm].dety + det_size_y/2.0 << " "
-              << std::endl;
-  }
+  // for(int iSipm = 0; iSipm < numOfCh ; iSipm++)
+  // {
+  //   std::cout << iSipm << " "
+  //             << sipm[iSipm].detx - det_size_x/2.0 << " "
+  //             << sipm[iSipm].detx + det_size_x/2.0 << " "
+  //             << sipm[iSipm].dety - det_size_y/2.0 << " "
+  //             << sipm[iSipm].dety + det_size_y/2.0 << " "
+  //             << std::endl;
+  // }
 
   //----------------------------------------//
   //             LOOP ON EVENTS             //
