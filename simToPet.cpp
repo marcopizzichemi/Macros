@@ -57,6 +57,7 @@ void usage()
             << "\t\t" << "[ --pitchx <N>        distance between center of mppcs , in x [mm] - default = 3.2]" << std::endl
             << "\t\t" << "[ --pitchy <N>        distance between center of mppcs , in y [mm] - default = 3.2]" << std::endl
             << "\t\t" << "[ --qe <N>            quantum efficiency of mppcs  - default = 0.3]" << std::endl
+            << "\t\t" << "[ --sptr <N>          sigma sptr of the detector   - default = 0.087]" << std::endl
             << "\t\t" << std::endl;
 }
 
@@ -115,6 +116,7 @@ int main (int argc, char** argv)
   float pitchx = 3.2;
   float pitchy = 3.2;
   double qe = 0.3;
+  double sigmaSPTR = 0.087;
   // int ncrystalsx = 2;
   // int ncrystalsy = 2;
 
@@ -127,6 +129,7 @@ int main (int argc, char** argv)
       { "pitchx", required_argument, 0, 0 },
       { "pitchy", required_argument, 0, 0 },
       { "qe", required_argument, 0, 0 },
+      { "sptr", required_argument, 0, 0 },
 			{ NULL, 0, 0, 0 }
 	};
 
@@ -168,6 +171,9 @@ int main (int argc, char** argv)
     }
     else if (c == 0 && optionIndex == 6){
       qe = atof((char *)optarg);
+    }
+    else if (c == 0 && optionIndex == 7){
+      sigmaSPTR = atof((char *)optarg);
     }
 		else {
       std::cout	<< "Usage: " << argv[0] << std::endl;
@@ -520,12 +526,12 @@ int main (int argc, char** argv)
         effectiveN = sipm[i].listOfTimestamps.size();
       for(int j = 0 ; j < effectiveN; j++)
       {
-        sipm[i].timestamp +=  (Float_t) ((gRandom->Gaus(sipm[i].listOfTimestamps[j],0.087) / effectiveN)*1e-9); // and convert to seconds
+        sipm[i].timestamp +=  (Float_t) ((gRandom->Gaus(sipm[i].listOfTimestamps[j],sigmaSPTR) / effectiveN)*1e-9); // default smearing at 0.087, and convert to seconds
       }
       timestamp[i] = (Float_t) sipm[i].timestamp;
     }
 
-
+    // 0.087
 
 
 
