@@ -696,15 +696,19 @@ int main (int argc, char** argv)
     // frame->SetTitle("My Title");
     c_summary->cd();
     THStack *hs = new THStack("hs","");
-    hs->Add(crystal[iCry].allCTR);
-    hs->Add(crystal[iCry].centralCTR);
+
     hs->Add(crystal[iCry].simpleCTR);
+    hs->Add(crystal[iCry].centralCTR);
+    hs->Add(crystal[iCry].allCTR);
+
+
+
     // crystal[iCry].allCTR->Draw();
     // crystal[iCry].centralCTR->Draw("same");
     // crystal[iCry].simpleCTR->Draw("same");
     hs->Draw("nostack");
     sname.str("");
-    sname << "CTR - Crystal " << crystal[iCry].number;
+    sname << "CTR - Crystal " << crystal[iCry].number << " - width in FWHM";
     hs->SetTitle(sname.str().c_str());
     hs->GetXaxis()->SetTitle("Time [s]");
     hs->GetXaxis()->SetTitleOffset(1);
