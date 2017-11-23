@@ -516,19 +516,19 @@ int main (int argc, char** argv)
     calibrationFile->cd("Module 0.0");
   }
 
-  // //BEGIN of DEBUG
-  for(unsigned int i = 0 ;  i < crystal.size() ; i++)
-  {
-    std::cout << crystal[i].number << "\t"
-              // << crystal[i].cut->GetTitle() << "\t"
-              << crystal[i].calibrationGraph->GetName() << "\t";
-    for(unsigned int j = 0 ; j < crystal[i].cutg.size(); j++)
-    {
-      std::cout << crystal[i].cutg[j]->GetName() << "\t";
-    }
-    std::cout << std::endl;
-  }
-  // //END of DEBUG
+  // // //BEGIN of DEBUG
+  // for(unsigned int i = 0 ;  i < crystal.size() ; i++)
+  // {
+  //   std::cout << crystal[i].number << "\t"
+  //             // << crystal[i].cut->GetTitle() << "\t"
+  //             << crystal[i].calibrationGraph->GetName() << "\t";
+  //   for(unsigned int j = 0 ; j < crystal[i].cutg.size(); j++)
+  //   {
+  //     std::cout << crystal[i].cutg[j]->GetName() << "\t";
+  //   }
+  //   std::cout << std::endl;
+  // }
+  // // //END of DEBUG
 
 
 
@@ -731,6 +731,13 @@ int main (int argc, char** argv)
     gStyle->SetOptTitle(0);
     TPaveLabel *title = new TPaveLabel(.11,.95,.35,.99,"new title","brndc");
     title->Draw();
+
+    std::cout << "Crystal " << crystal[iCry].number << std::endl;
+    std::cout << "CTR FWHM [ps] ---  (No correction - Central correction - full correction)" << std::endl;
+    std::cout << 1e12*crystal[iCry].simpleCTR->GetRMS()*2.355*TMath::Sqrt(2.0) << std::endl;
+    std::cout << 1e12*crystal[iCry].centralCTR->GetRMS()*2.355*TMath::Sqrt(2.0) << std::endl;
+    std::cout << 1e12*crystal[iCry].allCTR->GetRMS()*2.355*TMath::Sqrt(2.0) << std::endl;
+
     c_summary->Write();
   }
 
