@@ -74,7 +74,8 @@ void usage()
   std::cout << "\t\t" << "[ -i <input file prefix>    prefix of input files name] " << std::endl
             << "\t\t" << "[ -o <output file>    name of output file] " << std::endl
             << "\t\t" << "[ --photons <N>       average time on first N photons - default = 5]" << std::endl
-            << "\t\t" << "[ --saturation        flag to use saturation of mppc ] " << std::endl
+            << "\t\t" << "[ --saturation        flag to use saturation of mppc - default false ] " << std::endl
+            << "\t\t" << "[ --cherenkov         flag to include cherenkov - default false ] " << std::endl
             << "\t\t" << "[ --nmppcx <N>        number of mppc in x             - default = 4]" << std::endl
             << "\t\t" << "[ --nmppcy <N>        number of mppc in y             - default = 4]" << std::endl
             << "\t\t" << "[ --pitchx <N>        distance between center of mppcs , in x [mm] - default = 3.2]" << std::endl
@@ -128,6 +129,7 @@ int main (int argc, char** argv)
 
 
   bool saturation = false;
+  bool cherenkov = false;
   int numb_of_phot_for_time_average = 5;
   std::string inputFileName = "";
   std::string outputFileName = "";
@@ -160,6 +162,7 @@ int main (int argc, char** argv)
       { "sptr", required_argument, 0, 0 },
       { "doiSlices", required_argument, 0, 0 },
       { "length", required_argument, 0, 0 },
+      { "cherenkov", no_argument, 0, 0 },
 			{ NULL, 0, 0, 0 }
 	};
 
@@ -210,6 +213,10 @@ int main (int argc, char** argv)
     }
     else if (c == 0 && optionIndex == 9){
       length = atof((char *)optarg);
+    }
+    else if (c == 0 && optionIndex == 10){
+      std::cout << "Including Cherenkov photons " << std::endl;
+      cherenkov = true;
     }
 		else {
       std::cout	<< "Usage: " << argv[0] << std::endl;
@@ -580,90 +587,95 @@ int main (int argc, char** argv)
     //------------------------//
     for(int iPhot = 0; iPhot < photons->size(); iPhot++) // run on all opticals
     {
-      // find which sipm was hit
-      for(int iSipm = 0; iSipm < numOfCh ; iSipm++)
+      //skip cherenkov unless they are included
+      if(photons->at(iPhot).PhotonType != 1 || cherenkov)
       {
-        if((photons->at(iPhot).PositionX > (sipm[iSipm].detx - det_size_x/2.0 )) && (photons->at(iPhot).PositionX < (sipm[iSipm].detx + det_size_x/2.0 )) )
+        // find which sipm was hit
+        for(int iSipm = 0; iSipm < numOfCh ; iSipm++)
         {
-          if((photons->at(iPhot).PositionY > (sipm[iSipm].dety - det_size_y/2.0 )) && (photons->at(iPhot).PositionY < (sipm[iSipm].dety + det_size_y/2.0 )) )
+          if((photons->at(iPhot).PositionX > (sipm[iSipm].detx - det_size_x/2.0 )) && (photons->at(iPhot).PositionX < (sipm[iSipm].detx + det_size_x/2.0 )) )
           {
-            if(saturation)
+            if((photons->at(iPhot).PositionY > (sipm[iSipm].dety - det_size_y/2.0 )) && (photons->at(iPhot).PositionY < (sipm[iSipm].dety + det_size_y/2.0 )) )
             {
-              // find which spad was hit
-              // bring sipm hit to start in 0,0
-              float hitx = photons->at(iPhot).PositionX - sipm[iSipm].detx + (det_size_x/2.0);
-              float hity = photons->at(iPhot).PositionY - sipm[iSipm].dety + (det_size_y/2.0);
-              // find spad I and J
-              int hiti = (int) (hitx / spad_size_x);
-              int hitj = (int) (hity / spad_size_y);
-              // std::cout << photons->at(iPhot).PositionX << "\t"
-              //           << photons->at(iPhot).PositionY << "\t"
-              //           << sipm[iSipm].detx << "\t"
-              //           << sipm[iSipm].dety << "\t"
-              //           << hitx << "\t"
-              //           << hity << "\t"
-              //           << hiti << "\t"
-              //           << hitj << "\t"
-              //           << std::endl;
-              // ignore the NxN central spads
-              // 0-27 (28-29-20-31) 32-59
-              if( (hiti > ( n_spad_x/2 - n_dead_spad_x/2 - 1 ) ) &&
-              (hiti < ( n_spad_x/2 + n_dead_spad_x/2 - 1 ) ) &&
-              (hitj > ( n_spad_y/2 - n_dead_spad_y/2 - 1 ) ) &&
-              (hitj < ( n_spad_y/2 + n_dead_spad_y/2 - 1 ) ) )
+              if(saturation)
               {
-                // do nothing, this part of the sipm is not active
-              }
-              else // increment the counts of the sipm, if the spad was not hit yet
-              {
-                //HACK to avoid seg fault when the optical photon is exactly on the border (which makes the hiti of hitj being exatly 60 for example)
-                if(hiti == n_spad_x) hiti = hiti -1;
-                if(hitj == n_spad_y) hitj = hitj -1;
-
-                //quantum efficiency test
-
-                double numb = rand->Uniform(1.0);
-
-                if(numb < qe)
+                // find which spad was hit
+                // bring sipm hit to start in 0,0
+                float hitx = photons->at(iPhot).PositionX - sipm[iSipm].detx + (det_size_x/2.0);
+                float hity = photons->at(iPhot).PositionY - sipm[iSipm].dety + (det_size_y/2.0);
+                // find spad I and J
+                int hiti = (int) (hitx / spad_size_x);
+                int hitj = (int) (hity / spad_size_y);
+                // std::cout << photons->at(iPhot).PositionX << "\t"
+                //           << photons->at(iPhot).PositionY << "\t"
+                //           << sipm[iSipm].detx << "\t"
+                //           << sipm[iSipm].dety << "\t"
+                //           << hitx << "\t"
+                //           << hity << "\t"
+                //           << hiti << "\t"
+                //           << hitj << "\t"
+                //           << std::endl;
+                // ignore the NxN central spads
+                // 0-27 (28-29-20-31) 32-59
+                if( (hiti > ( n_spad_x/2 - n_dead_spad_x/2 - 1 ) ) &&
+                (hiti < ( n_spad_x/2 + n_dead_spad_x/2 - 1 ) ) &&
+                (hitj > ( n_spad_y/2 - n_dead_spad_y/2 - 1 ) ) &&
+                (hitj < ( n_spad_y/2 + n_dead_spad_y/2 - 1 ) ) )
                 {
-                  if(sipm[iSipm].spad[hiti][hitj] == 0) // if this spad was not hit yet
-                  {
-                    sipm[iSipm].counts++;
-                    sipm[iSipm].spad[hiti][hitj] = 1;
-                    sipm[iSipm].listOfTimestamps.push_back((Float_t) photons->at(iPhot).GlobalTime); //add its time stamp to the sipm
-                  }
-                  else
-                  {
-                    //ignore the hit, the spad has already fired and the optical photon is lost
-                  }
+                  // do nothing, this part of the sipm is not active
                 }
-              }
-            }
-            else // just qe test for each photon and sipm
-            {
-              // TRandom3 *rand = new TRandom3(0);
-              double numb = rand->Uniform(1.0);
-              if(numb < qe)  // accepted photon
-              {
-                sipm[iSipm].counts++;
-                sipm[iSipm].listOfTimestamps.push_back((Float_t) photons->at(iPhot).GlobalTime); //add its time stamp to the sipm
-                if(totalEnergyDeposited > 0.5 && CrystalsHit == 1 && crystals[0] == 36)
+                else // increment the counts of the sipm, if the spad was not hit yet
                 {
-                  for(unsigned int iSlice = 0 ; iSlice < sipm[iSipm].slice.size(); iSlice++)
+                  //HACK to avoid seg fault when the optical photon is exactly on the border (which makes the hiti of hitj being exatly 60 for example)
+                  if(hiti == n_spad_x) hiti = hiti -1;
+                  if(hitj == n_spad_y) hitj = hitj -1;
+
+                  //quantum efficiency test
+
+                  double numb = rand->Uniform(1.0);
+
+                  if(numb < qe)
                   {
-                    if(RealZ > sipm[iSipm].slice[iSlice].zMin && RealZ < sipm[iSipm].slice[iSlice].zMax)
+                    if(sipm[iSipm].spad[hiti][hitj] == 0) // if this spad was not hit yet
                     {
-                      sipm[iSipm].slice[iSlice].pulse->Fill(photons->at(iPhot).GlobalTime);
-                      // sipm[iSipm].slice[iSlice].events++;
+                      sipm[iSipm].counts++;
+                      sipm[iSipm].spad[hiti][hitj] = 1;
+                      sipm[iSipm].listOfTimestamps.push_back((Float_t) photons->at(iPhot).GlobalTime); //add its time stamp to the sipm
+                    }
+                    else
+                    {
+                      //ignore the hit, the spad has already fired and the optical photon is lost
                     }
                   }
                 }
               }
-            }
+              else // just qe test for each photon and sipm
+              {
+                // TRandom3 *rand = new TRandom3(0);
+                double numb = rand->Uniform(1.0);
+                if(numb < qe)  // accepted photon
+                {
+                  sipm[iSipm].counts++;
+                  sipm[iSipm].listOfTimestamps.push_back((Float_t) photons->at(iPhot).GlobalTime); //add its time stamp to the sipm
+                  if(totalEnergyDeposited > 0.5 && CrystalsHit == 1 && crystals[0] == 36)
+                  {
+                    for(unsigned int iSlice = 0 ; iSlice < sipm[iSipm].slice.size(); iSlice++)
+                    {
+                      if(RealZ > sipm[iSipm].slice[iSlice].zMin && RealZ < sipm[iSipm].slice[iSlice].zMax)
+                      {
+                        sipm[iSipm].slice[iSlice].pulse->Fill(photons->at(iPhot).GlobalTime);
+                        // sipm[iSipm].slice[iSlice].events++;
+                      }
+                    }
+                  }
+                }
+              }
 
+            }
           }
         }
       }
+
     }
     // calculate the global sipm parameters
     for(int i = 0; i < numOfCh ; i++)
