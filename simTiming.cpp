@@ -40,13 +40,16 @@
 struct Slice_t
 {
   TH1F* pulse;
+  TH1F* ctr;
   double zMin;
   double zMax;
   long int events;
+  // std::vector<Float_t> listOfTimestamps;
 };
 
 struct sipm_t
 {
+  TH1F* ctr;
   float detx;
   float dety;
   short int **spad;
@@ -72,18 +75,20 @@ bool compare_by_DepositionTime(const enDep a, const enDep b)
 void usage()
 {
   std::cout << "\t\t" << "[ -i <input file prefix>    prefix of input files name] " << std::endl
-            << "\t\t" << "[ -o <output file>    name of output file] " << std::endl
-            << "\t\t" << "[ --photons <N>       average time on first N photons - default = 5]" << std::endl
-            << "\t\t" << "[ --saturation        flag to use saturation of mppc - default false ] " << std::endl
-            << "\t\t" << "[ --cherenkov         flag to include cherenkov - default false ] " << std::endl
-            << "\t\t" << "[ --nmppcx <N>        number of mppc in x             - default = 4]" << std::endl
-            << "\t\t" << "[ --nmppcy <N>        number of mppc in y             - default = 4]" << std::endl
-            << "\t\t" << "[ --pitchx <N>        distance between center of mppcs , in x [mm] - default = 3.2]" << std::endl
-            << "\t\t" << "[ --pitchy <N>        distance between center of mppcs , in y [mm] - default = 3.2]" << std::endl
-            << "\t\t" << "[ --qe <N>            quantum efficiency of mppcs  - default = 0.3]" << std::endl
-            << "\t\t" << "[ --sptr <N>          sigma sptr of the detector   - default = 0.087]" << std::endl
-            << "\t\t" << "[ --doiSlices <N>     number of slices in doi - default = 10]" << std::endl
-            << "\t\t" << "[ --length <N>        crystal length in mm - default = 15]" << std::endl
+            << "\t\t" << "[ -o <output file>          name of output file] " << std::endl
+            << "\t\t" << "[ --photons <N>             average time on first N photons                  - default = 5]" << std::endl
+            << "\t\t" << "[ --saturation              flag to use saturation of mppc                   - default = false] " << std::endl
+            // << "\t\t" << "[ --cherenkov         flag to include cherenkov               - default false ] " << std::endl
+            << "\t\t" << "[ --nmppcx <N>              number of mppc in x direction                    - default = 4]" << std::endl
+            << "\t\t" << "[ --nmppcy <N>              number of mppc in y direction                    - default = 4]" << std::endl
+            << "\t\t" << "[ --pitchx <N>              distance x between center of mppcs [mm]          - default = 3.2]" << std::endl
+            << "\t\t" << "[ --pitchy <N>              distance y between center of mppcs [mm]          - default = 3.2]" << std::endl
+            << "\t\t" << "[ --qeScint <N>             quantum eff. for scintillation photons[0-1]      - default = 0.3]" << std::endl
+            << "\t\t" << "[ --qeCher <N>              quantum eff. for cherenkov photons [0-1]         - default = 0.2]" << std::endl
+            << "\t\t" << "[ --sptr <N>                sigma sptr of the detector [ns]                  - default = 0, no smearing]" << std::endl
+            << "\t\t" << "[ --doiSlices <N>           number of slices in doi                          - default = 10]" << std::endl
+            << "\t\t" << "[ --length <N>              crystal length in mm                             - default = 15]" << std::endl
+            << "\t\t" << "[ --timeBinSize <N>         size of individual time bin [ps]                 - default = 5]" << std::endl
             << "\t\t" << std::endl;
 }
 
@@ -142,11 +147,16 @@ int main (int argc, char** argv)
   int nmppcy = 4;
   float pitchx = 3.2;
   float pitchy = 3.2;
-  double qe = 0.3;
-  double sigmaSPTR = 0.087;
+  double qeScint = 0.3;
+  double qeCher = 0.2;
+  double sigmaSPTR = 0.0;
+  bool smearTimeStamp = false;
   int doiSlices = 10;
   double length = 15.0;
+  double timeBinSize = 5.0;
   std::string filePrefix = "";
+  double pulseStart = 0.0; // in ns
+  double pulseEnd = 2.5;   // in ns
   // int ncrystalsx = 2;
   // int ncrystalsy = 2;
 
@@ -158,11 +168,12 @@ int main (int argc, char** argv)
       { "nmppcy", required_argument, 0, 0 },
       { "pitchx", required_argument, 0, 0 },
       { "pitchy", required_argument, 0, 0 },
-      { "qe", required_argument, 0, 0 },
+      { "qeScint", required_argument, 0, 0 },
       { "sptr", required_argument, 0, 0 },
       { "doiSlices", required_argument, 0, 0 },
       { "length", required_argument, 0, 0 },
-      { "cherenkov", no_argument, 0, 0 },
+      { "qeCher", required_argument, 0, 0 },
+      { "timeBinSize", required_argument, 0, 0 },
 			{ NULL, 0, 0, 0 }
 	};
 
@@ -184,10 +195,10 @@ int main (int argc, char** argv)
     }
 		else if (c == 0 && optionIndex == 0){
       numb_of_phot_for_time_average = atoi((char *)optarg);
-      std::cout << "Time average on first " << numb_of_phot_for_time_average << " photons"<< std::endl;
+      // std::cout << "Time average on first " << numb_of_phot_for_time_average << " photons"<< std::endl;
     }
     else if (c == 0 && optionIndex == 1){
-      std::cout << "SiPM saturation will be taken into account " << std::endl;
+      // std::cout << "SiPM saturation will be taken into account " << std::endl;
       saturation = true;
     }
     else if (c == 0 && optionIndex == 2){
@@ -203,10 +214,14 @@ int main (int argc, char** argv)
       pitchx = atof((char *)optarg);
     }
     else if (c == 0 && optionIndex == 6){
-      qe = atof((char *)optarg);
+      qeScint = atof((char *)optarg);
     }
     else if (c == 0 && optionIndex == 7){
       sigmaSPTR = atof((char *)optarg);
+      if(sigmaSPTR > 0)
+      {
+        smearTimeStamp = true;
+      }
     }
     else if (c == 0 && optionIndex == 8){
       doiSlices = atoi((char *)optarg);
@@ -215,8 +230,11 @@ int main (int argc, char** argv)
       length = atof((char *)optarg);
     }
     else if (c == 0 && optionIndex == 10){
-      std::cout << "Including Cherenkov photons " << std::endl;
-      cherenkov = true;
+      // std::cout << "Including Cherenkov photons " << std::endl;
+      qeCher = atof((char *)optarg);
+    }
+    else if (c == 0 && optionIndex == 11){
+      timeBinSize = atof((char *)optarg);
     }
 		else {
       std::cout	<< "Usage: " << argv[0] << std::endl;
@@ -232,6 +250,31 @@ int main (int argc, char** argv)
 		return 1;
   }
 
+  // feedback to user
+  std::cout << "|----------------------------------------------|" << std::endl;
+  std::cout << "|               USER PARAMETERS                |" << std::endl;
+  std::cout << "|----------------------------------------------|" << std::endl;
+  std::cout << std::endl;
+  std::cout << "Input file prefix               = " << filePrefix << std::endl;
+  std::cout << "Output file                     = " << outputFileName << std::endl;
+  std::cout << "Time average on first           = " << numb_of_phot_for_time_average << " photons"<< std::endl;
+  std::cout << "nmppcx                          = " << nmppcx << std::endl;
+  std::cout << "nmppcy                          = " << nmppcy << std::endl;
+  std::cout << "pitchx                          = " << pitchx << std::endl;
+  std::cout << "pitchy                          = " << pitchy << std::endl;
+  std::cout << "PDE scintillation ph            = " << qeScint<< std::endl;
+  std::cout << "PDE Cherenkov ph                = " << qeCher << std::endl;
+  std::cout << "SPTR [ns] sigma                 = " << sigmaSPTR << std::endl;
+  std::cout << "Number of slices in z           = " << doiSlices << std::endl;
+  std::cout << "Crystal length [mm]             = " << length << std::endl;
+  std::cout << "Size of time bins [ps]          = " << timeBinSize << std::endl;
+  if(saturation)
+  {
+    std::cout << "SiPM saturation will be taken into account " << std::endl;
+  }
+  std::cout << std::endl;
+  std::cout << "|----------------------------------------------|" << std::endl;
+  std::cout << std::endl;
 
   //open all files that begin with prefix, add them to TChain
   TSystemDirectory dir("./","./" );
@@ -450,7 +493,11 @@ int main (int argc, char** argv)
   //FIXME not general at all!!!
   for(int i = 0 ; i < numOfCh ; i++)
   {
-
+    //
+    std::stringstream Htitle;
+    Htitle << "Global CTR channel " << i;
+    sipm[i].ctr = new TH1F(Htitle.str().c_str(),Htitle.str().c_str(),100,pulseStart*1e-9,pulseEnd*1e-9); // in seconds
+    sipm[i].ctr->GetXaxis()->SetTitle("Time [s]");
     //set position of he sipm
     sipm[i].detx = xmppc[i];
     sipm[i].dety = ymppc[i];
@@ -478,9 +525,31 @@ int main (int argc, char** argv)
       Slice_t tempSlice;
       tempSlice.zMin = -(length/2.0) + iDoi*(length/doiSlices);
       tempSlice.zMax = -(length/2.0) + (iDoi+1)*(length/doiSlices);
+
+      //pulse
       std::stringstream Hname;
       Hname << "Ch "<< i << " Pulse z " << tempSlice.zMin << " to " << tempSlice.zMax ;
-      tempSlice.pulse = new TH1F(Hname.str().c_str(),Hname.str().c_str(),1000,0,2.5);
+
+      int pulseBins = (int) round((pulseEnd-pulseStart)/(timeBinSize/1000)); // /1000 because input timeBinSize is ps
+      tempSlice.pulse = new TH1F(Hname.str().c_str(),Hname.str().c_str(),pulseBins,pulseStart,pulseEnd);
+      std::stringstream Htitle;
+      Htitle << "Time [ns]";
+      tempSlice.pulse->GetXaxis()->SetTitle(Htitle.str().c_str());
+      Htitle.str("");
+      Htitle << "Photons / " << timeBinSize << "ps";
+      tempSlice.pulse->GetYaxis()->SetTitle(Htitle.str().c_str());
+
+      //ctr
+      Hname.str("");
+      Hname << "Ch "<< i << " CTR z " << tempSlice.zMin << " to " << tempSlice.zMax ;
+      tempSlice.ctr = new TH1F(Hname.str().c_str(),Hname.str().c_str(),100,pulseStart*1e-9,pulseEnd*1e-9);
+      Htitle.str("");
+      Htitle << "Time [s]";
+      tempSlice.ctr->GetXaxis()->SetTitle(Htitle.str().c_str());
+      Htitle.str("");
+      Htitle << "N";
+      tempSlice.ctr->GetYaxis()->SetTitle(Htitle.str().c_str());
+
       tempSlice.events = 0;
       sipm[i].slice.push_back(tempSlice);
     }
@@ -561,22 +630,20 @@ int main (int argc, char** argv)
     // TotalEnergyDeposited_out = totalEnergyDeposited;
     CrystalsHit = crystals.size();
 
+    bool keepTheEvent = false;    // whether to keep or not the event, in terms of energyDeposition, single crystal hit and which crystal was hit
+    int phSlice = 0;             // which slice of the chosen crystal was hit
 
-
-    // if(NumbOfInteractions > 0) // discard events with no energy deposition (they would never trigger the detectors anyway..)
-    // {
-    //   t1->Fill();
-    // }
-
+    // count the "photoelectric" depositions in the slices, for the chosen crystal
     if(totalEnergyDeposited > 0.5 && CrystalsHit == 1 && crystals[0] == 36)
     {
+      keepTheEvent = true;
       for(int iSipm = 0; iSipm < numOfCh ; iSipm++)
       {
         for(unsigned int iSlice = 0 ; iSlice < sipm[iSipm].slice.size(); iSlice++)
         {
           if(RealZ > sipm[iSipm].slice[iSlice].zMin && RealZ < sipm[iSipm].slice[iSlice].zMax)
           {
-            // sipm[iSipm].slice[iSlice].pulse->Fill(photons->at(iPhot).GlobalTime);
+            phSlice = iSlice;
             sipm[iSipm].slice[iSlice].events++;
           }
         }
@@ -585,19 +652,35 @@ int main (int argc, char** argv)
     //------------------------//
     // OPTICAL PHOTONS        //
     //------------------------//
-    for(int iPhot = 0; iPhot < photons->size(); iPhot++) // run on all opticals
+    if(keepTheEvent)
     {
-      //skip cherenkov unless they are included
-      if(photons->at(iPhot).PhotonType != 1 || cherenkov)
+      for(int iPhot = 0; iPhot < photons->size(); iPhot++) // run on all opticals
       {
-        // find which sipm was hit
-        for(int iSipm = 0; iSipm < numOfCh ; iSipm++)
+        bool keepThePhoton = false;  // whether to keep the photon or not (for pde and saturation tests, so if the photons has triggers an avalanche)
+        int phSipm = 0;              // which Sipm was hit by the optical photon
+
+
+        // set PDE to the appropriate value, depending on photon type
+        // if PDE = 0 for a given photon type, those photons will be discarded
+        double qe;
+        if(photons->at(iPhot).PhotonType == 1)// cherenkov photons
         {
-          if((photons->at(iPhot).PositionX > (sipm[iSipm].detx - det_size_x/2.0 )) && (photons->at(iPhot).PositionX < (sipm[iSipm].detx + det_size_x/2.0 )) )
+          qe = qeCher;
+        }
+        else // all other photons are scintillation photons
+        {
+          qe = qeScint;
+        }
+
+        // find which sipm was hit and decide if keepThePhoton
+        for(int iSipm = 0; iSipm < numOfCh ; iSipm++) // run on sipms
+        {
+          if((photons->at(iPhot).PositionX > (sipm[iSipm].detx - det_size_x/2.0 )) && (photons->at(iPhot).PositionX < (sipm[iSipm].detx + det_size_x/2.0 )) ) // check if x of photon is inside sensitive area of this sipm
           {
-            if((photons->at(iPhot).PositionY > (sipm[iSipm].dety - det_size_y/2.0 )) && (photons->at(iPhot).PositionY < (sipm[iSipm].dety + det_size_y/2.0 )) )
+            if((photons->at(iPhot).PositionY > (sipm[iSipm].dety - det_size_y/2.0 )) && (photons->at(iPhot).PositionY < (sipm[iSipm].dety + det_size_y/2.0 )) )//check if y of photon is inside sensitive area of this sipm
             {
-              if(saturation)
+              phSipm = iSipm; // get Sipm index
+              if(saturation)  // consider saturation if user wants so
               {
                 // find which spad was hit
                 // bring sipm hit to start in 0,0
@@ -606,109 +689,103 @@ int main (int argc, char** argv)
                 // find spad I and J
                 int hiti = (int) (hitx / spad_size_x);
                 int hitj = (int) (hity / spad_size_y);
-                // std::cout << photons->at(iPhot).PositionX << "\t"
-                //           << photons->at(iPhot).PositionY << "\t"
-                //           << sipm[iSipm].detx << "\t"
-                //           << sipm[iSipm].dety << "\t"
-                //           << hitx << "\t"
-                //           << hity << "\t"
-                //           << hiti << "\t"
-                //           << hitj << "\t"
-                //           << std::endl;
-                // ignore the NxN central spads
-                // 0-27 (28-29-20-31) 32-59
+                // check if the photon has hit the dead area of the sipm (central part, for TSV)
                 if( (hiti > ( n_spad_x/2 - n_dead_spad_x/2 - 1 ) ) &&
                 (hiti < ( n_spad_x/2 + n_dead_spad_x/2 - 1 ) ) &&
                 (hitj > ( n_spad_y/2 - n_dead_spad_y/2 - 1 ) ) &&
-                (hitj < ( n_spad_y/2 + n_dead_spad_y/2 - 1 ) ) )
+                (hitj < ( n_spad_y/2 + n_dead_spad_y/2 - 1 ) )   )
                 {
                   // do nothing, this part of the sipm is not active
                 }
-                else // increment the counts of the sipm, if the spad was not hit yet
+                else //photon on active spad (but it could have been hit already)
                 {
                   //HACK to avoid seg fault when the optical photon is exactly on the border (which makes the hiti of hitj being exatly 60 for example)
                   if(hiti == n_spad_x) hiti = hiti -1;
                   if(hitj == n_spad_y) hitj = hitj -1;
 
                   //quantum efficiency test
-
-                  double numb = rand->Uniform(1.0);
-
-                  if(numb < qe)
+                  if(sipm[iSipm].spad[hiti][hitj] == 0) // if this spad was not hit yet
                   {
-                    if(sipm[iSipm].spad[hiti][hitj] == 0) // if this spad was not hit yet
+                    // qe test
+                    double numb = rand->Uniform(1.0);
+                    if(numb < qe) // this test involves already the photon nature (scintillation/cherenkov)
                     {
-                      sipm[iSipm].counts++;
-                      sipm[iSipm].spad[hiti][hitj] = 1;
-                      sipm[iSipm].listOfTimestamps.push_back((Float_t) photons->at(iPhot).GlobalTime); //add its time stamp to the sipm
+                      keepThePhoton = true; //keep the photon
+                      sipm[iSipm].spad[hiti][hitj] = 1; // set the spad as dead
                     }
-                    else
-                    {
-                      //ignore the hit, the spad has already fired and the optical photon is lost
-                    }
+                  }
+                  else // spad was already hit, so don't keepThePhoton
+                  {
+                    //ignore the hit, the spad has already fired and the optical photon is lost
                   }
                 }
               }
-              else // just qe test for each photon and sipm
+              else // perform just qe test for this photon
               {
-                // TRandom3 *rand = new TRandom3(0);
                 double numb = rand->Uniform(1.0);
                 if(numb < qe)  // accepted photon
                 {
-                  sipm[iSipm].counts++;
-                  sipm[iSipm].listOfTimestamps.push_back((Float_t) photons->at(iPhot).GlobalTime); //add its time stamp to the sipm
-                  if(totalEnergyDeposited > 0.5 && CrystalsHit == 1 && crystals[0] == 36)
-                  {
-                    for(unsigned int iSlice = 0 ; iSlice < sipm[iSipm].slice.size(); iSlice++)
-                    {
-                      if(RealZ > sipm[iSipm].slice[iSlice].zMin && RealZ < sipm[iSipm].slice[iSlice].zMax)
-                      {
-                        sipm[iSipm].slice[iSlice].pulse->Fill(photons->at(iPhot).GlobalTime);
-                        // sipm[iSipm].slice[iSlice].events++;
-                      }
-                    }
-                  }
+                  keepThePhoton = true; //keep the photon
                 }
               }
-
             }
           }
         }
-      }
 
-    }
-    // calculate the global sipm parameters
-    for(int i = 0; i < numOfCh ; i++)
-    {
-      // fill the charge vector
-      // charge[i] = (UShort_t) sipm[i].counts;
-      // calculate the sipm timestamp from average of first N timestamps
-      sipm[i].timestamp = 0.0;
-      int effectiveN = numb_of_phot_for_time_average;
-      if(numb_of_phot_for_time_average > sipm[i].listOfTimestamps.size())
-        effectiveN = sipm[i].listOfTimestamps.size();
-      for(int j = 0 ; j < effectiveN; j++)
-      {
-        sipm[i].timestamp +=  (Float_t) ((gRandom->Gaus(sipm[i].listOfTimestamps[j],sigmaSPTR) / effectiveN)*1e-9); // default smearing at 0.087, and convert to seconds
-      }
-      // timestamp[i] = (Float_t) sipm[i].timestamp;
-    }
-    // re-initialize the sipms counters
-    for(int i = 0 ; i < numOfCh ; i++)
-    {
-      //fill the array of spads with 0s
-      for(int iSpad = 0; iSpad < n_spad_x; iSpad++)
-      {
-        for(int jSpad = 0; jSpad < n_spad_y; jSpad++)
+        // so if the photon has started an avalanche
+        if(keepThePhoton)
         {
-          sipm[i].spad[iSpad][jSpad] = 0;
+          sipm[phSipm].counts++;  // increment counts on the SiPM that was hit
+          Float_t RealTimeStamp = photons->at(iPhot).GlobalTime;  // get time of arrival of the photon
+          if(smearTimeStamp)  // smear time stamp if user says so, according to sigmaSPTR
+          {
+            RealTimeStamp = gRandom->Gaus(RealTimeStamp,sigmaSPTR); // both RealTimeStamp and sigmaSPTR are in [ns]
+          }
+          sipm[phSipm].listOfTimestamps.push_back(RealTimeStamp); // add to the list of timestamps for the sipm hit
+          if(totalEnergyDeposited > 0.5 && CrystalsHit == 1 && crystals[0] == 36) // check if energy deposited is in photopeak and the crystal is the chosen one (36)
+          {
+            sipm[phSipm].slice[phSlice].pulse->Fill(RealTimeStamp); // fill the pulse histo for the slice of this sipm
+            // sipm[phSipm].slice[phSlice].listOfTimestamps.push_back(RealTimeStamp); // fill the listOfTimestamps for the slice of this sipm)
+          }
         }
       }
-      //set count to 0
-      sipm[i].counts = 0;
-      //clear time stamps;
-      sipm[i].listOfTimestamps.clear();
+      // end of run on all photons of this gamma event
+
+      // calculate the global (and per slice) sipm parameters
+      for(int i = 0; i < numOfCh ; i++)
+      {
+        // calculate the sipm timestamp from average of first N timestamps
+        // first, the timestamps need to be ordered again (because of gaussian smearing, if applied)
+        std::sort(sipm[i].listOfTimestamps.begin(),sipm[i].listOfTimestamps.end());
+        sipm[i].timestamp = 0.0;
+        int effectiveN = numb_of_phot_for_time_average;
+        if(numb_of_phot_for_time_average > sipm[i].listOfTimestamps.size())
+          effectiveN = sipm[i].listOfTimestamps.size();
+        for(int j = 0 ; j < effectiveN; j++)
+        {
+          sipm[i].timestamp +=  (Float_t) ( (sipm[i].listOfTimestamps[j] / effectiveN)*1e-9); // already smeared if user says so, and converted now to seconds
+        }
+        sipm[i].ctr->Fill(sipm[i].timestamp);
+        sipm[i].slice[phSlice].ctr->Fill(sipm[i].timestamp);
+      }
+      // re-initialize the sipms counters
+      for(int i = 0 ; i < numOfCh ; i++)
+      {
+        //fill the array of spads with 0s
+        for(int iSpad = 0; iSpad < n_spad_x; iSpad++)
+        {
+          for(int jSpad = 0; jSpad < n_spad_y; jSpad++)
+          {
+            sipm[i].spad[iSpad][jSpad] = 0;
+          }
+        }
+        //set count to 0
+        sipm[i].counts = 0;
+        //clear time stamps;
+        sipm[i].listOfTimestamps.clear();
+      }
     }
+
 
 
 
@@ -750,11 +827,15 @@ int main (int argc, char** argv)
 
     TLegend *legendNorm = new TLegend(0.15,0.62,0.30,0.89,"");
     legendNorm->SetFillStyle(0);
+
+    sipm[i].ctr->Write();
+
     // sname.str("");
     // sname << "No correction        = " << round(1e12*crystal[iCry].simpleCTR->GetRMS()*2.355*TMath::Sqrt(2.0)) << "ps";
     int color = 1; // avoid white
     for(unsigned int iSlice = 0 ; iSlice < sipm[i].slice.size(); iSlice++)
     {
+      sipm[i].slice[iSlice].ctr->Write();
       std::stringstream sDoi;
       sDoi << "z = " <<(sipm[i].slice[iSlice].zMax + sipm[i].slice[iSlice].zMin) /2.0 << "mm";
       if(color == 5)
