@@ -1,7 +1,45 @@
 // compile with
 // g++ -o ../build/simTiming simTiming.cpp `root-config --cflags --glibs` && cp structDictionary.C ../build/
-// syntax
-// simRead_base `ls out*`
+
+//---------------------------------//
+//                                 //
+// simTiming                       //
+//                                 //
+//---------------------------------//
+
+// Program to analyze timing in a scintillator matrix
+// 1. Input is the output of a g4matrix simulation. The input is passed by specifying the prefix common to all simulation ouput file, via the flag -i
+// 2. The crystal hit is split in N parts, and pulses/histos are built for each one
+// 3. An impulse is built for each part for each event
+//     a. by time of arrival of photons
+//     b. with sum of single spad impulses
+// 4. Calculates time stamp of each event
+//     a. by average of first M photons (M input by user)
+//     b. by crossing of fixed threshold (thr input by user)
+// 5. Outputs global CTR and CTR for each part 
+
+// syntax explained by running without args:
+
+// Usage: simTiming
+	// 	[ -i <input file prefix>    prefix of input files name]
+	// 	[ -o <output file>          name of output file]
+	// 	[ --photons <N>             average time on first N photons                  - default = 5]
+	// 	[ --saturation              flag to use saturation of mppc                   - default = false]
+	// 	[ --nmppcx <N>              number of mppc in x direction                    - default = 4]
+	// 	[ --nmppcy <N>              number of mppc in y direction                    - default = 4]
+	// 	[ --pitchx <N>              distance x between center of mppcs [mm]          - default = 3.2]
+	// 	[ --pitchy <N>              distance y between center of mppcs [mm]          - default = 3.2]
+	// 	[ --qeScint <N>             quantum eff. for scintillation photons[0-1]      - default = 0.3]
+	// 	[ --qeCher <N>              quantum eff. for cherenkov photons [0-1]         - default = 0.2]
+	// 	[ --sptr <N>                sigma sptr of the detector [ps]                  - default = 0, no smearing]
+	// 	[ --doiSlices <N>           number of slices in doi                          - default = 10]
+	// 	[ --length <N>              crystal length in mm                             - default = 15]
+	// 	[ --timeBinSize <N>         size of individual time bin [ps]                 - default = 5]
+	// 	[ --spadPulse               flag to use read spad pulses                     - default = false]
+	// 	[ --spadRise <N>            spad pulse rise time [ps]                        - default = 200]
+	// 	[ --spadDecay <N>           spad pulse decay time [ps]                       - default = 10000]
+	// 	[ --pulseEnd <N>            length of pluses [ps]                            - default = 10000]
+
 
 #include "TROOT.h"
 #include "TTree.h"
@@ -28,6 +66,10 @@
 #include "TLegend.h"
 #include "THStack.h"
 #include "TSystemDirectory.h"
+#include "TMultiGraph.h"
+#include "TGraph.h"
+
+// #include <omp.h>
 
 #include "../code/struct.hh"
 
@@ -59,6 +101,24 @@ struct sipm_t
   std::vector<Slice_t> slice;
 };
 
+double singleSpad(double t, double t0, double tr,double td)
+{
+  double As = 1.0;
+  double b = td/tr;
+  double Sa = As*0.1;
+  double A = (1.0/(2*3.1415*Sa))*exp(-(As)/(2.0*Sa));
+  double C = (A)/(pow(b,(1.0/(1.0-b))) - pow(b,(1.0/((1.0/b)-1.0))));
+  double s = C * (exp( -(t-t0)/(td) ) - exp( -(t-t0)/(tr) ) );
+  if(t>=t0)
+  {
+    return s;
+  }
+  else
+  {
+    return 0;
+  }
+}
+
 
 
 bool compare_by_GlobalTime(const optPhot a, const optPhot b)
@@ -76,7 +136,8 @@ void usage()
 {
   std::cout << "\t\t" << "[ -i <input file prefix>    prefix of input files name] " << std::endl
             << "\t\t" << "[ -o <output file>          name of output file] " << std::endl
-            << "\t\t" << "[ --photons <N>             average time on first N photons                  - default = 5]" << std::endl
+            << "\t\t" << "[ --photons <N>             if spadPulse is not used: average time of first N (integer) photons                               - default = 5]" << std::endl
+            << "\t\t" << "[                           if spadPulse is used: trigger threshold, expressed in multiples (double) of single photon pulses  - default = 5]" << std::endl
             << "\t\t" << "[ --saturation              flag to use saturation of mppc                   - default = false] " << std::endl
             // << "\t\t" << "[ --cherenkov         flag to include cherenkov               - default false ] " << std::endl
             << "\t\t" << "[ --nmppcx <N>              number of mppc in x direction                    - default = 4]" << std::endl
@@ -85,13 +146,18 @@ void usage()
             << "\t\t" << "[ --pitchy <N>              distance y between center of mppcs [mm]          - default = 3.2]" << std::endl
             << "\t\t" << "[ --qeScint <N>             quantum eff. for scintillation photons[0-1]      - default = 0.3]" << std::endl
             << "\t\t" << "[ --qeCher <N>              quantum eff. for cherenkov photons [0-1]         - default = 0.2]" << std::endl
-            << "\t\t" << "[ --sptr <N>                sigma sptr of the detector [ns]                  - default = 0, no smearing]" << std::endl
+            << "\t\t" << "[ --sptr <N>                sigma sptr of the detector [ps]                  - default = 0, no smearing]" << std::endl
             << "\t\t" << "[ --doiSlices <N>           number of slices in doi                          - default = 10]" << std::endl
             << "\t\t" << "[ --length <N>              crystal length in mm                             - default = 15]" << std::endl
             << "\t\t" << "[ --timeBinSize <N>         size of individual time bin [ps]                 - default = 5]" << std::endl
+            << "\t\t" << "[ --spadPulse               flag to use read spad pulses                     - default = false] " << std::endl
+            << "\t\t" << "[ --spadRise <N>            spad pulse rise time [ps]                        - default = 200]" << std::endl
+            << "\t\t" << "[ --spadDecay <N>           spad pulse decay time [ps]                       - default = 10000]" << std::endl
+            << "\t\t" << "[ --pulseEnd <N>            length of pluses [ps]                            - default = 10000]" << std::endl
             << "\t\t" << std::endl;
 }
 
+// # ifndef __CINT__
 int main (int argc, char** argv)
 {
 
@@ -103,7 +169,7 @@ int main (int argc, char** argv)
   }
 
 
-
+  // ROOT::EnableThreadSafety();
   gROOT->ProcessLine("#include <vector>"); //needed by ROOT to deal with standard vectors
 
   //HACK to use the dictionary easily
@@ -135,11 +201,12 @@ int main (int argc, char** argv)
 
   bool saturation = false;
   bool cherenkov = false;
-  int numb_of_phot_for_time_average = 5;
+  double numb_of_phot_for_time_average = 5.0;
   std::string inputFileName = "";
   std::string outputFileName = "";
   bool inputGiven = false;
   bool outputGiven = false;
+  bool spadPulse = false;
   TChain *tree =  new TChain("tree"); // read input files
   // int nmodulex = 1;
   // int nmoduley = 1;
@@ -153,10 +220,12 @@ int main (int argc, char** argv)
   bool smearTimeStamp = false;
   int doiSlices = 10;
   double length = 15.0;
-  double timeBinSize = 5.0;
+  double timeBinSize = 50.0; //ps
   std::string filePrefix = "";
-  double pulseStart = 0.0; // in ns
-  double pulseEnd = 2.5;   // in ns
+  double pulseStart = 0.0;  // in ps
+  double pulseEnd = 10000.0;   // in ps
+  double spadRise = 200.0; // 200 ps
+  double spadDecay = 10000.0; // 10 ns
   // int ncrystalsx = 2;
   // int ncrystalsy = 2;
 
@@ -174,7 +243,11 @@ int main (int argc, char** argv)
       { "length", required_argument, 0, 0 },
       { "qeCher", required_argument, 0, 0 },
       { "timeBinSize", required_argument, 0, 0 },
-			{ NULL, 0, 0, 0 }
+      { "spadPulse", no_argument, 0, 0 },
+      { "spadRise", required_argument, 0, 0 },
+      { "spadDecay", required_argument, 0, 0 },
+      { "pulseEnd", required_argument, 0, 0 },
+      { NULL, 0, 0, 0 }
 	};
 
   while(1) {
@@ -194,7 +267,7 @@ int main (int argc, char** argv)
       outputGiven = true;
     }
 		else if (c == 0 && optionIndex == 0){
-      numb_of_phot_for_time_average = atoi((char *)optarg);
+      numb_of_phot_for_time_average = atof((char *)optarg);
       // std::cout << "Time average on first " << numb_of_phot_for_time_average << " photons"<< std::endl;
     }
     else if (c == 0 && optionIndex == 1){
@@ -236,6 +309,18 @@ int main (int argc, char** argv)
     else if (c == 0 && optionIndex == 11){
       timeBinSize = atof((char *)optarg);
     }
+    else if (c == 0 && optionIndex == 12){
+      spadPulse = true;
+    }
+    else if (c == 0 && optionIndex == 13){
+      spadRise = atof((char *)optarg);
+    }
+    else if (c == 0 && optionIndex == 14){
+      spadDecay = atof((char *)optarg);
+    }
+    else if (c == 0 && optionIndex == 15){
+      pulseEnd = atof((char *)optarg);
+    }
 		else {
       std::cout	<< "Usage: " << argv[0] << std::endl;
 			usage();
@@ -249,6 +334,15 @@ int main (int argc, char** argv)
 		usage();
 		return 1;
   }
+
+  // if the real spad pulses is not used, the timestamp will be calculated as average of first N photons,
+  // but the the N has to be integer
+  if(!spadPulse)
+  {
+    numb_of_phot_for_time_average = round(numb_of_phot_for_time_average);
+  }
+
+  int pulseBins = (int) round((pulseEnd-pulseStart)/(timeBinSize)); // /1000 because input timeBinSize is ps
 
   // feedback to user
   std::cout << "|----------------------------------------------|" << std::endl;
@@ -264,13 +358,19 @@ int main (int argc, char** argv)
   std::cout << "pitchy                          = " << pitchy << std::endl;
   std::cout << "PDE scintillation ph            = " << qeScint<< std::endl;
   std::cout << "PDE Cherenkov ph                = " << qeCher << std::endl;
-  std::cout << "SPTR [ns] sigma                 = " << sigmaSPTR << std::endl;
+  std::cout << "SPTR [ps] sigma                 = " << sigmaSPTR << std::endl;
   std::cout << "Number of slices in z           = " << doiSlices << std::endl;
   std::cout << "Crystal length [mm]             = " << length << std::endl;
   std::cout << "Size of time bins [ps]          = " << timeBinSize << std::endl;
   if(saturation)
   {
-    std::cout << "SiPM saturation will be taken into account " << std::endl;
+    std::cout << "--> SiPM saturation will be taken into account " << std::endl;
+  }
+  if(spadPulse)
+  {
+    std::cout << "--> Pulse generated using spad pulses: " << std::endl;
+    std::cout << "Spad pulse rise time [ps]       = " << spadRise << std::endl;
+    std::cout << "Spad pulse decay time [ps]      = " << spadDecay << std::endl;
   }
   std::cout << std::endl;
   std::cout << "|----------------------------------------------|" << std::endl;
@@ -491,12 +591,13 @@ int main (int argc, char** argv)
   //initialize spads
   //they are in the same order of ch0, ch1, etc..
   //FIXME not general at all!!!
+  // #pragma omp parallel for
   for(int i = 0 ; i < numOfCh ; i++)
   {
     //
     std::stringstream Htitle;
     Htitle << "Global CTR channel " << i;
-    sipm[i].ctr = new TH1F(Htitle.str().c_str(),Htitle.str().c_str(),100,pulseStart*1e-9,pulseEnd*1e-9); // in seconds
+    sipm[i].ctr = new TH1F(Htitle.str().c_str(),Htitle.str().c_str(),1000,pulseStart*1e-12,pulseEnd*1e-12); // in seconds
     sipm[i].ctr->GetXaxis()->SetTitle("Time [s]");
     //set position of he sipm
     sipm[i].detx = xmppc[i];
@@ -530,8 +631,8 @@ int main (int argc, char** argv)
       std::stringstream Hname;
       Hname << "Ch "<< i << " Pulse z " << tempSlice.zMin << " to " << tempSlice.zMax ;
 
-      int pulseBins = (int) round((pulseEnd-pulseStart)/(timeBinSize/1000)); // /1000 because input timeBinSize is ps
-      tempSlice.pulse = new TH1F(Hname.str().c_str(),Hname.str().c_str(),pulseBins,pulseStart,pulseEnd);
+
+      tempSlice.pulse = new TH1F(Hname.str().c_str(),Hname.str().c_str(),pulseBins,pulseStart/1000.0,pulseEnd/1000.0); // in ns
       std::stringstream Htitle;
       Htitle << "Time [ns]";
       tempSlice.pulse->GetXaxis()->SetTitle(Htitle.str().c_str());
@@ -542,7 +643,7 @@ int main (int argc, char** argv)
       //ctr
       Hname.str("");
       Hname << "Ch "<< i << " CTR z " << tempSlice.zMin << " to " << tempSlice.zMax ;
-      tempSlice.ctr = new TH1F(Hname.str().c_str(),Hname.str().c_str(),100,pulseStart*1e-9,pulseEnd*1e-9);
+      tempSlice.ctr = new TH1F(Hname.str().c_str(),Hname.str().c_str(),1000,pulseStart*1e-12,pulseEnd*1e-12);
       Htitle.str("");
       Htitle << "Time [s]";
       tempSlice.ctr->GetXaxis()->SetTitle(Htitle.str().c_str());
@@ -567,7 +668,27 @@ int main (int argc, char** argv)
   //Prepare histograms of "pulses"
   // slice the doi coordinate doiSlices times, for each build and average "pulse"
 
-
+  //find max of single spad pulse
+  std::vector<double> x,y;
+  // double tEnd = 10.0;
+  // double tBegin = 0.0;
+  // int divisions = 10000;
+  // double t0 = 1.0;
+  // double tr = 0.2;
+  // double td = 10;
+  double maxSingleSpad = 0.0;
+  for(int i = 0 ; i < pulseBins ; i++)
+  {
+    double valueX = i*((pulseEnd - pulseStart)/pulseBins)/1000.0;   //in ns
+    double valueY = singleSpad(valueX,0.0,spadRise/1000.0,spadDecay/1000.0);
+    if(valueY > maxSingleSpad)
+    {
+      maxSingleSpad = valueY;
+    }
+    // x.push_back(valueX);
+    // y.push_back(valueY);
+  }
+  // std::cout << max << std::endl;
 
 
   //----------------------------------------//
@@ -576,7 +697,7 @@ int main (int argc, char** argv)
   long int counter = 0;
   int nEntries = tree->GetEntries();
   std::cout << "nEntries = " << nEntries << std::endl;
-
+  // #pragma omp parallel for
   for(int iEvent = 0; iEvent < nEntries ; iEvent++)
   {
     tree->GetEvent(iEvent);
@@ -606,6 +727,7 @@ int main (int argc, char** argv)
     double RealZ = 0;
     NumbOfInteractions = energyDeposition->size();
     std::vector<int> crystals;
+    // #pragma omp parallel for
     for(int eEvent = 0; eEvent < energyDeposition->size(); eEvent++)// run on energy depositions for this gamma event
     {
       // -- counting the crystals where energy was deposited in this event
@@ -654,11 +776,13 @@ int main (int argc, char** argv)
     //------------------------//
     if(keepTheEvent)
     {
+      // #pragma omp parallel for
       for(int iPhot = 0; iPhot < photons->size(); iPhot++) // run on all opticals
       {
         bool keepThePhoton = false;  // whether to keep the photon or not (for pde and saturation tests, so if the photons has triggers an avalanche)
         int phSipm = 0;              // which Sipm was hit by the optical photon
-
+        // Float_t timeOfArrival = photons->at(iPhot).GlobalTime;
+        // if(timeOfArrival > 2.0) break;
 
         // set PDE to the appropriate value, depending on photon type
         // if PDE = 0 for a given photon type, those photons will be discarded
@@ -739,13 +863,28 @@ int main (int argc, char** argv)
           Float_t RealTimeStamp = photons->at(iPhot).GlobalTime;  // get time of arrival of the photon
           if(smearTimeStamp)  // smear time stamp if user says so, according to sigmaSPTR
           {
-            RealTimeStamp = gRandom->Gaus(RealTimeStamp,sigmaSPTR); // both RealTimeStamp and sigmaSPTR are in [ns]
+            RealTimeStamp = gRandom->Gaus(RealTimeStamp,sigmaSPTR/1000.0); // RealTimeStamp in ns, sigmaSPTR in ps, converted here
           }
           sipm[phSipm].listOfTimestamps.push_back(RealTimeStamp); // add to the list of timestamps for the sipm hit
           if(totalEnergyDeposited > 0.5 && CrystalsHit == 1 && crystals[0] == 36) // check if energy deposited is in photopeak and the crystal is the chosen one (36)
           {
-            sipm[phSipm].slice[phSlice].pulse->Fill(RealTimeStamp); // fill the pulse histo for the slice of this sipm
-            // sipm[phSipm].slice[phSlice].listOfTimestamps.push_back(RealTimeStamp); // fill the listOfTimestamps for the slice of this sipm)
+            if(spadPulse) // sum to the SiPM pulse this spad pulse
+            {
+              for(int iBin = 0; iBin < sipm[phSipm].slice[phSlice].pulse->GetNbinsX(); iBin++) //run on all bins
+              {
+                double tBin = sipm[phSipm].slice[phSlice].pulse->GetBinCenter(iBin+1);
+                if( tBin >= RealTimeStamp) //nothing happens before RealTimeStamp
+                {
+                  // sipm[phSipm].slice[phSlice].pulse->Fill(tBin,1.0*( exp(-(tBin - RealTimeStamp)/(spadDecay/1000.0)) * (1.0 - exp(-(tBin - RealTimeStamp)/(spadRise/1000.0)) ) ) );  //input of spadDecay and spadRise is in ps, all times are in ns so these two are converted here
+                  sipm[phSipm].slice[phSlice].pulse->Fill(tBin,singleSpad(tBin,RealTimeStamp,spadRise/1000.0,spadDecay/1000.0)/maxSingleSpad );  //input of spadDecay and spadRise is in ps, all times are in ns so these two are converted here
+                }
+              }
+            }
+            else // simply build the pulse with the timestamps
+            {
+              sipm[phSipm].slice[phSlice].pulse->Fill(RealTimeStamp); // fill the pulse histo for the slice of this sipm
+              // sipm[phSipm].slice[phSlice].listOfTimestamps.push_back(RealTimeStamp); // fill the listOfTimestamps for the slice of this sipm)
+            }
           }
         }
       }
@@ -754,19 +893,46 @@ int main (int argc, char** argv)
       // calculate the global (and per slice) sipm parameters
       for(int i = 0; i < numOfCh ; i++)
       {
-        // calculate the sipm timestamp from average of first N timestamps
-        // first, the timestamps need to be ordered again (because of gaussian smearing, if applied)
-        std::sort(sipm[i].listOfTimestamps.begin(),sipm[i].listOfTimestamps.end());
         sipm[i].timestamp = 0.0;
-        int effectiveN = numb_of_phot_for_time_average;
-        if(numb_of_phot_for_time_average > sipm[i].listOfTimestamps.size())
-          effectiveN = sipm[i].listOfTimestamps.size();
-        for(int j = 0 ; j < effectiveN; j++)
+
+
+        if(spadPulse)
         {
-          sipm[i].timestamp +=  (Float_t) ( (sipm[i].listOfTimestamps[j] / effectiveN)*1e-9); // already smeared if user says so, and converted now to seconds
+          double threshold = numb_of_phot_for_time_average;
+          for(int iBin = 0; iBin < sipm[i].slice[phSlice].pulse->GetNbinsX()-1; iBin++) //run on all bins
+          {
+            double tBin = sipm[i].slice[phSlice].pulse->GetBinCenter(iBin+1);
+            double vBin = sipm[i].slice[phSlice].pulse->GetBinContent(iBin+1);
+            double tBinNext = sipm[i].slice[phSlice].pulse->GetBinCenter(iBin+2);
+            double vBinNext = sipm[i].slice[phSlice].pulse->GetBinContent(iBin+2);
+            if(vBin < threshold && vBinNext > threshold)
+            {
+              sipm[i].timestamp = 1e-9*(tBin + tBinNext)/2.0;
+              sipm[i].ctr->Fill(sipm[i].timestamp);
+              sipm[i].slice[phSlice].ctr->Fill(sipm[i].timestamp);
+              break;
+            }
+          }
+
         }
-        sipm[i].ctr->Fill(sipm[i].timestamp);
-        sipm[i].slice[phSlice].ctr->Fill(sipm[i].timestamp);
+        else
+        {
+          // calculate the sipm timestamp from average of first N timestamps
+          // first, the timestamps need to be ordered again (because of gaussian smearing, if applied)
+          std::sort(sipm[i].listOfTimestamps.begin(),sipm[i].listOfTimestamps.end());
+          int effectiveN = numb_of_phot_for_time_average;
+          if(numb_of_phot_for_time_average > sipm[i].listOfTimestamps.size())
+            effectiveN = sipm[i].listOfTimestamps.size();
+          for(int j = 0 ; j < effectiveN; j++)
+          {
+            sipm[i].timestamp +=  (Float_t) ( (sipm[i].listOfTimestamps[j] / effectiveN)*1e-9); // already smeared if user says so, and converted now to seconds
+          }
+          sipm[i].ctr->Fill(sipm[i].timestamp);
+          sipm[i].slice[phSlice].ctr->Fill(sipm[i].timestamp);
+        }
+
+
+
       }
       // re-initialize the sipms counters
       for(int i = 0 ; i < numOfCh ; i++)
@@ -822,6 +988,11 @@ int main (int argc, char** argv)
     THStack *hsNorm = new THStack(sStack.str().c_str(),sStack.str().c_str());
     TCanvas *canvasNorm = new TCanvas(sStack.str().c_str(),sStack.str().c_str(),1200,800);
 
+    sStack.str("");
+    sStack << "Graph Pulses of Ch " << i;
+    TMultiGraph *mg = new TMultiGraph();
+    TCanvas *canvasMg = new TCanvas(sStack.str().c_str(),sStack.str().c_str(),1200,800);
+
     TLegend *legend = new TLegend(0.15,0.62,0.30,0.89,"");
     legend->SetFillStyle(0);
 
@@ -833,6 +1004,8 @@ int main (int argc, char** argv)
     // sname.str("");
     // sname << "No correction        = " << round(1e12*crystal[iCry].simpleCTR->GetRMS()*2.355*TMath::Sqrt(2.0)) << "ps";
     int color = 1; // avoid white
+
+
     for(unsigned int iSlice = 0 ; iSlice < sipm[i].slice.size(); iSlice++)
     {
       sipm[i].slice[iSlice].ctr->Write();
@@ -842,36 +1015,64 @@ int main (int argc, char** argv)
       {
         color++; // no yellow!!
       }
+
+
       sipm[i].slice[iSlice].pulse->SetLineColor(color);
-      color++;
+
       //normalize the histograms to the number of events in the doi slice - mandatory to average
       if(sipm[i].slice[iSlice].events != 0)
       {
         sipm[i].slice[iSlice].pulse->Scale(1.0/sipm[i].slice[iSlice].events);
       }
+
+      //rescale pulse as multiple of single spad pulses
+      //and get vectors
+      std::vector<double> valueX;
+      std::vector<double> valueY;
+      for(int iBin = 0; iBin < sipm[i].slice[iSlice].pulse->GetNbinsX(); iBin++) //run on all bins
+      {
+        double Xvalue = sipm[i].slice[iSlice].pulse->GetBinCenter(iBin+1);
+        double Yvalue = sipm[i].slice[iSlice].pulse->GetBinContent(iBin+1);
+        valueX.push_back(Xvalue);
+        valueY.push_back(Yvalue);
+        // sipm[i].slice[iSlice].pulse->SetBinContent(iBin+1,Yvalue/maxSingleSpad);
+      }
+      TGraph *gr = new TGraph(sipm[i].slice[iSlice].pulse->GetNbinsX(),&valueX[0],&valueY[0]);
+      gr->SetLineColor(color);
+      gr->SetLineWidth(2);
+
+      mg->Add(gr,"l");
       //clone the histo
       TH1F *clone = (TH1F*) sipm[i].slice[iSlice].pulse->Clone();
       hs->Add(clone);
       legend->AddEntry(clone,sDoi.str().c_str(),"l");
 
-      //normalize histograms to max
-      int maxBin = sipm[i].slice[iSlice].pulse->GetMaximumBin();
-      double maxValue = sipm[i].slice[iSlice].pulse->GetBinContent(maxBin);
-      sipm[i].slice[iSlice].pulse->Scale(1.0/maxValue);
-      hsNorm->Add(sipm[i].slice[iSlice].pulse);
-      legendNorm->AddEntry(sipm[i].slice[iSlice].pulse,sDoi.str().c_str(),"l");
-      sipm[i].slice[iSlice].pulse->Write();
+      //normalize histograms to max, by fitting to line
+      // TF1 *line = new TF1("line","[0]",1.75,2.5); //FIXME hardcoded
+      // int maxBin = sipm[i].slice[iSlice].pulse->GetMaximumBin();
+      // double maxValue = sipm[i].slice[iSlice].pulse->GetBinContent(maxBin);
+      // sipm[i].slice[iSlice].pulse->Fit(line,"RQN");
+      // sipm[i].slice[iSlice].pulse->Scale(1.0/line->GetParameter(0));
+      // hsNorm->Add(sipm[i].slice[iSlice].pulse);
+      // legendNorm->AddEntry(sipm[i].slice[iSlice].pulse,sDoi.str().c_str(),"l");
+      // sipm[i].slice[iSlice].pulse->Write();
+      color++;
     }
+    canvasMg->cd();
+    mg->Draw("a");
+    legend->Draw();
+    canvasMg->Write();
+
     canvas->cd();
     hs->Draw("nostack");
     legend->Draw();
     canvas->Write();
 
 
-    canvasNorm->cd();
-    hsNorm->Draw("nostack");
-    legendNorm->Draw();
-    canvasNorm->Write();
+    // canvasNorm->cd();
+    // hsNorm->Draw("nostack");
+    // legendNorm->Draw();
+    // canvasNorm->Write();
   }
   fOut->Close();
 
@@ -892,3 +1093,4 @@ int main (int argc, char** argv)
   delete rand;
   return 0;
 }
+// # endif
