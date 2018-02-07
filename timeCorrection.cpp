@@ -1,7 +1,7 @@
 // compile with
 // g++ -o ../build/timeCorrection timeCorrection.cpp `root-config --cflags --glibs` -Wl,--no-as-needed -lHist -lCore -lMathCore -lTree -lTreePlayer
 
-// small program to extract timing from petiroc data
+// small program to extract timing calibration and data
 
 #include "TROOT.h"
 #include "TFile.h"
@@ -481,15 +481,15 @@ int main (int argc, char** argv)
          gDirectory->cd("..");
          std::stringstream sname;
          sname << "CTR basic - " << temp_crystal.number;
-         temp_crystal.simpleCTR = new TH1F(sname.str().c_str(),sname.str().c_str(),500,-0e-9,2e-9);
+         temp_crystal.simpleCTR = new TH1F(sname.str().c_str(),sname.str().c_str(),500,-15e-9,15e-9);
          sname.str("");
 
          sname << "CTR central correction - " << temp_crystal.number;
-         temp_crystal.centralCTR = new TH1F(sname.str().c_str(),sname.str().c_str(),500,-0e-9,2e-9);
+         temp_crystal.centralCTR = new TH1F(sname.str().c_str(),sname.str().c_str(),500,-15e-9,15e-9);
          sname.str("");
 
          sname << "CTR all correction - " << temp_crystal.number;
-         temp_crystal.allCTR = new TH1F(sname.str().c_str(),sname.str().c_str(),500,-0e-9,2e-9);
+         temp_crystal.allCTR = new TH1F(sname.str().c_str(),sname.str().c_str(),500,-15e-9,15e-9);
          sname.str("");
 
          TCut globalCut; // the cut for the formula
