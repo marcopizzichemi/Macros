@@ -72,6 +72,8 @@ struct Crystal_t
   TGraph* rms_tw_correction;
   std::vector<TGraph*> delay;
   std::vector<TGraph*> rms_delay;
+  const char* path;
+  bool accepted;
   // TCanvas
 };
 
@@ -110,11 +112,12 @@ bool compareByNumber(const Crystal_t &a,const Crystal_t  &b)
 
 void usage()
 {
-  std::cout << "\t\t" << "[-i|--input] <temp.root>  [-o|--output] <output.root> [-c|--calibration] calibration.root [OPTIONS]" << std::endl
+  std::cout << "\t\t" << "[-i|--input] <temp.root>  [-o|--output] <output.root> [-c|--calibration] calibration.root [--coincidence] coincidence.root [OPTIONS]" << std::endl
             << "\t\t" << "<temp.root>                                        - complete dataset (analysis ttree) of run"   << std::endl
             << "\t\t" << "<output.root>                                      - output file name"   << std::endl
             << "\t\t" << "<calibration.root>                                 - calibration file " << std::endl
-            << "\t\t" << "--simulation                                       - the datast is from a simulation (therefore the tagging photopeak is ignored) ] " << std::endl
+            << "\t\t" << "<coincidence.root>                                 - time calibration file " << std::endl
+            << "\t\t" << "--simulation                                       - the datast is from a simulation (therefore the tagging photopeak is ignored)" << std::endl
             << "\t\t" << "--length <value>                                   - crystal length in mm, default = 15.0"  << std::endl
             << "\t\t" << "--doiFraction <value>                              - fraction of DOI length towards which the time stamps are corrected (from 0 to 1)"  << std::endl
             << "\t\t" << "                                                   - 0 = front of the crystal (DOI close to detector) "  << std::endl
@@ -133,6 +136,7 @@ int main (int argc, char** argv)
   std::string inputFileName = "";
   std::string outputFileName = "";
   std::string calibrationFileName = "";
+  std::string coincidenceCalibrationFileName = "";
 
   bool simulation = false;
   Float_t length = 15.0;
@@ -148,6 +152,7 @@ int main (int argc, char** argv)
       { "simulation", no_argument, 0, 0 },
       { "length", required_argument, 0, 0 },
       { "doiFraction", required_argument, 0, 0 },
+      { "coincidence", required_argument, 0, 0 },
 			{ NULL, 0, 0, 0 }
 	};
 
@@ -184,6 +189,9 @@ int main (int argc, char** argv)
     }
     else if (c == 0 && optionIndex == 5){
       doiFraction = atof((char *)optarg);;
+    }
+    else if (c == 0 && optionIndex == 6){
+      coincidenceCalibrationFileName = (char *)optarg;
     }
 		else {
       std::cout	<< "Usage: " << argv[0] << std::endl;
@@ -232,8 +240,19 @@ int main (int argc, char** argv)
   // std::cout << "Number of Crystals \t= "<< numOfCry << std::endl;
 
 
+  // find the crystals with complete calibration data
+  // this means looking into TWO files:
+  // 1. the standard calibration file, but produced with active timing part
+  //    this is produced NOT in coincidence and will give all but two plot
+  //    for the crystals calibration. the only two missing are the only two that HAVE
+  //    to be measured in coincidence, i.e. the tw_correction plots (and it's RMS) and the tag photopeak cut
+  // 2. a configuration run performed in coincidence, from which the tw_correction are taken
+  //
+  // afterwards the crystals will be accepted if they are present in both calibration files
+
   std::vector<Crystal_t> crystal;
 
+  // STANDARD CALIBRATION FILE
   TFile *calibrationFile = new TFile(calibrationFileName.c_str());
   calibrationFile->cd("Module 0.0");
   TList *listModule = gDirectory->GetListOfKeys();
@@ -245,9 +264,9 @@ int main (int argc, char** argv)
     keysModName.push_back(listModule->At(i)->GetName());
   }
 
-  TCut *taggingPhotopeakCut;
+  // TCut *taggingPhotopeakCut;
 
-  std::string taggingPhotopeakCut_prefix("taggingPhotopeakCut");
+  // std::string taggingPhotopeakCut_prefix("taggingPhotopeakCut");
   std::vector<std::string> MPPCfolders;
   for(unsigned int i = 0 ; i < keysModName.size() ; i++)
   {
@@ -255,20 +274,16 @@ int main (int argc, char** argv)
     {
       MPPCfolders.push_back(keysModName[i]);
     }
-    if(!keysModName[i].compare(0,taggingPhotopeakCut_prefix.size(),taggingPhotopeakCut_prefix)) // find tcut
-    {
+    // if(!keysModName[i].compare(0,taggingPhotopeakCut_prefix.size(),taggingPhotopeakCut_prefix)) // find tcut
+    // {
      //  std::cout << keysCryName[i] << std::endl;
-      taggingPhotopeakCut = (TCut*) gDirectory->Get( keysModName[i].c_str());
+      // taggingPhotopeakCut = (TCut*) gDirectory->Get( keysModName[i].c_str());
       // if(cut)
       //   temp_crystal.CrystalCut = cut;
-    }
+    // }
   }
 
-  // std::stringstream sformulaname;
-  // sformulaname << "FormulaTag";
-  TCut taggingPhotopeakCutName;
-  taggingPhotopeakCutName = taggingPhotopeakCut->GetTitle();
-  TTreeFormula* FormulaTag = new TTreeFormula("FormulaTag",taggingPhotopeakCutName,tree);
+
 
 
   for(unsigned int iMppc = 0 ; iMppc < MPPCfolders.size() ; iMppc++)
@@ -307,25 +322,11 @@ int main (int argc, char** argv)
        temp_crystal.centralCTR = NULL;
        temp_crystal.allCTR = NULL;
        temp_crystal.wz = NULL;
+       temp_crystal.accepted = false;
 
        //get crystal number
-      //  std::cout << atoi((CrystalFolders[iCry].substr(crystal_prefix.size()+1,CrystalFolders[iCry].size()-crystal_prefix.size()-1)).c_str()) << std::endl;
        temp_crystal.number = atoi((CrystalFolders[iCry].substr(crystal_prefix.size()+1,CrystalFolders[iCry].size()-crystal_prefix.size()-1)).c_str());
 
-
-      //  if(zPosGiven) //take the z vector from input file
-      //  {
-      //    // run on the inputZs
-      //    for(int iZ = 0; iZ < inputZ.size(); iZ++)
-      //    {
-      //      //calc crystal number. this is terrible since it's not general at all..
-      //      int cryNum = inputZ[iZ].i * 8 + inputZ[iZ].j;
-      //      if(cryNum == temp_crystal.number)
-      //      {
-      //        temp_crystal.z = inputZ[iZ].z;
-      //      }
-      //    }
-      //  }
        TList *listCry = gDirectory->GetListOfKeys();
        int nKeysCry = listCry->GetEntries();
        std::vector<std::string> keysCryName;
@@ -415,15 +416,10 @@ int main (int argc, char** argv)
             //  std::cout << gDirectory->Get(keysCryName[i].c_str())->GetTitle() << "\t"
                       //  << temp_crystal.detectorChannel << std::endl;
            }
-
-
-
-
-
-
          }
 
          gDirectory->cd("TimeCorrection");
+         temp_crystal.path = gDirectory->GetPath();
          TList *listTcorr = gDirectory->GetListOfKeys();
          int nKeysTcorr = listTcorr->GetEntries();
          std::vector<std::string> keysTcorrName;
@@ -433,28 +429,28 @@ int main (int argc, char** argv)
              keysTcorrName.push_back(listTcorr->At(i)->GetName());
            }
 
-           std::string deltaWGraph_prefix = "DeltaW Graph";
-           std::string rms_deltaWGraph_prefix = "RMS DeltaW Graph";
+           // std::string deltaWGraph_prefix = "DeltaW Graph";
+           // std::string rms_deltaWGraph_prefix = "RMS DeltaW Graph";
            std::string graph_delay_prefix = "Graph Delay ch_";
            std::string rms_graph_delay_prefix = "RMS Graph Delay ch_";
 
            for(unsigned int i = 0 ; i < keysTcorrName.size() ; i++)
            {
-             if(!keysTcorrName[i].compare(0,deltaWGraph_prefix.size(),deltaWGraph_prefix))
-             {
-               TGraph *calibGraph = NULL;
-               calibGraph = (TGraph*) gDirectory->Get(keysTcorrName[i].c_str());
-               if(calibGraph)
-                 temp_crystal.tw_correction = calibGraph;
-             }
+             // if(!keysTcorrName[i].compare(0,deltaWGraph_prefix.size(),deltaWGraph_prefix))
+             // {
+             //   TGraph *calibGraph = NULL;
+             //   calibGraph = (TGraph*) gDirectory->Get(keysTcorrName[i].c_str());
+             //   if(calibGraph)
+             //     temp_crystal.tw_correction = calibGraph;
+             // }
 
-             if(!keysTcorrName[i].compare(0,rms_deltaWGraph_prefix.size(),rms_deltaWGraph_prefix))
-             {
-              TGraph *calibGraph = NULL;
-              calibGraph = (TGraph*) gDirectory->Get(keysTcorrName[i].c_str());
-              if(calibGraph)
-                 temp_crystal.rms_tw_correction = calibGraph;
-             }
+             // if(!keysTcorrName[i].compare(0,rms_deltaWGraph_prefix.size(),rms_deltaWGraph_prefix))
+             // {
+             //  TGraph *calibGraph = NULL;
+             //  calibGraph = (TGraph*) gDirectory->Get(keysTcorrName[i].c_str());
+             //  if(calibGraph)
+             //     temp_crystal.rms_tw_correction = calibGraph;
+             // }
 
              if(!keysTcorrName[i].compare(0,graph_delay_prefix.size(),graph_delay_prefix))
              {
@@ -481,15 +477,15 @@ int main (int argc, char** argv)
          gDirectory->cd("..");
          std::stringstream sname;
          sname << "CTR basic - " << temp_crystal.number;
-         temp_crystal.simpleCTR = new TH1F(sname.str().c_str(),sname.str().c_str(),500,-15e-9,15e-9);
+         temp_crystal.simpleCTR = new TH1F(sname.str().c_str(),sname.str().c_str(),500,-12e-9,-7e-9);
          sname.str("");
 
          sname << "CTR central correction - " << temp_crystal.number;
-         temp_crystal.centralCTR = new TH1F(sname.str().c_str(),sname.str().c_str(),500,-15e-9,15e-9);
+         temp_crystal.centralCTR = new TH1F(sname.str().c_str(),sname.str().c_str(),500,-12e-9,-7e-9);
          sname.str("");
 
          sname << "CTR all correction - " << temp_crystal.number;
-         temp_crystal.allCTR = new TH1F(sname.str().c_str(),sname.str().c_str(),500,-15e-9,15e-9);
+         temp_crystal.allCTR = new TH1F(sname.str().c_str(),sname.str().c_str(),500,-12e-9,-7e-9);
          sname.str("");
 
          TCut globalCut; // the cut for the formula
@@ -506,15 +502,99 @@ int main (int argc, char** argv)
          sname.str("");
 
          if(temp_crystal.calibrationGraph && temp_crystal.CrystalCutWithoutCutG && temp_crystal.PhotopeakEnergyCut && (temp_crystal.cutg.size() == 2))
+         {
+
            crystal.push_back(temp_crystal);
+         }
+
        }
-
-
-
        gDirectory->cd("..");
     }
     calibrationFile->cd("Module 0.0");
   }
+
+
+  // COINCIDENCE CALIBRATION FILE
+  //
+  TFile *coincidenceCalibrationFile = new TFile(coincidenceCalibrationFileName.c_str());
+  coincidenceCalibrationFile->cd("Module 0.0");
+  TList *listModuleCoinc = gDirectory->GetListOfKeys();
+  int nKeysModCoinc = listModuleCoinc->GetEntries();
+  std::vector<std::string> keysModNameCoinc;
+  // fill a vector with the leaves names
+  // std::string mppc_prefixCoinc("MPPC");
+  for(int i = 0 ; i < nKeysModCoinc ; i++){
+    keysModNameCoinc.push_back(listModuleCoinc->At(i)->GetName());
+  }
+
+  TCut *taggingPhotopeakCut;
+  std::string taggingPhotopeakCut_prefix("taggingPhotopeakCut");
+  // std::vector<std::string> MPPCfoldersCoinc;
+  for(unsigned int i = 0 ; i < keysModNameCoinc.size() ; i++)
+  {
+    // if (!keysModNameCoinc[i].compare(0, mppc_prefixCoinc.size(), mppc_prefixCoinc))
+    // {
+    //   MPPCfoldersCoinc.push_back(keysModNameCoinc[i]);
+    // }
+    if(!keysModNameCoinc[i].compare(0,taggingPhotopeakCut_prefix.size(),taggingPhotopeakCut_prefix)) // find tcut
+    {
+     //  std::cout << keysCryName[i] << std::endl;
+      taggingPhotopeakCut = (TCut*) gDirectory->Get( keysModName[i].c_str());
+      // if(cut)
+      //   temp_crystal.CrystalCut = cut;
+    }
+  }
+
+  std::stringstream sformulaname;
+  sformulaname << "FormulaTag";
+  TCut taggingPhotopeakCutName;
+  taggingPhotopeakCutName = taggingPhotopeakCut->GetTitle();
+  TTreeFormula* FormulaTag = new TTreeFormula("FormulaTag",taggingPhotopeakCutName,tree);
+
+  //look only into crystals found in the other calibration file
+  for(unsigned int iCry = 0 ;  iCry < crystal.size() ; iCry++)
+  {
+    bool dirFound = gDirectory->cd(crystal[iCry].path);
+    if(dirFound)
+    {
+      crystal[iCry].accepted = true;
+      TList *listTcorr = gDirectory->GetListOfKeys();
+      int nKeysTcorr = listTcorr->GetEntries();
+      std::vector<std::string> keysTcorrName;
+      if(nKeysTcorr) //if directory not empty
+      {
+        for(int i = 0 ; i < nKeysTcorr ; i++){
+          keysTcorrName.push_back(listTcorr->At(i)->GetName());
+        }
+
+        std::string deltaWGraph_prefix = "DeltaW Graph";
+        std::string rms_deltaWGraph_prefix = "RMS DeltaW Graph";
+        // std::string graph_delay_prefix = "Graph Delay ch_";
+        // std::string rms_graph_delay_prefix = "RMS Graph Delay ch_";
+
+        for(unsigned int i = 0 ; i < keysTcorrName.size() ; i++)
+        {
+          if(!keysTcorrName[i].compare(0,deltaWGraph_prefix.size(),deltaWGraph_prefix))
+          {
+            TGraph *calibGraph = NULL;
+            calibGraph = (TGraph*) gDirectory->Get(keysTcorrName[i].c_str());
+            if(calibGraph)
+              crystal[iCry].tw_correction = calibGraph;
+          }
+
+          if(!keysTcorrName[i].compare(0,rms_deltaWGraph_prefix.size(),rms_deltaWGraph_prefix))
+          {
+           TGraph *calibGraph = NULL;
+           calibGraph = (TGraph*) gDirectory->Get(keysTcorrName[i].c_str());
+           if(calibGraph)
+              crystal[iCry].rms_tw_correction = calibGraph;
+          }
+        }
+      }
+    }
+  }
+
+
 
   // // //BEGIN of DEBUG
   // for(unsigned int i = 0 ;  i < crystal.size() ; i++)
@@ -531,6 +611,15 @@ int main (int argc, char** argv)
   // // //END of DEBUG
 
 
+  std::cout << "Calibration data found for crystals: " << std::endl;
+  for(unsigned int i = 0 ;  i < crystal.size() ; i++)
+  {
+    if(crystal[i].accepted)
+    {
+      std::cout << crystal[i].number << std::endl;
+    }
+
+  }
 
   Float_t FloodX,FloodY,FloodZ;
   Float_t ZPosition;
@@ -590,73 +679,75 @@ int main (int argc, char** argv)
     tree->GetEvent(i);              //read complete accepted event in memory
     for(unsigned int iCry = 0 ;  iCry < crystal.size() ; iCry++)
     {
-      if(FormulaTag->EvalInstance() || simulation) // if in photopeak of tagging crystal - or if in simulation
+      if(crystal[iCry].accepted)
       {
-        if(crystal[iCry].Formula->EvalInstance())  //if in global cut of crystal
+        if(FormulaTag->EvalInstance() || simulation) // if in photopeak of tagging crystal - or if in simulation
         {
-          goodEvents++;
-
-          // std::string deltaWGraph_prefix = "DeltaW Graph";
-          // std::string rms_deltaWGraph_prefix = "RMS DeltaW Graph";
-          std::string graph_delay_prefix = "Graph Delay ch_";
-          std::string rms_graph_delay_prefix = "RMS Graph Delay ch_";
-
-          Float_t averageTimeStamp = 0.0;
-          Float_t totalWeight = 0.0;
-          // averageTimeStamp += timeStamp[crystal[iCry].detectorChannel];
-          Float_t weight = 0.0;
-          weight = pow(crystal[iCry].rms_tw_correction->Eval(FloodZ),-2);
-          averageTimeStamp += weight*(timeStamp[crystal[iCry].detectorChannel]);
-          totalWeight += weight;
-          // std::cout << i << " " << iCry << " " <<  crystal[iCry].number << "\n";
-          for(unsigned int iGraph = 0; iGraph < crystal[iCry].delay.size();iGraph++)
+          if(crystal[iCry].Formula->EvalInstance())  //if in global cut of crystal
           {
-            std::string graphName = crystal[iCry].delay[iGraph]->GetName();
-            int graphCh = atoi( graphName.substr( graph_delay_prefix.size(), graphName.size() - graph_delay_prefix.size() ).c_str() );
-            // std::cout << graphCh  << "\t";
+            goodEvents++;
 
-            std::string rmsName = crystal[iCry].rms_delay[iGraph]->GetName();
-            int rmsCh = atoi( rmsName.substr( rms_graph_delay_prefix.size(), rmsName.size() - rms_graph_delay_prefix.size() ).c_str() );
-            // std::cout << rmsCh  << "\t";
-            weight = pow(crystal[iCry].rms_delay[iGraph]->Eval(FloodZ),-2);
+            // std::string deltaWGraph_prefix = "DeltaW Graph";
+            // std::string rms_deltaWGraph_prefix = "RMS DeltaW Graph";
+            std::string graph_delay_prefix = "Graph Delay ch_";
+            std::string rms_graph_delay_prefix = "RMS Graph Delay ch_";
+
+            Float_t averageTimeStamp = 0.0;
+            Float_t totalWeight = 0.0;
+            // averageTimeStamp += timeStamp[crystal[iCry].detectorChannel];
+            Float_t weight = 0.0;
+            weight = pow(crystal[iCry].rms_tw_correction->Eval(FloodZ),-2);
+            averageTimeStamp += weight*(timeStamp[crystal[iCry].detectorChannel]);
             totalWeight += weight;
-            averageTimeStamp += weight*(timeStamp[graphCh] - crystal[iCry].delay[iGraph]->Eval(FloodZ));
-            // std::cout << timeStamp[graphCh] - crystal[iCry].delay[iGraph]->Eval(FloodZ) << "\t";
+            // std::cout << i << " " << iCry << " " <<  crystal[iCry].number << "\n";
+            for(unsigned int iGraph = 0; iGraph < crystal[iCry].delay.size();iGraph++)
+            {
+              std::string graphName = crystal[iCry].delay[iGraph]->GetName();
+              int graphCh = atoi( graphName.substr( graph_delay_prefix.size(), graphName.size() - graph_delay_prefix.size() ).c_str() );
+              // std::cout << graphCh  << "\t";
+
+              std::string rmsName = crystal[iCry].rms_delay[iGraph]->GetName();
+              int rmsCh = atoi( rmsName.substr( rms_graph_delay_prefix.size(), rmsName.size() - rms_graph_delay_prefix.size() ).c_str() );
+              // std::cout << rmsCh  << "\t";
+              weight = pow(crystal[iCry].rms_delay[iGraph]->Eval(FloodZ),-2);
+              totalWeight += weight;
+              averageTimeStamp += weight*(timeStamp[graphCh] - crystal[iCry].delay[iGraph]->Eval(FloodZ));
+              // std::cout << timeStamp[graphCh] - crystal[iCry].delay[iGraph]->Eval(FloodZ) << "\t";
+            }
+            averageTimeStamp = averageTimeStamp/totalWeight;
+            // averageTimeStamp = averageTimeStamp/(crystal[iCry].delay.size() + 1);
+            // std::cout << std::endl;
+            // std::cout << "TEST "<< i << std::endl;
+            Float_t centralcorrection = crystal[iCry].tw_correction->Eval(crystal[iCry].wz->Eval(length*doiFraction)) - crystal[iCry].tw_correction->Eval(FloodZ);
+            // std::cout << crystal[iCry].calibrationGraph->Eval(FloodZ) << "\t" << (crystal[iCry].calibrationGraph->Eval(FloodZ) - ZPosition) << std::endl;
+            // Float_t realZ = ZPosition;
+            // std::cout << realZ << std::endl;
+            // if(zPosGiven)//check ZPosition, then take the z vector from the crystal and use the closest z
+            // {
+            //   float distance = INFINITY; // in mm, i doubt it will ever be bigger...
+            //   int posMarker = -1;
+            //   for(unsigned int iDistance = 0 ; iDistance < crystal[iCry].z.size(); iDistance++)
+            //   {
+            //     if( fabs(crystal[iCry].z[iDistance] - ZPosition) < distance )
+            //     {
+            //       posMarker = iDistance;
+            //       distance = fabs(crystal[iCry].z[iDistance] - ZPosition);
+            //     }
+            //   }
+            //   realZ = crystal[iCry].z[posMarker];
+            //
+            // }
+            // std::cout << realZ << std::endl;
+
+            // std::cout << timeStamp[crystal[iCry].detectorChannel] << "\t" << TaggingTimeStamp << std::endl;
+            crystal[iCry].simpleCTR->Fill(timeStamp[crystal[iCry].detectorChannel] - TaggingTimeStamp);
+            // std::cout << "TEST "<< i << std::endl;
+            crystal[iCry].centralCTR->Fill((timeStamp[crystal[iCry].detectorChannel] + (centralcorrection)) - TaggingTimeStamp);
+            crystal[iCry].allCTR->Fill(averageTimeStamp + centralcorrection  - TaggingTimeStamp);
+
           }
-          averageTimeStamp = averageTimeStamp/totalWeight;
-          // averageTimeStamp = averageTimeStamp/(crystal[iCry].delay.size() + 1);
-          // std::cout << std::endl;
-          // std::cout << "TEST "<< i << std::endl;
-          Float_t centralcorrection = crystal[iCry].tw_correction->Eval(crystal[iCry].wz->Eval(length*doiFraction)) - crystal[iCry].tw_correction->Eval(FloodZ);
-          // std::cout << crystal[iCry].calibrationGraph->Eval(FloodZ) << "\t" << (crystal[iCry].calibrationGraph->Eval(FloodZ) - ZPosition) << std::endl;
-          // Float_t realZ = ZPosition;
-          // std::cout << realZ << std::endl;
-          // if(zPosGiven)//check ZPosition, then take the z vector from the crystal and use the closest z
-          // {
-          //   float distance = INFINITY; // in mm, i doubt it will ever be bigger...
-          //   int posMarker = -1;
-          //   for(unsigned int iDistance = 0 ; iDistance < crystal[iCry].z.size(); iDistance++)
-          //   {
-          //     if( fabs(crystal[iCry].z[iDistance] - ZPosition) < distance )
-          //     {
-          //       posMarker = iDistance;
-          //       distance = fabs(crystal[iCry].z[iDistance] - ZPosition);
-          //     }
-          //   }
-          //   realZ = crystal[iCry].z[posMarker];
-          //
-          // }
-          // std::cout << realZ << std::endl;
-
-          // std::cout << timeStamp[crystal[iCry].detectorChannel] << "\t" << TaggingTimeStamp << std::endl;
-          crystal[iCry].simpleCTR->Fill(timeStamp[crystal[iCry].detectorChannel] - TaggingTimeStamp);
-          // std::cout << "TEST "<< i << std::endl;
-          crystal[iCry].centralCTR->Fill((timeStamp[crystal[iCry].detectorChannel] + (centralcorrection)) - TaggingTimeStamp);
-          crystal[iCry].allCTR->Fill(averageTimeStamp + centralcorrection  - TaggingTimeStamp);
-
         }
       }
-
       // delete Formula;
     }
   }
@@ -668,12 +759,40 @@ int main (int argc, char** argv)
   for(unsigned int iCry = 0 ;  iCry < crystal.size() ; iCry++)
   {
     std::stringstream sname;
-    // sname << "Fit Cry " << crystal[iCry].number;
-    // TF1 *gauss = new TF1(sname.str().c_str(),  "[0]*exp(-0.5*((x-[1])/[2])**2)",-10,10);
-    // gauss->SetParameter(1,crystal[iCry].doiResolution->GetMean());
-    // gauss->SetParameter(2,crystal[iCry].doiResolution->GetRMS());
-    // crystal[iCry].doiResolution->Fit(sname.str().c_str(),"Q","",crystal[iCry].doiResolution->GetMean()-3.0,crystal[iCry].doiResolution->GetMean()+2.0);
+    sname << "Fit Cry " << crystal[iCry].number;
+    TF1 *gauss = new TF1(sname.str().c_str(),  "[0]*exp(-0.5*((x-[1])/[2])**2)",-15e-9,15e-9);
+    gauss->SetParameter(0,crystal[iCry].simpleCTR->GetMaximum());
+    gauss->SetParameter(1,crystal[iCry].simpleCTR->GetMean());
+    gauss->SetParameter(2,crystal[iCry].simpleCTR->GetRMS());
+    // std::cout << crystal[iCry].simpleCTR->GetMaximum() << std::endl;
+    crystal[iCry].simpleCTR->Fit(sname.str().c_str(),"","",crystal[iCry].simpleCTR->GetMean()-2.0*crystal[iCry].simpleCTR->GetRMS(),crystal[iCry].simpleCTR->GetMean()+2.0*crystal[iCry].simpleCTR->GetRMS());
     // std::cout << crystal[iCry].number << "\t" << fabs(gauss->GetParameter(2) * 2.355) << std::endl;
+    float basicSigma = gauss->GetParameter(2);
+    sname.str("");
+
+    sname << "Fit Cry " << crystal[iCry].number;
+    TF1 *gauss2 = new TF1(sname.str().c_str(),  "[0]*exp(-0.5*((x-[1])/[2])**2)",-15e-9,15e-9);
+    gauss2->SetParameter(0,crystal[iCry].centralCTR->GetMaximum());
+    gauss2->SetParameter(1,crystal[iCry].centralCTR->GetMean());
+    gauss2->SetParameter(2,crystal[iCry].centralCTR->GetRMS());
+
+
+    crystal[iCry].centralCTR->Fit(sname.str().c_str(),"","",crystal[iCry].centralCTR->GetMean()-2.0*crystal[iCry].centralCTR->GetRMS(),crystal[iCry].centralCTR->GetMean()+2.0*crystal[iCry].centralCTR->GetRMS());
+    // std::cout << crystal[iCry].number << "\t" << fabs(gauss->GetParameter(2) * 2.355) << std::endl;
+    float centralSigma = gauss2->GetParameter(2);
+
+    sname.str("");
+    sname << "Fit Cry " << crystal[iCry].number;
+    TF1 *gauss3 = new TF1(sname.str().c_str(),  "[0]*exp(-0.5*((x-[1])/[2])**2)",-15e-9,15e-9);
+    gauss3->SetParameter(0,crystal[iCry].allCTR->GetMaximum());
+    gauss3->SetParameter(1,crystal[iCry].allCTR->GetMean());
+    gauss3->SetParameter(2,crystal[iCry].allCTR->GetRMS());
+
+    crystal[iCry].allCTR->Fit(sname.str().c_str(),"","",crystal[iCry].allCTR->GetMean()-2.0*crystal[iCry].allCTR->GetRMS(),crystal[iCry].allCTR->GetMean()+2.0*crystal[iCry].allCTR->GetRMS());
+    // std::cout << crystal[iCry].number << "\t" << fabs(gauss->GetParameter(2) * 2.355) << std::endl;
+    float allSigma = gauss3->GetParameter(2);
+    sname.str("");
+
     crystal[iCry].simpleCTR->Write();
     crystal[iCry].centralCTR->Write();
     crystal[iCry].allCTR->Write();
@@ -718,13 +837,13 @@ int main (int argc, char** argv)
     TLegend *legend = new TLegend(0.54,0.62,0.89,0.89,"");
     legend->SetFillStyle(0);
     sname.str("");
-    sname << "No correction        = " << round(1e12*crystal[iCry].simpleCTR->GetRMS()*2.355*TMath::Sqrt(2.0)) << "ps";
+    sname << "No correction        = " << fabs(round(1e12*basicSigma*2.355*TMath::Sqrt(2.0))) << "ps";
     legend->AddEntry(crystal[iCry].simpleCTR,sname.str().c_str(),"f");
     sname.str("");
-    sname << "Central correction = " << round(1e12*crystal[iCry].centralCTR->GetRMS()*2.355*TMath::Sqrt(2.0)) << "ps";
+    sname << "Central correction = " << fabs(round(1e12*centralSigma*2.355*TMath::Sqrt(2.0))) << "ps";
     legend->AddEntry(crystal[iCry].centralCTR,sname.str().c_str(),"f");
     sname.str("");
-    sname << "Full correction       = " << round(1e12*crystal[iCry].allCTR->GetRMS()*2.355*TMath::Sqrt(2.0)) << "ps";
+    sname << "Full correction       = " << fabs(round(1e12*allSigma*2.355*TMath::Sqrt(2.0))) << "ps";
     legend->AddEntry(crystal[iCry].allCTR,sname.str().c_str(),"f");
     sname.str("");
     legend->Draw();
@@ -734,9 +853,9 @@ int main (int argc, char** argv)
 
     std::cout << "Crystal " << crystal[iCry].number << std::endl;
     std::cout << "CTR FWHM [ps] ---  (No correction - Central correction - full correction)" << std::endl;
-    std::cout << 1e12*crystal[iCry].simpleCTR->GetRMS()*2.355*TMath::Sqrt(2.0) << std::endl;
-    std::cout << 1e12*crystal[iCry].centralCTR->GetRMS()*2.355*TMath::Sqrt(2.0) << std::endl;
-    std::cout << 1e12*crystal[iCry].allCTR->GetRMS()*2.355*TMath::Sqrt(2.0) << std::endl;
+    std::cout << fabs(1e12*basicSigma*2.355*TMath::Sqrt(2.0)) << std::endl;
+    std::cout << fabs(1e12*centralSigma*2.355*TMath::Sqrt(2.0)) << std::endl;
+    std::cout << fabs(1e12*allSigma*2.355*TMath::Sqrt(2.0)) << std::endl;
 
     c_summary->Write();
   }
