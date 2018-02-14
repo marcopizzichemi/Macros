@@ -122,6 +122,7 @@ void usage()
             << "\t\t" << "--doiFraction <value>                              - fraction of DOI length towards which the time stamps are corrected (from 0 to 1)"  << std::endl
             << "\t\t" << "                                                   - 0 = front of the crystal (DOI close to detector) "  << std::endl
             << "\t\t" << "                                                   - 1 = back of the crystal (DOI far from detector) "  << std::endl
+            << "\t\t" << "--tagFwhm <value>                                  - FWHM timing resolution of reference board, in ps - default = 70"  << std::endl
             << "\t\t" << std::endl;
 }
 
@@ -139,8 +140,9 @@ int main (int argc, char** argv)
   std::string coincidenceCalibrationFileName = "";
 
   bool simulation = false;
-  Float_t length = 15.0;
+  Float_t length = 15.0; //mm
   Float_t doiFraction = 0.5;
+  Float_t tagFwhm = 70.0e-12; //s
 
 
   // parse arguments
@@ -153,6 +155,7 @@ int main (int argc, char** argv)
       { "length", required_argument, 0, 0 },
       { "doiFraction", required_argument, 0, 0 },
       { "coincidence", required_argument, 0, 0 },
+      { "tagFwhm", required_argument, 0, 0 },
 			{ NULL, 0, 0, 0 }
 	};
 
@@ -192,6 +195,9 @@ int main (int argc, char** argv)
     }
     else if (c == 0 && optionIndex == 6){
       coincidenceCalibrationFileName = (char *)optarg;
+    }
+    else if (c == 0 && optionIndex == 7){
+      tagFwhm = 1e-12*atof((char *)optarg);
     }
 		else {
       std::cout	<< "Usage: " << argv[0] << std::endl;
@@ -765,9 +771,9 @@ int main (int argc, char** argv)
     gauss->SetParameter(1,crystal[iCry].simpleCTR->GetMean());
     gauss->SetParameter(2,crystal[iCry].simpleCTR->GetRMS());
     // std::cout << crystal[iCry].simpleCTR->GetMaximum() << std::endl;
-    crystal[iCry].simpleCTR->Fit(sname.str().c_str(),"","",crystal[iCry].simpleCTR->GetMean()-2.0*crystal[iCry].simpleCTR->GetRMS(),crystal[iCry].simpleCTR->GetMean()+2.0*crystal[iCry].simpleCTR->GetRMS());
+    crystal[iCry].simpleCTR->Fit(sname.str().c_str(),"","",crystal[iCry].simpleCTR->GetMean()-1.75*crystal[iCry].simpleCTR->GetRMS(),crystal[iCry].simpleCTR->GetMean()+1.75*crystal[iCry].simpleCTR->GetRMS());
     // std::cout << crystal[iCry].number << "\t" << fabs(gauss->GetParameter(2) * 2.355) << std::endl;
-    float basicSigma = gauss->GetParameter(2);
+    float basicSigma = sqrt(pow(gauss->GetParameter(2),2) - pow(tagFwhm/2.355,2)) ;
     sname.str("");
 
     sname << "Fit Cry " << crystal[iCry].number;
@@ -777,9 +783,9 @@ int main (int argc, char** argv)
     gauss2->SetParameter(2,crystal[iCry].centralCTR->GetRMS());
 
 
-    crystal[iCry].centralCTR->Fit(sname.str().c_str(),"","",crystal[iCry].centralCTR->GetMean()-2.0*crystal[iCry].centralCTR->GetRMS(),crystal[iCry].centralCTR->GetMean()+2.0*crystal[iCry].centralCTR->GetRMS());
+    crystal[iCry].centralCTR->Fit(sname.str().c_str(),"","",crystal[iCry].centralCTR->GetMean()-1.75*crystal[iCry].centralCTR->GetRMS(),crystal[iCry].centralCTR->GetMean()+1.75*crystal[iCry].centralCTR->GetRMS());
     // std::cout << crystal[iCry].number << "\t" << fabs(gauss->GetParameter(2) * 2.355) << std::endl;
-    float centralSigma = gauss2->GetParameter(2);
+    float centralSigma = sqrt(pow(gauss2->GetParameter(2),2) - pow(tagFwhm/2.355,2)) ;
 
     sname.str("");
     sname << "Fit Cry " << crystal[iCry].number;
@@ -788,9 +794,9 @@ int main (int argc, char** argv)
     gauss3->SetParameter(1,crystal[iCry].allCTR->GetMean());
     gauss3->SetParameter(2,crystal[iCry].allCTR->GetRMS());
 
-    crystal[iCry].allCTR->Fit(sname.str().c_str(),"","",crystal[iCry].allCTR->GetMean()-2.0*crystal[iCry].allCTR->GetRMS(),crystal[iCry].allCTR->GetMean()+2.0*crystal[iCry].allCTR->GetRMS());
+    crystal[iCry].allCTR->Fit(sname.str().c_str(),"","",crystal[iCry].allCTR->GetMean()-1.75*crystal[iCry].allCTR->GetRMS(),crystal[iCry].allCTR->GetMean()+1.75*crystal[iCry].allCTR->GetRMS());
     // std::cout << crystal[iCry].number << "\t" << fabs(gauss->GetParameter(2) * 2.355) << std::endl;
-    float allSigma = gauss3->GetParameter(2);
+    float allSigma = sqrt(pow(gauss3->GetParameter(2),2) - pow(tagFwhm/2.355,2)) ;;
     sname.str("");
 
     crystal[iCry].simpleCTR->Write();
@@ -820,7 +826,9 @@ int main (int argc, char** argv)
     hs->Add(crystal[iCry].centralCTR);
     hs->Add(crystal[iCry].allCTR);
 
-
+    Float_t realBasicCTR = fabs(1e12*basicSigma*2.355*TMath::Sqrt(2.0));
+    Float_t realCentralCTR = fabs(1e12*centralSigma*2.355*TMath::Sqrt(2.0));
+    Float_t realAllCTR =fabs(1e12*allSigma*2.355*TMath::Sqrt(2.0));
 
     // crystal[iCry].allCTR->Draw();
     // crystal[iCry].centralCTR->Draw("same");
@@ -837,13 +845,13 @@ int main (int argc, char** argv)
     TLegend *legend = new TLegend(0.54,0.62,0.89,0.89,"");
     legend->SetFillStyle(0);
     sname.str("");
-    sname << "No correction        = " << fabs(round(1e12*basicSigma*2.355*TMath::Sqrt(2.0))) << "ps";
+    sname << "No correction        = " << realBasicCTR << "ps";
     legend->AddEntry(crystal[iCry].simpleCTR,sname.str().c_str(),"f");
     sname.str("");
-    sname << "Central correction = " << fabs(round(1e12*centralSigma*2.355*TMath::Sqrt(2.0))) << "ps";
+    sname << "Central correction = " << realCentralCTR << "ps";
     legend->AddEntry(crystal[iCry].centralCTR,sname.str().c_str(),"f");
     sname.str("");
-    sname << "Full correction       = " << fabs(round(1e12*allSigma*2.355*TMath::Sqrt(2.0))) << "ps";
+    sname << "Full correction       = " << realAllCTR << "ps";
     legend->AddEntry(crystal[iCry].allCTR,sname.str().c_str(),"f");
     sname.str("");
     legend->Draw();
@@ -851,13 +859,56 @@ int main (int argc, char** argv)
     TPaveLabel *title = new TPaveLabel(.11,.95,.35,.99,"new title","brndc");
     title->Draw();
 
+
+
+
     std::cout << "Crystal " << crystal[iCry].number << std::endl;
-    std::cout << "CTR FWHM [ps] ---  (No correction - Central correction - full correction)" << std::endl;
-    std::cout << fabs(1e12*basicSigma*2.355*TMath::Sqrt(2.0)) << std::endl;
-    std::cout << fabs(1e12*centralSigma*2.355*TMath::Sqrt(2.0)) << std::endl;
-    std::cout << fabs(1e12*allSigma*2.355*TMath::Sqrt(2.0)) << std::endl;
+    std::cout << "CTR FWHM [ps] " << std::endl;
+    std::cout << "No correction       = "<< realBasicCTR   << " ps" << std::endl;
+    std::cout << "Central correction  = "<< realCentralCTR << " ps" << std::endl;
+    std::cout << "Full correction     = "<< realAllCTR     << " ps" << std::endl;
+
+
 
     c_summary->Write();
+
+    TH1F* cloneBasic = (TH1F*) crystal[iCry].simpleCTR->Clone();
+    TH1F* cloneCentral = (TH1F*) crystal[iCry].centralCTR->Clone();
+    TH1F* cloneAll = (TH1F*) crystal[iCry].allCTR->Clone();
+    THStack *cloneHs = (THStack*) hs->Clone();
+
+    sname.str("");
+    sname << "Multi - Crystal " << crystal[iCry].number;
+    TCanvas* c_multi = new TCanvas(sname.str().c_str(),sname.str().c_str(),1800,1400);
+    c_multi->Divide(2,2);
+    c_multi->cd(1);
+    TLegend *legend1 = new TLegend(0.15,0.69,0.49,0.89,"");
+    legend1->SetFillStyle(0);
+    sname.str("");
+    sname << "No correction        = " << realBasicCTR << "ps";
+    legend1->AddEntry(cloneBasic,sname.str().c_str(),"f");
+    cloneBasic->Draw();
+    legend1->Draw();
+    c_multi->cd(2);
+    TLegend *legend2 = new TLegend(0.15,0.69,0.49,0.89,"");
+    legend2->SetFillStyle(0);
+    sname.str("");
+    sname << "Central correction   = " << realCentralCTR << "ps";
+    legend2->AddEntry(cloneCentral,sname.str().c_str(),"f");
+    cloneCentral->Draw();
+    legend2->Draw();
+
+    c_multi->cd(3);
+    TLegend *legend3 = new TLegend(0.15,0.69,0.49,0.89,"");
+    legend3->SetFillStyle(0);
+    sname.str("");
+    sname << "Full correction      = " << realAllCTR << "ps";
+    legend3->AddEntry(cloneAll,sname.str().c_str(),"f");
+    cloneAll->Draw();
+    legend3->Draw();
+    c_multi->cd(4);
+    cloneHs->Draw("nostack");
+    c_multi->Write();
   }
 
   treeFile->Close();
