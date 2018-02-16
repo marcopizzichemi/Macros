@@ -104,6 +104,84 @@ struct Crystal_t
 // };
 
 
+/*** find width at half max ***/
+float ComputeFWHM(TH1F* histo)
+{
+   float max = histo->GetMaximum();
+   float halfMax = max / 2.0;
+   int binMin = histo->FindFirstBinAbove(halfMax);
+   int binMax = histo->FindLastBinAbove(halfMax);
+   float down = histo->GetBinCenter(binMin);
+   float up   = histo->GetBinCenter(binMax);
+   float ret = up -down;
+   return ret;
+}
+
+/*** find effective sigma ***/
+void FindSmallestInterval(float* ret, TH1F* histo, const float&
+fraction, const bool& verbosity)
+{
+   float integralMax = fraction * histo->Integral();
+
+   int N = histo -> GetNbinsX();
+   std::vector<float> binCenters(N);
+   std::vector<float> binContents(N);
+   std::vector<float> binIntegrals(N);
+   for(int bin1 = 0; bin1 < N; ++bin1)
+   {
+     binCenters[bin1] = histo->GetBinCenter(bin1+1);
+     binContents[bin1] = histo->GetBinContent(bin1+1);
+
+     for(int bin2 = 0; bin2 <= bin1; ++bin2)
+       binIntegrals[bin1] += binContents[bin2];
+   }
+
+   float min = 0.;
+   float max = 0.;
+   float delta = 999999.;
+   for(int bin1 = 0; bin1 < N; ++bin1)
+   {
+     for(int bin2 = bin1+1; bin2 < N; ++bin2)
+     {
+       if( (binIntegrals[bin2]-binIntegrals[bin1]) < integralMax ) continue;
+
+       float tmpMin = histo -> GetBinCenter(bin1);
+       float tmpMax = histo -> GetBinCenter(bin2);
+
+       if( (tmpMax-tmpMin) < delta )
+       {
+         delta = (tmpMax - tmpMin);
+         min = tmpMin;
+         max = tmpMax;
+       }
+
+       break;
+     }
+   }
+
+   TH1F* smallHisto = (TH1F*)( histo->Clone("smallHisto") );
+   for(int bin = 1; bin <= smallHisto->GetNbinsX(); ++bin)
+   {
+     if( smallHisto->GetBinCenter(bin) < min )
+       smallHisto -> SetBinContent(bin,0);
+
+     if( smallHisto->GetBinCenter(bin) > max )
+       smallHisto -> SetBinContent(bin,0);
+   }
+   smallHisto -> SetFillColor(kYellow);
+
+   float mean = smallHisto -> GetMean();
+   float meanErr = smallHisto -> GetMeanError();
+
+   ret[0] = mean;
+   ret[1] = meanErr;
+   ret[2] = min;
+   ret[3] = max;
+}
+
+
+
+
 
 bool compareByNumber(const Crystal_t &a,const Crystal_t  &b)
 {
@@ -123,6 +201,12 @@ void usage()
             << "\t\t" << "                                                   - 0 = front of the crystal (DOI close to detector) "  << std::endl
             << "\t\t" << "                                                   - 1 = back of the crystal (DOI far from detector) "  << std::endl
             << "\t\t" << "--tagFwhm <value>                                  - FWHM timing resolution of reference board, in ps - default = 70"  << std::endl
+            << "\t\t" << "--rmsLow <value>                                   - lower bound of CTR fit -> mean - rmsLow*mean - default = 1.75"  << std::endl
+            << "\t\t" << "--rmsHigh <value>                                  - upper bound of CTR fit -> mean + rmsHigh*mean - default = 1.75"  << std::endl
+            << "\t\t" << "--histoMin <value>                                 - lower limit of CTR spectra, in ns - default = -15"  << std::endl
+            << "\t\t" << "--histoMax <value>                                 - upper limit of CTR spectra, in ns - default = 15"  << std::endl
+            << "\t\t" << "--histoBins <value>                                - n of bins for CTR spectra - default = 500"  << std::endl
+              << "\t\t" << "--smooth <value>                                 - n of iteration in CTR histograms smoothing - default = 0 (no smoothing)"  << std::endl
             << "\t\t" << std::endl;
 }
 
@@ -143,7 +227,12 @@ int main (int argc, char** argv)
   Float_t length = 15.0; //mm
   Float_t doiFraction = 0.5;
   Float_t tagFwhm = 70.0e-12; //s
-
+  Float_t rmsLow = 1.75;
+  Float_t rmsHigh = 1.75;
+  Float_t histoMin = -15e-9;//s
+  Float_t histoMax = 15e-9;//s
+  int histoBins = 500;
+  int smooth = 0; //
 
   // parse arguments
   static struct option longOptions[] =
@@ -156,6 +245,12 @@ int main (int argc, char** argv)
       { "doiFraction", required_argument, 0, 0 },
       { "coincidence", required_argument, 0, 0 },
       { "tagFwhm", required_argument, 0, 0 },
+      { "rmsLow", required_argument, 0, 0 },
+      { "rmsHigh", required_argument, 0, 0 },
+      { "histoMin", required_argument, 0, 0 },
+      { "histoMax", required_argument, 0, 0 },
+      { "histoBins", required_argument, 0, 0 },
+      { "smooth", required_argument, 0, 0 },
 			{ NULL, 0, 0, 0 }
 	};
 
@@ -198,6 +293,24 @@ int main (int argc, char** argv)
     }
     else if (c == 0 && optionIndex == 7){
       tagFwhm = 1e-12*atof((char *)optarg);
+    }
+    else if (c == 0 && optionIndex == 8){
+      rmsLow = atof((char *)optarg);
+    }
+    else if (c == 0 && optionIndex == 9){
+      rmsHigh = atof((char *)optarg);
+    }
+    else if (c == 0 && optionIndex == 10){
+      histoMin = 1e-9*atof((char *)optarg);
+    }
+    else if (c == 0 && optionIndex == 11){
+      histoMax = 1e-9*atof((char *)optarg);
+    }
+    else if (c == 0 && optionIndex == 12){
+      histoBins = atoi((char *)optarg);
+    }
+    else if (c == 0 && optionIndex == 13){
+      smooth = atoi((char *)optarg);
     }
 		else {
       std::cout	<< "Usage: " << argv[0] << std::endl;
@@ -483,15 +596,15 @@ int main (int argc, char** argv)
          gDirectory->cd("..");
          std::stringstream sname;
          sname << "CTR basic - " << temp_crystal.number;
-         temp_crystal.simpleCTR = new TH1F(sname.str().c_str(),sname.str().c_str(),500,-12e-9,-7e-9);
+         temp_crystal.simpleCTR = new TH1F(sname.str().c_str(),sname.str().c_str(),histoBins,histoMin,histoMax);
          sname.str("");
 
          sname << "CTR central correction - " << temp_crystal.number;
-         temp_crystal.centralCTR = new TH1F(sname.str().c_str(),sname.str().c_str(),500,-12e-9,-7e-9);
+         temp_crystal.centralCTR = new TH1F(sname.str().c_str(),sname.str().c_str(),histoBins,histoMin,histoMax);
          sname.str("");
 
          sname << "CTR all correction - " << temp_crystal.number;
-         temp_crystal.allCTR = new TH1F(sname.str().c_str(),sname.str().c_str(),500,-12e-9,-7e-9);
+         temp_crystal.allCTR = new TH1F(sname.str().c_str(),sname.str().c_str(),histoBins,histoMin,histoMax);
          sname.str("");
 
          TCut globalCut; // the cut for the formula
@@ -764,44 +877,78 @@ int main (int argc, char** argv)
   outputFile->cd();
   for(unsigned int iCry = 0 ;  iCry < crystal.size() ; iCry++)
   {
+
     std::stringstream sname;
-    sname << "Fit Cry " << crystal[iCry].number;
-    TF1 *gauss = new TF1(sname.str().c_str(),  "[0]*exp(-0.5*((x-[1])/[2])**2)",-15e-9,15e-9);
-    gauss->SetParameter(0,crystal[iCry].simpleCTR->GetMaximum());
-    gauss->SetParameter(1,crystal[iCry].simpleCTR->GetMean());
-    gauss->SetParameter(2,crystal[iCry].simpleCTR->GetRMS());
-    // std::cout << crystal[iCry].simpleCTR->GetMaximum() << std::endl;
-    crystal[iCry].simpleCTR->Fit(sname.str().c_str(),"","",crystal[iCry].simpleCTR->GetMean()-1.75*crystal[iCry].simpleCTR->GetRMS(),crystal[iCry].simpleCTR->GetMean()+1.75*crystal[iCry].simpleCTR->GetRMS());
-    // std::cout << crystal[iCry].number << "\t" << fabs(gauss->GetParameter(2) * 2.355) << std::endl;
-    float basicSigma = sqrt(pow(gauss->GetParameter(2),2) - pow(tagFwhm/2.355,2)) ;
+
+    // sname << "Fit Cry " << crystal[iCry].number;
+    // TF1 *gauss = new TF1(sname.str().c_str(),  "[0]*exp(-0.5*((x-[1])/[2])**2)",-15e-9,15e-9);
+    // gauss->SetParameter(0,crystal[iCry].simpleCTR->GetMaximum());
+    // gauss->SetParameter(1,crystal[iCry].simpleCTR->GetMean());
+    // gauss->SetParameter(2,crystal[iCry].simpleCTR->GetRMS());
+    //
+    // // std::cout << crystal[iCry].simpleCTR->GetMaximum() << std::endl;
+    // crystal[iCry].simpleCTR->Fit(sname.str().c_str(),"","",crystal[iCry].simpleCTR->GetMean()-rmsLow*crystal[iCry].simpleCTR->GetRMS(),crystal[iCry].simpleCTR->GetMean()+rmsHigh*crystal[iCry].simpleCTR->GetRMS());
+    // // std::cout << crystal[iCry].number << "\t" << fabs(gauss->GetParameter(2) * 2.355) << std::endl;
+    //
+    // sname.str("");
+    //
+    // sname << "Fit Cry " << crystal[iCry].number;
+    // TF1 *gauss2 = new TF1(sname.str().c_str(),  "[0]*exp(-0.5*((x-[1])/[2])**2)",-15e-9,15e-9);
+    // gauss2->SetParameter(0,crystal[iCry].centralCTR->GetMaximum());
+    // gauss2->SetParameter(1,crystal[iCry].centralCTR->GetMean());
+    // gauss2->SetParameter(2,crystal[iCry].centralCTR->GetRMS());
+    //
+    //
+    // crystal[iCry].centralCTR->Fit(sname.str().c_str(),"","",crystal[iCry].centralCTR->GetMean()-rmsLow*crystal[iCry].centralCTR->GetRMS(),crystal[iCry].centralCTR->GetMean()+rmsHigh*crystal[iCry].centralCTR->GetRMS());
+    // // std::cout << crystal[iCry].number << "\t" << fabs(gauss->GetParameter(2) * 2.355) << std::endl;
+    //
+    //
+    // sname.str("");
+    // sname << "Fit Cry " << crystal[iCry].number;
+    // TF1 *gauss3 = new TF1(sname.str().c_str(),  "[0]*exp(-0.5*((x-[1])/[2])**2)",-15e-9,15e-9);
+    // gauss3->SetParameter(0,crystal[iCry].allCTR->GetMaximum());
+    // gauss3->SetParameter(1,crystal[iCry].allCTR->GetMean());
+    // gauss3->SetParameter(2,crystal[iCry].allCTR->GetRMS());
+    //
+    // crystal[iCry].allCTR->Fit(sname.str().c_str(),"","",crystal[iCry].allCTR->GetMean()-rmsLow*crystal[iCry].allCTR->GetRMS(),crystal[iCry].allCTR->GetMean()+rmsHigh*crystal[iCry].allCTR->GetRMS());
+    // // std::cout << crystal[iCry].number << "\t" << fabs(gauss->GetParameter(2) * 2.355) << std::endl;
+
+
+    // *** with effetive sigma ***//
+    // float *basicHistoSigma = new float[4];
+    // float *centralHistoSigma = new float[4];
+    // float *allHistoSigma = new float[4];
+    // FindSmallestInterval(basicHistoSigma,crystal[iCry].simpleCTR,0.68,true);
+    // FindSmallestInterval(centralHistoSigma,crystal[iCry].centralCTR,0.68,true);
+    // FindSmallestInterval(allHistoSigma,crystal[iCry].allCTR,0.68,true);
+    //
+    // std::cout << basicHistoSigma[0] << " " << basicHistoSigma[1] << " " << basicHistoSigma[2] << " " << basicHistoSigma[3] << std::endl;
+
+    // float basicSigma = sqrt(pow((basicHistoSigma[3]-basicHistoSigma[2])/2.0,2) - pow(tagFwhm/2.355,2)) ;
+    // float centralSigma = sqrt(pow((centralHistoSigma[3]-centralHistoSigma[2])/2.0,2) - pow(tagFwhm/2.355,2)) ;
+    // float allSigma = sqrt(pow((allHistoSigma[3]-allHistoSigma[2])/2.0,2) - pow(tagFwhm/2.355,2)) ;
+
+    if(smooth)
+    {
+      crystal[iCry].simpleCTR ->Smooth(smooth);
+      crystal[iCry].centralCTR->Smooth(smooth);
+      crystal[iCry].allCTR    ->Smooth(smooth);
+    }
+
+    float basicHistoSigma    = ComputeFWHM(crystal[iCry].simpleCTR) / 2.355;
+    float centralHistoSigma  = ComputeFWHM(crystal[iCry].centralCTR)/ 2.355;
+    float allHistoSigma      = ComputeFWHM(crystal[iCry].allCTR)    / 2.355;
+
+    float basicSigma   = sqrt(pow(basicHistoSigma   ,2) - pow(tagFwhm/2.355,2)) ;
+    float centralSigma = sqrt(pow(centralHistoSigma ,2) - pow(tagFwhm/2.355,2)) ;
+    float allSigma     = sqrt(pow(allHistoSigma     ,2) - pow(tagFwhm/2.355,2)) ;
+
+    Float_t realBasicCTR = fabs(1e12*basicSigma*2.355*TMath::Sqrt(2.0));
+    Float_t realCentralCTR = fabs(1e12*centralSigma*2.355*TMath::Sqrt(2.0));
+    Float_t realAllCTR =fabs(1e12*allSigma*2.355*TMath::Sqrt(2.0));
+
     sname.str("");
 
-    sname << "Fit Cry " << crystal[iCry].number;
-    TF1 *gauss2 = new TF1(sname.str().c_str(),  "[0]*exp(-0.5*((x-[1])/[2])**2)",-15e-9,15e-9);
-    gauss2->SetParameter(0,crystal[iCry].centralCTR->GetMaximum());
-    gauss2->SetParameter(1,crystal[iCry].centralCTR->GetMean());
-    gauss2->SetParameter(2,crystal[iCry].centralCTR->GetRMS());
-
-
-    crystal[iCry].centralCTR->Fit(sname.str().c_str(),"","",crystal[iCry].centralCTR->GetMean()-1.75*crystal[iCry].centralCTR->GetRMS(),crystal[iCry].centralCTR->GetMean()+1.75*crystal[iCry].centralCTR->GetRMS());
-    // std::cout << crystal[iCry].number << "\t" << fabs(gauss->GetParameter(2) * 2.355) << std::endl;
-    float centralSigma = sqrt(pow(gauss2->GetParameter(2),2) - pow(tagFwhm/2.355,2)) ;
-
-    sname.str("");
-    sname << "Fit Cry " << crystal[iCry].number;
-    TF1 *gauss3 = new TF1(sname.str().c_str(),  "[0]*exp(-0.5*((x-[1])/[2])**2)",-15e-9,15e-9);
-    gauss3->SetParameter(0,crystal[iCry].allCTR->GetMaximum());
-    gauss3->SetParameter(1,crystal[iCry].allCTR->GetMean());
-    gauss3->SetParameter(2,crystal[iCry].allCTR->GetRMS());
-
-    crystal[iCry].allCTR->Fit(sname.str().c_str(),"","",crystal[iCry].allCTR->GetMean()-1.75*crystal[iCry].allCTR->GetRMS(),crystal[iCry].allCTR->GetMean()+1.75*crystal[iCry].allCTR->GetRMS());
-    // std::cout << crystal[iCry].number << "\t" << fabs(gauss->GetParameter(2) * 2.355) << std::endl;
-    float allSigma = sqrt(pow(gauss3->GetParameter(2),2) - pow(tagFwhm/2.355,2)) ;;
-    sname.str("");
-
-    crystal[iCry].simpleCTR->Write();
-    crystal[iCry].centralCTR->Write();
-    crystal[iCry].allCTR->Write();
     crystal[iCry].simpleCTR->SetFillStyle(3001);
     crystal[iCry].simpleCTR->SetFillColor(kGreen);
     crystal[iCry].simpleCTR->SetLineColor(kGreen);
@@ -814,7 +961,18 @@ int main (int argc, char** argv)
     crystal[iCry].simpleCTR->SetStats(0);
     crystal[iCry].centralCTR->SetStats(0);
     crystal[iCry].allCTR->SetStats(0);
+    crystal[iCry].simpleCTR->Write();
+    crystal[iCry].centralCTR->Write();
+    crystal[iCry].allCTR->Write();
+
     sname.str("");
+
+
+
+
+
+
+
     sname << "Summary - Crystal " << crystal[iCry].number;
     TCanvas* c_summary = new TCanvas(sname.str().c_str(),sname.str().c_str(),1200,800);
     // frame = c_summary->DrawFrame(-1., 0., 2., 2.);
@@ -822,13 +980,14 @@ int main (int argc, char** argv)
     c_summary->cd();
     THStack *hs = new THStack("hs","");
 
+    crystal[iCry].simpleCTR->Scale(1.0/crystal[iCry].simpleCTR->GetMaximum());
+    crystal[iCry].centralCTR->Scale(1.0/crystal[iCry].centralCTR->GetMaximum());
+    crystal[iCry].allCTR->Scale(1.0/crystal[iCry].allCTR->GetMaximum());
     hs->Add(crystal[iCry].simpleCTR);
     hs->Add(crystal[iCry].centralCTR);
     hs->Add(crystal[iCry].allCTR);
 
-    Float_t realBasicCTR = fabs(1e12*basicSigma*2.355*TMath::Sqrt(2.0));
-    Float_t realCentralCTR = fabs(1e12*centralSigma*2.355*TMath::Sqrt(2.0));
-    Float_t realAllCTR =fabs(1e12*allSigma*2.355*TMath::Sqrt(2.0));
+
 
     // crystal[iCry].allCTR->Draw();
     // crystal[iCry].centralCTR->Draw("same");
@@ -861,7 +1020,7 @@ int main (int argc, char** argv)
 
 
 
-
+    std::cout << std::endl;
     std::cout << "Crystal " << crystal[iCry].number << std::endl;
     std::cout << "CTR FWHM [ps] " << std::endl;
     std::cout << "No correction       = "<< realBasicCTR   << " ps" << std::endl;
@@ -871,6 +1030,7 @@ int main (int argc, char** argv)
 
 
     c_summary->Write();
+
 
     TH1F* cloneBasic = (TH1F*) crystal[iCry].simpleCTR->Clone();
     TH1F* cloneCentral = (TH1F*) crystal[iCry].centralCTR->Clone();
@@ -907,7 +1067,9 @@ int main (int argc, char** argv)
     cloneAll->Draw();
     legend3->Draw();
     c_multi->cd(4);
+    c_multi->cd(4)->SetGrid();
     cloneHs->Draw("nostack");
+
     c_multi->Write();
   }
 
