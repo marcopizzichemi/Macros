@@ -862,9 +862,13 @@ int main (int argc, char** argv)
             Float_t averageTimeStamp = 0.0;
             Float_t totalWeight = 0.0;
             // averageTimeStamp += timeStamp[crystal[iCry].detectorChannel];
+            Float_t centralcorrection = crystal[iCry].tw_correction->Eval(crystal[iCry].wz->Eval(length*doiFraction)) - crystal[iCry].tw_correction->Eval(FloodZ);
+            Float_t zeroCorrection    = crystal[iCry].tw_correction->Eval(crystal[iCry].wz->Eval(length*0)) - crystal[iCry].tw_correction->Eval(FloodZ);
+
             Float_t weight = 0.0;
-            weight = pow(crystal[iCry].rms_tw_correction->Eval(FloodZ),-2);
-            averageTimeStamp += weight*(timeStamp[crystal[iCry].detectorChannel]);
+            weight = pow(sqrt(pow(crystal[iCry].rms_tw_correction->Eval(FloodZ),2)+pow(crystal[iCry].rms_tw_correction->Eval(crystal[iCry].wz->Eval(length*0)),2)),-2);
+
+            averageTimeStamp += weight*(timeStamp[crystal[iCry].detectorChannel]- zeroCorrection);
             totalWeight += weight;
             // std::cout << i << " " << iCry << " " <<  crystal[iCry].number << "\n";
             for(unsigned int iGraph = 0; iGraph < crystal[iCry].delay.size();iGraph++)
@@ -885,7 +889,7 @@ int main (int argc, char** argv)
             // averageTimeStamp = averageTimeStamp/(crystal[iCry].delay.size() + 1);
             // std::cout << std::endl;
             // std::cout << "TEST "<< i << std::endl;
-            Float_t centralcorrection = crystal[iCry].tw_correction->Eval(crystal[iCry].wz->Eval(length*doiFraction)) - crystal[iCry].tw_correction->Eval(FloodZ);
+
             // std::cout << crystal[iCry].calibrationGraph->Eval(FloodZ) << "\t" << (crystal[iCry].calibrationGraph->Eval(FloodZ) - ZPosition) << std::endl;
             // Float_t realZ = ZPosition;
             // std::cout << realZ << std::endl;
