@@ -103,6 +103,54 @@ struct Crystal_t
 //
 // };
 
+// // define a function with 3 parameters
+// Double_t crystalball(Double_t *x,Double_t *par) {
+//       Double_t arg = 0;
+//       if (par[2]!=0) arg = (x[0] - par[1])/par[2];
+//       Double_t fitval = par[0]*TMath::Exp(-0.5*arg*arg);
+//       return fitval;
+// }
+
+
+// void ComputeWithCrystalBall(TH1F* histo,float *res)
+// {
+//   // res[0] is fwhm
+//   // res[1] is fwtm
+//   double f1min = -10e-9;
+//   double f1max = -8e-9;
+//   TF1* f1  = new TF1("f1","crystalball",f1min,f1max);
+//   f1->SetParameters(280,histo->GetMean(),histo->GetRMS(),1,3);
+//   histo->Fit(f1,"","",-9.4e-9,-8.42-9);
+//   double min = 1;
+//   double max = -1;
+//   double min10 = 1;
+//   double max10 = -1;
+//
+//   int divs = 1000;
+//   double step = (f1max-f1min)/divs;
+//   for(int i = 0 ; i < divs ; i++)
+//   {
+//     if( (f1->Eval(f1min + i*step) < f1->GetMaximum()/2.0) && (f1->Eval(f1min + (i+1)*step) > f1->GetMaximum()/2.0) )
+//     {
+//       min = f1min + (i+0.5)*step;
+//     }
+//     if( (f1->Eval(f1min + i*step) > f1->GetMaximum()/2.0) && (f1->Eval(f1min + (i+1)*step) < f1->GetMaximum()/2.0) )
+//     {
+//       max = f1min + (i+0.5)*step;
+//     }
+//     if( (f1->Eval(f1min + i*step) < f1->GetMaximum()/10.0) && (f1->Eval(f1min + (i+1)*step) > f1->GetMaximum()/10.0) )
+//     {
+//       min10 = f1min + (i+0.5)*step;
+//     }
+//     if( (f1->Eval(f1min + i*step) > f1->GetMaximum()/10.0) && (f1->Eval(f1min + (i+1)*step) < f1->GetMaximum()/10.0) )
+//     {
+//       max10 = f1min + (i+0.5)*step;
+//     }
+//   }
+//
+//   res[0] = 2.355*sqrt(2)*sqrt(pow((max-min)/2.355,2)-pow(70e-12/2.355,2));
+//   res[1] = sqrt(2)*sqrt(pow((max10-min10),2)-pow((70e-12/2.355)*4.29,2));
+// }
 
 /*** find width at half max ***/
 float ComputeFWHM(TH1F* histo)
@@ -595,15 +643,15 @@ int main (int argc, char** argv)
          }
          gDirectory->cd("..");
          std::stringstream sname;
-         sname << "CTR basic - " << temp_crystal.number;
+         sname << "No correction - Crystal " << temp_crystal.number;
          temp_crystal.simpleCTR = new TH1F(sname.str().c_str(),sname.str().c_str(),histoBins,histoMin,histoMax);
          sname.str("");
 
-         sname << "CTR central correction - " << temp_crystal.number;
+         sname << "Central correction - Crystal " << temp_crystal.number;
          temp_crystal.centralCTR = new TH1F(sname.str().c_str(),sname.str().c_str(),histoBins,histoMin,histoMax);
          sname.str("");
 
-         sname << "CTR all correction - " << temp_crystal.number;
+         sname << "Full correction - Crystal " << temp_crystal.number;
          temp_crystal.allCTR = new TH1F(sname.str().c_str(),sname.str().c_str(),histoBins,histoMin,histoMax);
          sname.str("");
 
@@ -939,6 +987,15 @@ int main (int argc, char** argv)
     float centralHistoSigma  = ComputeFWHM(crystal[iCry].centralCTR)/ 2.355;
     float allHistoSigma      = ComputeFWHM(crystal[iCry].allCTR)    / 2.355;
 
+
+    // float basicRes[2];
+    // float centralRes[2] ;
+    // float allRes[2] ;
+    //
+    // ComputeWithCrystalBall(crystal[iCry].simpleCTR,basicRes);
+    // std::cout << "CTR FWHM [ps] = " << basicRes[0] << std::endl;
+    // std::cout << "CTR FWTM [ps] = " << basicRes[1] << std::endl;
+
     float basicSigma   = sqrt(pow(basicHistoSigma   ,2) - pow(tagFwhm/2.355,2)) ;
     float centralSigma = sqrt(pow(centralHistoSigma ,2) - pow(tagFwhm/2.355,2)) ;
     float allSigma     = sqrt(pow(allHistoSigma     ,2) - pow(tagFwhm/2.355,2)) ;
@@ -968,8 +1025,11 @@ int main (int argc, char** argv)
     sname.str("");
 
 
+    // TF1 *func = new TF1("crystalball",crystalball,-3,3,3);
+    // func->SetParameters(500,hpx->GetMean(),hpx->GetRMS());
 
-
+      // give the parameters meaningful names
+    // func->SetParNames ("Constant","Mean_value","Sigma");
 
 
 
