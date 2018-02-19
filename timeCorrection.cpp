@@ -490,6 +490,7 @@ int main (int argc, char** argv)
        temp_crystal.allCTR = NULL;
        temp_crystal.wz = NULL;
        temp_crystal.accepted = false;
+       temp_crystal.tw_correction = NULL;
 
        //get crystal number
        temp_crystal.number = atoi((CrystalFolders[iCry].substr(crystal_prefix.size()+1,CrystalFolders[iCry].size()-crystal_prefix.size()-1)).c_str());
@@ -585,62 +586,62 @@ int main (int argc, char** argv)
            }
          }
 
-         gDirectory->cd("TimeCorrection");
-         temp_crystal.path = gDirectory->GetPath();
-         TList *listTcorr = gDirectory->GetListOfKeys();
-         int nKeysTcorr = listTcorr->GetEntries();
-         std::vector<std::string> keysTcorrName;
-         if(nKeysTcorr) //if directory not empty
+         bool dirExists;
+         dirExists = gDirectory->cd("TimeCorrection");
+         if(dirExists)
          {
-           for(int i = 0 ; i < nKeysTcorr ; i++){
-             keysTcorrName.push_back(listTcorr->At(i)->GetName());
-           }
-
-           // std::string deltaWGraph_prefix = "DeltaW Graph";
-           // std::string rms_deltaWGraph_prefix = "RMS DeltaW Graph";
-           std::string graph_delay_prefix = "Graph Delay ch_";
-           std::string rms_graph_delay_prefix = "RMS Graph Delay ch_";
-
-           for(unsigned int i = 0 ; i < keysTcorrName.size() ; i++)
+           temp_crystal.path = gDirectory->GetPath();
+           TList *listTcorr = gDirectory->GetListOfKeys();
+           int nKeysTcorr = listTcorr->GetEntries();
+           std::vector<std::string> keysTcorrName;
+           if(nKeysTcorr) //if directory not empty
            {
-             // if(!keysTcorrName[i].compare(0,deltaWGraph_prefix.size(),deltaWGraph_prefix))
-             // {
-             //   TGraph *calibGraph = NULL;
-             //   calibGraph = (TGraph*) gDirectory->Get(keysTcorrName[i].c_str());
-             //   if(calibGraph)
-             //     temp_crystal.tw_correction = calibGraph;
-             // }
-
-             // if(!keysTcorrName[i].compare(0,rms_deltaWGraph_prefix.size(),rms_deltaWGraph_prefix))
-             // {
-             //  TGraph *calibGraph = NULL;
-             //  calibGraph = (TGraph*) gDirectory->Get(keysTcorrName[i].c_str());
-             //  if(calibGraph)
-             //     temp_crystal.rms_tw_correction = calibGraph;
-             // }
-
-             if(!keysTcorrName[i].compare(0,graph_delay_prefix.size(),graph_delay_prefix))
-             {
-               TGraph *calibGraph = NULL;
-               calibGraph = (TGraph*) gDirectory->Get(keysTcorrName[i].c_str());
-               if(calibGraph)
-                 temp_crystal.delay.push_back(calibGraph);
+             for(int i = 0 ; i < nKeysTcorr ; i++){
+               keysTcorrName.push_back(listTcorr->At(i)->GetName());
              }
 
-             if(!keysTcorrName[i].compare(0,rms_graph_delay_prefix.size(),rms_graph_delay_prefix))
+             // std::string deltaWGraph_prefix = "DeltaW Graph";
+             // std::string rms_deltaWGraph_prefix = "RMS DeltaW Graph";
+             std::string graph_delay_prefix = "Graph Delay ch_";
+             std::string rms_graph_delay_prefix = "RMS Graph Delay ch_";
+
+             for(unsigned int i = 0 ; i < keysTcorrName.size() ; i++)
              {
-               TGraph *calibGraph = NULL;
-               calibGraph = (TGraph*) gDirectory->Get(keysTcorrName[i].c_str());
-               if(calibGraph)
-                 temp_crystal.rms_delay.push_back(calibGraph);
+               // if(!keysTcorrName[i].compare(0,deltaWGraph_prefix.size(),deltaWGraph_prefix))
+               // {
+               //   TGraph *calibGraph = NULL;
+               //   calibGraph = (TGraph*) gDirectory->Get(keysTcorrName[i].c_str());
+               //   if(calibGraph)
+               //     temp_crystal.tw_correction = calibGraph;
+               // }
+
+               // if(!keysTcorrName[i].compare(0,rms_deltaWGraph_prefix.size(),rms_deltaWGraph_prefix))
+               // {
+               //  TGraph *calibGraph = NULL;
+               //  calibGraph = (TGraph*) gDirectory->Get(keysTcorrName[i].c_str());
+               //  if(calibGraph)
+               //     temp_crystal.rms_tw_correction = calibGraph;
+               // }
+
+               if(!keysTcorrName[i].compare(0,graph_delay_prefix.size(),graph_delay_prefix))
+               {
+                 TGraph *calibGraph = NULL;
+                 calibGraph = (TGraph*) gDirectory->Get(keysTcorrName[i].c_str());
+                 if(calibGraph)
+                   temp_crystal.delay.push_back(calibGraph);
+               }
+
+               if(!keysTcorrName[i].compare(0,rms_graph_delay_prefix.size(),rms_graph_delay_prefix))
+               {
+                 TGraph *calibGraph = NULL;
+                 calibGraph = (TGraph*) gDirectory->Get(keysTcorrName[i].c_str());
+                 if(calibGraph)
+                   temp_crystal.rms_delay.push_back(calibGraph);
+               }
              }
            }
-
-
-
-
-
          }
+
          gDirectory->cd("..");
          std::stringstream sname;
          sname << "No correction - Crystal " << temp_crystal.number;
@@ -853,68 +854,58 @@ int main (int argc, char** argv)
           if(crystal[iCry].Formula->EvalInstance())  //if in global cut of crystal
           {
             goodEvents++;
-
-            // std::string deltaWGraph_prefix = "DeltaW Graph";
-            // std::string rms_deltaWGraph_prefix = "RMS DeltaW Graph";
-            std::string graph_delay_prefix = "Graph Delay ch_";
-            std::string rms_graph_delay_prefix = "RMS Graph Delay ch_";
-
-            Float_t averageTimeStamp = 0.0;
-            Float_t totalWeight = 0.0;
-            // averageTimeStamp += timeStamp[crystal[iCry].detectorChannel];
-            Float_t centralcorrection = crystal[iCry].tw_correction->Eval(crystal[iCry].wz->Eval(length*doiFraction)) - crystal[iCry].tw_correction->Eval(FloodZ);
-            Float_t zeroCorrection    = crystal[iCry].tw_correction->Eval(crystal[iCry].wz->Eval(length*0)) - crystal[iCry].tw_correction->Eval(FloodZ);
-
-            Float_t weight = 0.0;
-            weight = pow(sqrt(pow(crystal[iCry].rms_tw_correction->Eval(FloodZ),2)+pow(crystal[iCry].rms_tw_correction->Eval(crystal[iCry].wz->Eval(length*0)),2)),-2);
-
-            averageTimeStamp += weight*(timeStamp[crystal[iCry].detectorChannel]- zeroCorrection);
-            totalWeight += weight;
-            // std::cout << i << " " << iCry << " " <<  crystal[iCry].number << "\n";
-            for(unsigned int iGraph = 0; iGraph < crystal[iCry].delay.size();iGraph++)
-            {
-              std::string graphName = crystal[iCry].delay[iGraph]->GetName();
-              int graphCh = atoi( graphName.substr( graph_delay_prefix.size(), graphName.size() - graph_delay_prefix.size() ).c_str() );
-              // std::cout << graphCh  << "\t";
-
-              std::string rmsName = crystal[iCry].rms_delay[iGraph]->GetName();
-              int rmsCh = atoi( rmsName.substr( rms_graph_delay_prefix.size(), rmsName.size() - rms_graph_delay_prefix.size() ).c_str() );
-              // std::cout << rmsCh  << "\t";
-              weight = pow(crystal[iCry].rms_delay[iGraph]->Eval(FloodZ),-2);
-              totalWeight += weight;
-              averageTimeStamp += weight*(timeStamp[graphCh] - crystal[iCry].delay[iGraph]->Eval(FloodZ));
-              // std::cout << timeStamp[graphCh] - crystal[iCry].delay[iGraph]->Eval(FloodZ) << "\t";
-            }
-            averageTimeStamp = averageTimeStamp/totalWeight;
-            // averageTimeStamp = averageTimeStamp/(crystal[iCry].delay.size() + 1);
-            // std::cout << std::endl;
-            // std::cout << "TEST "<< i << std::endl;
-
-            // std::cout << crystal[iCry].calibrationGraph->Eval(FloodZ) << "\t" << (crystal[iCry].calibrationGraph->Eval(FloodZ) - ZPosition) << std::endl;
-            // Float_t realZ = ZPosition;
-            // std::cout << realZ << std::endl;
-            // if(zPosGiven)//check ZPosition, then take the z vector from the crystal and use the closest z
-            // {
-            //   float distance = INFINITY; // in mm, i doubt it will ever be bigger...
-            //   int posMarker = -1;
-            //   for(unsigned int iDistance = 0 ; iDistance < crystal[iCry].z.size(); iDistance++)
-            //   {
-            //     if( fabs(crystal[iCry].z[iDistance] - ZPosition) < distance )
-            //     {
-            //       posMarker = iDistance;
-            //       distance = fabs(crystal[iCry].z[iDistance] - ZPosition);
-            //     }
-            //   }
-            //   realZ = crystal[iCry].z[posMarker];
-            //
-            // }
-            // std::cout << realZ << std::endl;
-
-            // std::cout << timeStamp[crystal[iCry].detectorChannel] << "\t" << TaggingTimeStamp << std::endl;
+            Float_t centralcorrection = 0.0;
+            Float_t zeroCorrection    = 0.0;
+            //no corr
             crystal[iCry].simpleCTR->Fill(timeStamp[crystal[iCry].detectorChannel] - TaggingTimeStamp);
-            // std::cout << "TEST "<< i << std::endl;
-            crystal[iCry].centralCTR->Fill((timeStamp[crystal[iCry].detectorChannel] + (centralcorrection)) - TaggingTimeStamp);
-            crystal[iCry].allCTR->Fill(averageTimeStamp + centralcorrection  - TaggingTimeStamp);
+
+            if(crystal[iCry].tw_correction)
+            {
+              // central corr
+              // std::string deltaWGraph_prefix = "DeltaW Graph";
+              // std::string rms_deltaWGraph_prefix = "RMS DeltaW Graph";
+              std::string graph_delay_prefix = "Graph Delay ch_";
+              std::string rms_graph_delay_prefix = "RMS Graph Delay ch_";
+              Float_t averageTimeStamp = 0.0;
+              Float_t totalWeight = 0.0;
+              // averageTimeStamp += timeStamp[crystal[iCry].detectorChannel];
+              centralcorrection = crystal[iCry].tw_correction->Eval(crystal[iCry].wz->Eval(length*doiFraction)) - crystal[iCry].tw_correction->Eval(FloodZ);
+              crystal[iCry].centralCTR->Fill((timeStamp[crystal[iCry].detectorChannel] + (centralcorrection)) - TaggingTimeStamp);
+
+
+              if(crystal[iCry].delay.size())
+              {
+                //full corr
+                zeroCorrection = crystal[iCry].tw_correction->Eval(crystal[iCry].wz->Eval(length*0)) - crystal[iCry].tw_correction->Eval(FloodZ);
+
+                Float_t weight = 0.0;
+                weight = pow(sqrt(pow(crystal[iCry].rms_tw_correction->Eval(FloodZ),2)+pow(crystal[iCry].rms_tw_correction->Eval(crystal[iCry].wz->Eval(length*0)),2)),-2);
+
+                averageTimeStamp += weight*(timeStamp[crystal[iCry].detectorChannel]- zeroCorrection);
+                totalWeight += weight;
+                // std::cout << i << " " << iCry << " " <<  crystal[iCry].number << "\n";
+                for(unsigned int iGraph = 0; iGraph < crystal[iCry].delay.size();iGraph++)
+                {
+                  std::string graphName = crystal[iCry].delay[iGraph]->GetName();
+                  int graphCh = atoi( graphName.substr( graph_delay_prefix.size(), graphName.size() - graph_delay_prefix.size() ).c_str() );
+                  // std::cout << graphCh  << "\t";
+
+                  std::string rmsName = crystal[iCry].rms_delay[iGraph]->GetName();
+                  int rmsCh = atoi( rmsName.substr( rms_graph_delay_prefix.size(), rmsName.size() - rms_graph_delay_prefix.size() ).c_str() );
+                  // std::cout << rmsCh  << "\t";
+                  weight = pow(crystal[iCry].rms_delay[iGraph]->Eval(FloodZ),-2);
+                  totalWeight += weight;
+                  averageTimeStamp += weight*(timeStamp[graphCh] - crystal[iCry].delay[iGraph]->Eval(FloodZ));
+                  // std::cout << timeStamp[graphCh] - crystal[iCry].delay[iGraph]->Eval(FloodZ) << "\t";
+                }
+                averageTimeStamp = averageTimeStamp/totalWeight;
+
+                crystal[iCry].allCTR->Fill(averageTimeStamp + centralcorrection  - TaggingTimeStamp);
+              }
+            }
+
+
+
 
           }
         }
