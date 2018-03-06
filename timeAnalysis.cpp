@@ -1,5 +1,5 @@
 // compile with
-// g++ -o ../build/timeCorrection timeCorrection.cpp `root-config --cflags --glibs` -Wl,--no-as-needed -lHist -lCore -lMathCore -lTree -lTreePlayer
+// g++ -o ../build/timeAnalysis timeAnalysis.cpp `root-config --cflags --glibs` -Wl,--no-as-needed -lHist -lCore -lMathCore -lTree -lTreePlayer
 
 
 // g++ -o ../build/timeCorrection timeCorrection.cpp -pthread -std=c++11 -m64 -I/home/marco/Programs/Root/root-6.10.08/include -L/home/marco/Programs/Root/root-6.10.08/lib -lGui -lCore -lRIO -lNet -lHist -lGraf -lGraf3d -lGpad -lTree -lTreePlayer -lRint -lPostscript -lMatrix -lPhysics -lMathCore -lThread -lMultiProc -pthread -lm -ldl -rdynamic -Wl,--no-as-needed -lHist -lCore -lMathCore -lTree -lTreePlayer
@@ -55,11 +55,31 @@
 #include <getopt.h>
 #include <algorithm>    // std::sort
 
+#include <sys/types.h>
+#include <dirent.h>
+
+// typedef std::vector<std::string> stringvec;
+// list files in directory
+// taken from
+// http://www.martinbroadhurst.com/list-the-files-in-a-directory-in-c.html
+void read_directory(const std::string& name, std::vector<std::string> &v)
+{
+    DIR* dirp = opendir(name.c_str());
+    struct dirent * dp;
+    while ((dp = readdir(dirp)) != NULL) {
+        v.push_back(dp->d_name);
+    }
+    closedir(dirp);
+}
+
 
 struct Crystal_t
 {
   int number;
   int detectorChannel;
+  int timingChannel;
+  std::vector<int> relevantForW;
+  std::vector<int> delayTimingChannels;
   TCut *CrystalCut;
   TCut *CrystalCutWithoutCutG;
   TCut *PhotopeakEnergyCut;
@@ -80,80 +100,13 @@ struct Crystal_t
   // TCanvas
 };
 
-// class of real z positions of tag points (after check of alignment)
-// class inputZ_t
-// {
-// public:
-//   int pointsFromDoi;
-//   int i;
-//   int j;
-//   std::vector<double> z;
-//   inputZ_t(int a){ pointsFromDoi = a;};
-//   void clear(){z.clear();};
-//
-//   friend std::istream& operator>>(std::istream& input, inputZ_t& s)
-//   {
-//     input >> s.i; //read i
-//     input >> s.j;           //read
-//     for(int p = 0; p < s.pointsFromDoi; p++)
-//     {
-//       double zValue;
-//       input >> zValue;
-//       s.z.push_back(zValue);
-//     }
-//     return input;
-//   }
-//
-// };
+struct detector_t
+{
+  int digitizerChannel;
+  float saturation;
+  float pedestal;
+};
 
-// // define a function with 3 parameters
-// Double_t crystalball(Double_t *x,Double_t *par) {
-//       Double_t arg = 0;
-//       if (par[2]!=0) arg = (x[0] - par[1])/par[2];
-//       Double_t fitval = par[0]*TMath::Exp(-0.5*arg*arg);
-//       return fitval;
-// }
-
-
-// void ComputeWithCrystalBall(TH1F* histo,float *res)
-// {
-//   // res[0] is fwhm
-//   // res[1] is fwtm
-//   double f1min = -10e-9;
-//   double f1max = -8e-9;
-//   TF1* f1  = new TF1("f1","crystalball",f1min,f1max);
-//   f1->SetParameters(280,histo->GetMean(),histo->GetRMS(),1,3);
-//   histo->Fit(f1,"","",-9.4e-9,-8.42-9);
-//   double min = 1;
-//   double max = -1;
-//   double min10 = 1;
-//   double max10 = -1;
-//
-//   int divs = 1000;
-//   double step = (f1max-f1min)/divs;
-//   for(int i = 0 ; i < divs ; i++)
-//   {
-//     if( (f1->Eval(f1min + i*step) < f1->GetMaximum()/2.0) && (f1->Eval(f1min + (i+1)*step) > f1->GetMaximum()/2.0) )
-//     {
-//       min = f1min + (i+0.5)*step;
-//     }
-//     if( (f1->Eval(f1min + i*step) > f1->GetMaximum()/2.0) && (f1->Eval(f1min + (i+1)*step) < f1->GetMaximum()/2.0) )
-//     {
-//       max = f1min + (i+0.5)*step;
-//     }
-//     if( (f1->Eval(f1min + i*step) < f1->GetMaximum()/10.0) && (f1->Eval(f1min + (i+1)*step) > f1->GetMaximum()/10.0) )
-//     {
-//       min10 = f1min + (i+0.5)*step;
-//     }
-//     if( (f1->Eval(f1min + i*step) > f1->GetMaximum()/10.0) && (f1->Eval(f1min + (i+1)*step) < f1->GetMaximum()/10.0) )
-//     {
-//       max10 = f1min + (i+0.5)*step;
-//     }
-//   }
-//
-//   res[0] = 2.355*sqrt(2)*sqrt(pow((max-min)/2.355,2)-pow(70e-12/2.355,2));
-//   res[1] = sqrt(2)*sqrt(pow((max10-min10),2)-pow((70e-12/2.355)*4.29,2));
-// }
 
 /*** find width at half max ***/
 float ComputeFWHM(TH1F* histo)
@@ -177,24 +130,14 @@ void extractCTR(TH1F* histo,double fitMin,double fitMax, int divs, double* res)
   f1->SetParameters(histo->GetMaximum(),histo->GetMean(),histo->GetRMS(),1,3);
   histo->Fit(f1,"Q","",fitMin,fitMax);
   double min,max,min10,max10;
-
   // int divs = 3000;
   double step = (f1max-f1min)/divs;
   // is [0] the max of the function???
   for(int i = 0 ; i < divs ; i++)
   {
-    // std::cout << f1->Eval(f1min + i*step)  << "\t"
-              // << f1->Eval(f1min + (i+1)*step) <<  "\t"
-              // << f1->GetParameter(0) << "\t"
-              // << std::endl;
     if( (f1->Eval(f1min + i*step) < f1->GetParameter(0)/2.0) && (f1->Eval(f1min + (i+1)*step) > f1->GetParameter(0)/2.0) )
     {
-
       min = f1min + (i+0.5)*step;
-      // std::cout << f1->Eval(f1min + i*step) << " "
-      //           << f1->Eval(f1min + (i+1)*step) << " "
-      //           << f1->GetMaximum()/2.0 << " "
-      //           << min  << std::endl;
     }
     if( (f1->Eval(f1min + i*step) > f1->GetParameter(0)/2.0) && (f1->Eval(f1min + (i+1)*step) < f1->GetParameter(0)/2.0) )
     {
@@ -211,15 +154,6 @@ void extractCTR(TH1F* histo,double fitMin,double fitMax, int divs, double* res)
   }
   res[0] = sqrt(2)*sqrt(pow((max-min),2)-pow(70e-12,2));
   res[1] = sqrt(2)*sqrt(pow((max10-min10),2)-pow((70e-12/2.355)*4.29,2));
-  // std::cout
-  // << min << " "
-  // << max << " "
-  // << max - min << " "
-  // << std::endl << "CTR FWHM [ps] = "<< 2.355*sqrt(2)*sqrt(pow((max-min)/2.355,2)-pow(70e-12/2.355,2)) << std::endl
-  // << max10 - min10 << std::endl
-  // << "CTR FWTM [ps] = "<< sqrt(2)*sqrt(pow((max10-min10),2)-pow((70e-12/2.355)*4.29,2))
-  // << std::endl;
-
 }
 
 /*** find effective sigma ***/
@@ -285,9 +219,6 @@ fraction, const bool& verbosity)
 }
 
 
-
-
-
 bool compareByNumber(const Crystal_t &a,const Crystal_t  &b)
 {
   return a.number < b.number;
@@ -295,11 +226,11 @@ bool compareByNumber(const Crystal_t &a,const Crystal_t  &b)
 
 void usage()
 {
-  std::cout << "\t\t" << "[-i|--input] <temp.root>  [-o|--output] <output.root> [-c|--calibration] calibration.root [--coincidence] coincidence.root [OPTIONS]" << std::endl
-            << "\t\t" << "<temp.root>                                        - complete dataset (analysis ttree) of run"   << std::endl
+  std::cout << "\t\t" << "[-i|--input] <file_prefix>  [-o|--output] <output.root> [-c|--calibration] calibration.root [--coincidence] coincidence.root [OPTIONS]" << std::endl
+            << "\t\t" << "<file_prefix>                                      - prefix of TTree files to analyze"   << std::endl
             << "\t\t" << "<output.root>                                      - output file name"   << std::endl
             << "\t\t" << "<calibration.root>                                 - calibration file " << std::endl
-            << "\t\t" << "<coincidence.root>                                 - time calibration file " << std::endl
+            // << "\t\t" << "<coincidence.root>                                 - time calibration file " << std::endl
             << "\t\t" << "--simulation                                       - the datast is from a simulation (therefore the tagging photopeak is ignored)" << std::endl
             << "\t\t" << "--length <value>                                   - crystal length in mm, default = 15.0"  << std::endl
             << "\t\t" << "--doiFraction <value>                              - fraction of DOI length towards which the time stamps are corrected (from 0 to 1)"  << std::endl
@@ -330,7 +261,7 @@ int main (int argc, char** argv)
   std::string inputFileName = "";
   std::string outputFileName = "";
   std::string calibrationFileName = "";
-  std::string coincidenceCalibrationFileName = "";
+  // std::string coincidenceCalibrationFileName = "";
 
   bool simulation = false;
   Float_t length = 15.0; //mm
@@ -358,7 +289,7 @@ int main (int argc, char** argv)
       { "simulation", no_argument, 0, 0 },
       { "length", required_argument, 0, 0 },
       { "doiFraction", required_argument, 0, 0 },
-      { "coincidence", required_argument, 0, 0 },
+      // { "coincidence", required_argument, 0, 0 },
       { "tagFwhm", required_argument, 0, 0 },
       { "rmsLow", required_argument, 0, 0 },
       { "rmsHigh", required_argument, 0, 0 },
@@ -407,37 +338,37 @@ int main (int argc, char** argv)
     else if (c == 0 && optionIndex == 5){
       doiFraction = atof((char *)optarg);;
     }
+    // else if (c == 0 && optionIndex == 6){
+    //   coincidenceCalibrationFileName = (char *)optarg;
+    // }
     else if (c == 0 && optionIndex == 6){
-      coincidenceCalibrationFileName = (char *)optarg;
-    }
-    else if (c == 0 && optionIndex == 7){
       tagFwhm = atof((char *)optarg);
     }
-    else if (c == 0 && optionIndex == 8){
+    else if (c == 0 && optionIndex == 7){
       rmsLow = atof((char *)optarg);
     }
-    else if (c == 0 && optionIndex == 9){
+    else if (c == 0 && optionIndex == 8){
       rmsHigh = atof((char *)optarg);
     }
-    else if (c == 0 && optionIndex == 10){
+    else if (c == 0 && optionIndex == 9){
       histoMin = atof((char *)optarg);
     }
-    else if (c == 0 && optionIndex == 11){
+    else if (c == 0 && optionIndex == 10){
       histoMax = atof((char *)optarg);
     }
-    else if (c == 0 && optionIndex == 12){
+    else if (c == 0 && optionIndex == 11){
       histoBins = atoi((char *)optarg);
     }
-    else if (c == 0 && optionIndex == 13){
+    else if (c == 0 && optionIndex == 12){
       smooth = atoi((char *)optarg);
     }
-    else if (c == 0 && optionIndex == 14){
+    else if (c == 0 && optionIndex == 13){
       fitMin = atof((char *)optarg);
     }
-    else if (c == 0 && optionIndex == 15){
+    else if (c == 0 && optionIndex == 14){
       fitMax = atof((char *)optarg);
     }
-    else if (c == 0 && optionIndex == 16){
+    else if (c == 0 && optionIndex == 15){
       divs = atoi((char *)optarg);
     }
     else if (c == 0 && optionIndex == 16){
@@ -452,10 +383,87 @@ int main (int argc, char** argv)
 
   std::cout << "length * doiFraction = " << length * doiFraction << std::endl;
 
+  // read file in dir
+  std::vector<std::string> v;
+  read_directory(".", v);
+  // std::copy(v.begin(), v.end(),std::ostream_iterator<std::string>(std::cout, "\n"));
+  // extract files with correct prefix
+  std::vector<std::string> listInputFiles;
+
+  for(unsigned int i = 0 ; i < v.size() ; i++)
+  {
+    if(!v[i].compare(0,inputFileName.size(),inputFileName))
+    {
+      listInputFiles.push_back(v[i]);
+    }
+  }
 
 
-  TFile *treeFile = new TFile(inputFileName.c_str());
-  TTree* tree = (TTree*) treeFile->Get("adc");
+
+  // TFile *treeFile = new TFile(inputFileName.c_str());
+  // TTree* tree = (TTree*) treeFile->Get("adc");
+
+  //----------------------------------------------------------//
+  //  Get TChain of input files                               //
+  //----------------------------------------------------------//
+  TChain* tree = new TChain("adc");  // create the input tchain and the analysis ttree
+  for(unsigned int i = 0 ; i < listInputFiles.size(); i++)
+  {
+    std::cout << "Adding file " << listInputFiles[i] << std::endl;
+    tree->Add(listInputFiles[i].c_str());
+  }
+
+  // Add several TTreeFormula to the list;
+  TList formulas;
+
+  //variables for the input TChain
+  // ULong64_t     ChainExtendedTimeTag;                                // extended time tag
+  // ULong64_t     ChainDeltaTimeTag;                                   // delta tag from previous event
+  // Int_t        *ChainAdcChannel;
+  // Short_t      *ChainDesktopAdcChannel;                              // input TChain data for desktop digitizers - data is int_16
+  // UShort_t     *ChainVMEadcChannel;                                  // input TChain data for VME digitizers - data is uint_16
+  // Float_t      *ChainTimeStamp;
+  // Float_t      *TDCBinning;
+  // // Short_t      *ChainPetirocChannel;                                 //FIXME temporary data type of petiroc charge input - ask
+  // Float_t       RealX;                                               // "real" gamma interaction positions (from simulation data)
+  // Float_t       RealY;                                               // "real" gamma interaction positions (from simulation data)
+  // Float_t       RealZ;                                               // "real" gamma interaction positions (from simulation data)
+  // Float_t       simTaggingCharge;
+  // Float_t       simTaggingTime;
+  // Short_t       CrystalsHit;                                         // "real" number of crystals hit in the event (from simulation data)
+  // Short_t       NumbOfInteractions;                                  // "real" number of interaction (energy depositions) in the event (from simulation data)
+  //
+  // //branches for the input TChain
+  // TBranch      *bChainExtendedTimeTag;                               // branches for above data
+  // TBranch      *bChainDeltaTimeTag;                                  // branches for above data
+  // TBranch     **bChainAdcChannel;                                    // branches for above data
+  // TBranch     **bChainTimeStamp;
+  // TBranch      *bRealX;                                              // branches for above data
+  // TBranch      *bRealY;                                              // branches for above data
+  // TBranch      *bRealZ;                                              // branches for above data
+  // TBranch      *bsimTaggingCharge;                                              // branches for above data
+  // TBranch      *bsimTaggingTime;                                              // branches for above data
+  // TBranch      *bCrystalsHit;                                        // branches for above data
+  // TBranch      *bNumbOfInteractions;                                 // branches for above data
+  // TBranch      *bTotalCryEnergy;                                     //
+  //
+  // if(std::string(argv[1]) == std::string("-c")) // first argument is -c, then the config file name is passed by command line
+  // {
+  //   for (int i = 3; i < argc ; i++) // run on the remaining arguments to add all the input files
+  //   {
+  //     std::cout << "Adding file " << argv[i] << std::endl;
+  //     tree->Add(argv[i]);
+  //   }
+  // }
+  // else // the config file was indeed the default one
+  // {
+  //   for (int i = 1; i < argc ; i++) // run on the remaining arguments to add all the input files
+  //   {
+  //     std::cout << "Adding file " << argv[i] << std::endl;
+  //     tree->Add(argv[i]);
+  //   }
+  // }
+
   std::vector<int> detector_channels;
 
   TObjArray *leavescopy = tree->GetListOfLeaves();
@@ -490,6 +498,62 @@ int main (int argc, char** argv)
   // std::cout << "Number of Crystals \t= "<< numOfCry << std::endl;
 
 
+  // first, create the adc channels variables and branches
+  // ChainAdcChannel        = new Int_t [numOfCh];
+  // ChainDesktopAdcChannel = new Short_t [numOfCh]; // input from ADC desktop
+  // ChainVMEadcChannel     = new UShort_t [numOfCh]; // input from VME
+  // ChainTimeStamp         = new Float_t[numOfCh];
+  // // TDCBinning             = new Float_t[numOfCh];
+  // // DigitizerChannelOn     = new bool[adcChannels];
+  // bChainAdcChannel       = new TBranch* [numOfCh];
+  // bChainTimeStamp        = new TBranch* [numOfCh];
+  ULong64_t     ChainExtendedTimeTag;                                // extended time tag
+  ULong64_t     ChainDeltaTimeTag;                                   // delta tag from previous
+  UShort_t      *charge;
+  Float_t      *timeStamp;
+  TBranch      *bChainExtendedTimeTag;                               // branches for above data
+  TBranch      *bChainDeltaTimeTag;                                  // branches for above data
+  TBranch      **bCharge;
+  TBranch      **btimeStamp;
+
+  charge = new UShort_t[numOfCh];
+  timeStamp = new Float_t[numOfCh];
+  bCharge = new TBranch*[numOfCh];
+  btimeStamp = new TBranch*[numOfCh];
+
+  // set branches for reading the input files
+  tree->SetBranchAddress("ExtendedTimeTag", &ChainExtendedTimeTag, &bChainExtendedTimeTag);
+  tree->SetBranchAddress("DeltaTimeTag", &ChainDeltaTimeTag, &bChainDeltaTimeTag);
+  // if(usingRealSimData)
+  // {
+  //   tree->SetBranchAddress("RealX", &RealX, &bRealX);
+  //   tree->SetBranchAddress("RealY", &RealY, &bRealY);
+  //   tree->SetBranchAddress("RealZ", &RealZ, &bRealZ);
+  //   // fchain->SetBranchAddress("Tagging", &simTaggingCharge, &bsimTaggingCharge);
+  //   // fchain->SetBranchAddress("TaggingTimeStamp", &simTaggingTime, &bsimTaggingTime);
+  //   tree->SetBranchAddress("CrystalsHit",&CrystalsHit, &bCrystalsHit);
+  //   tree->SetBranchAddress("NumbOfInteractions",&NumbOfInteractions, &bNumbOfInteractions);
+  //   // fchain->SetBranchAddress("TotalCryEnergy",&TotalCryEnergy, &bTotalCryEnergy);
+  // }
+  for (int i = 0 ; i < detector_channels.size() ; i++)
+  {
+    //empty the stringstreams
+    std::stringstream sname;
+    sname << "ch" << detector_channels[i];
+    // stype << "ch" << i << "/F";
+    tree->SetBranchAddress(sname.str().c_str(),&charge[detector_channels[i]],&bCharge[detector_channels[i]]);
+    sname.str("");
+    // stype.str("");
+
+    sname << "t" << detector_channels[i];
+    // stype << "t" << i << "/F";
+    tree->SetBranchAddress(sname.str().c_str(),&timeStamp[detector_channels[i]],&btimeStamp[detector_channels[i]]);
+    sname.str("");
+    // stype.str("");
+  }
+
+
+
   // find the crystals with complete calibration data
   // this means looking into TWO files:
   // 1. the standard calibration file, but produced with active timing part
@@ -501,6 +565,7 @@ int main (int argc, char** argv)
   // afterwards the crystals will be accepted if they are present in both calibration files
 
   std::vector<Crystal_t> crystal;
+  std::vector<detector_t> detectorSaturation;
 
   // STANDARD CALIBRATION FILE
   TFile *calibrationFile = new TFile(calibrationFileName.c_str());
@@ -515,8 +580,32 @@ int main (int argc, char** argv)
   }
 
   TCut *taggingPhotopeakCut;
-
+  int taggingCrystalTimingChannel;
   std::string taggingPhotopeakCut_prefix("taggingPhotopeakCut");
+  std::string taggingCrystalTimingChannel_prefix("taggingCrystalTimingChannel");
+  // std::string det_prefix("channels");
+  // std::string saturation_prefix("saturation");
+
+  std::vector<int> *pChannels;
+  std::vector<float> *pSaturation;
+  std::vector<float> *pPedestal;
+  gDirectory->GetObject("channels",pChannels);
+  gDirectory->GetObject("saturation",pSaturation);
+  gDirectory->GetObject("pedestal",pPedestal);
+
+  std::vector<int> DetChannels = pChannels[0];
+  std::vector<float> saturation = pSaturation[0];
+  std::vector<float> pedestal = pPedestal[0];
+
+  for(unsigned int iSat = 0; iSat < DetChannels.size(); iSat++)
+  {
+    detector_t tempDetector;
+    tempDetector.digitizerChannel = DetChannels[iSat];
+    tempDetector.saturation = saturation[iSat];
+    tempDetector.pedestal = pedestal[iSat];
+    detectorSaturation.push_back(tempDetector);
+  }
+
   std::vector<std::string> MPPCfolders;
   for(unsigned int i = 0 ; i < keysModName.size() ; i++)
   {
@@ -531,8 +620,39 @@ int main (int argc, char** argv)
 //       if(cut)
 //         temp_crystal.CrystalCut = cut;
     }
+    if(!keysModName[i].compare(0,taggingCrystalTimingChannel_prefix.size(),taggingCrystalTimingChannel_prefix)) // find tcut
+    {
+      std::stringstream snameCh;
+      snameCh << ((TNamed*) gDirectory->Get(keysModName[i].c_str()))->GetTitle();
+      taggingCrystalTimingChannel = atoi(snameCh.str().c_str());
+    }
+
+    // if(!keysModName[i].compare(0,det_prefix.size(),det_prefix)) // find tcut
+    // {
+    //   std::stringstream snameCh;
+    //   std::vector<int> *v;
+    //   gDirectory->GetObject("channelsNumRelevantForW",v);
+    //   temp_crystal.relevantForW = v[0];
+    // }
+    //
+    // if(!keysModName[i].compare(0,saturation_prefix.size(),saturation_prefix)) // find tcut
+    // {
+    //   std::stringstream snameCh;
+    //   std::vector<int> *v;
+    //   gDirectory->GetObject("channelsNumRelevantForW",v);
+    //   temp_crystal.relevantForW = v[0];
+    // }
+
+
   }
 
+  std::stringstream sformulaname;
+  sformulaname << "FormulaTag";
+  TCut taggingPhotopeakCutName;
+  taggingPhotopeakCutName = taggingPhotopeakCut->GetTitle();
+  // std::cout << "FormulaTag ------------- \n" << taggingPhotopeakCutName << std::endl;
+  TTreeFormula* FormulaTag = new TTreeFormula("FormulaTag",taggingPhotopeakCutName,tree);
+  formulas.Add(FormulaTag);
 
 
 
@@ -545,18 +665,35 @@ int main (int argc, char** argv)
     std::vector<std::string> keysMppcName;
     // fill a vector with the leaves names
     std::string crystal_prefix("Crystal");
+    // std::string det_prefix("digitizerChannel");
+    // std::string saturation_prefix("saturation");
     for(int i = 0 ; i < nKeysMppc ; i++){
       keysMppcName.push_back(listMppc->At(i)->GetName());
     }
 
     std::vector<std::string> CrystalFolders;
+
     for(unsigned int i = 0 ; i < keysMppcName.size() ; i++)
     {
       if (!keysMppcName[i].compare(0, crystal_prefix.size(), crystal_prefix))
       {
         CrystalFolders.push_back(keysMppcName[i]);
       }
+      // if (!keysMppcName[i].compare(0, det_prefix.size(), det_prefix))
+      // {
+      //   std::stringstream snameCh;
+      //   snameCh << ((TNamed*) gDirectory->Get(keysMppcName[i].c_str()))->GetTitle();
+      //   tempDetector.digitizerChannel = atoi(snameCh.str().c_str());
+      // }
+      // if (!keysMppcName[i].compare(0, saturation_prefix.size(), saturation_prefix))
+      // {
+      //   std::stringstream snameCh;
+      //   snameCh << ((TNamed*) gDirectory->Get(keysMppcName[i].c_str()))->GetTitle();
+      //   tempDetector.saturation = atof(snameCh.str().c_str());
+      // }
     }
+    // detectorSaturation.push_back(tempDetector);
+
     for(unsigned int iCry = 0 ; iCry < CrystalFolders.size() ; iCry++)
     {
       //  std::cout << CrystalFolders[iCry] << std::endl;
@@ -596,7 +733,9 @@ int main (int argc, char** argv)
          std::string crystalCut_prefix("CrystalCut");
          std::string crystalCutWithoutCutG_prefix("CrystalCutWithoutCutG");
          std::string photopeakEnergyCut_prefix("PhotopeakEnergyCut");
-         std::string channel_prefix("ChNum");
+         std::string channel_prefix("digitizerChannel");
+         std::string w_channels_prefix("channelsNumRelevantForW");
+         std::string timing_channel_prefix("timingChannel");
          std::string wz_prefix("w(z)");
         //  std::string correction_prefix("Correction Graph");
         //  std::string correction_rms_prefix("RMS Correction Graphs");
@@ -668,6 +807,37 @@ int main (int argc, char** argv)
             //  std::cout << gDirectory->Get(keysCryName[i].c_str())->GetTitle() << "\t"
                       //  << temp_crystal.detectorChannel << std::endl;
            }
+
+
+
+
+           if(!keysCryName[i].compare(0,timing_channel_prefix.size(),timing_channel_prefix)) // find timing channel
+           {
+             //  std::cout << keysCryName[i] << std::endl;
+             std::stringstream snameCh;
+             snameCh << ((TNamed*) gDirectory->Get(keysCryName[i].c_str()))->GetTitle();
+             //  TCut* cut = (TCut*) gDirectory->Get( keysCryName[i].c_str());
+            //  istringstream()
+             temp_crystal.timingChannel = atoi(snameCh.str().c_str());
+             //  std::cout <<temp_crystal.detectorChannel << std::endl;
+            //  std::cout << gDirectory->Get(keysCryName[i].c_str())->GetTitle() << "\t"
+                      //  << temp_crystal.detectorChannel << std::endl;
+           }
+
+           if(!keysCryName[i].compare(0,w_channels_prefix.size(),w_channels_prefix)) // find detector channel
+           {
+             //  std::cout << keysCryName[i] << std::endl;
+             std::stringstream snameCh;
+             std::vector<int> *v;
+             gDirectory->GetObject("channelsNumRelevantForW",v);
+             // snameCh << ((TNamed*) gDirectory->Get(keysCryName[i].c_str()))->GetTitle();
+             //  TCut* cut = (TCut*) gDirectory->Get( keysCryName[i].c_str());
+            //  istringstream()
+             temp_crystal.relevantForW = v[0];
+             //  std::cout <<temp_crystal.detectorChannel << std::endl;
+            //  std::cout << gDirectory->Get(keysCryName[i].c_str())->GetTitle() << "\t"
+                      //  << temp_crystal.detectorChannel << std::endl;
+           }
          }
 
          bool dirExists;
@@ -697,7 +867,7 @@ int main (int argc, char** argv)
              std::string rms_deltaWGraph_prefix = "RMS DeltaW Graph";
              std::string graph_delay_prefix = "Graph Delay ch_";
              std::string rms_graph_delay_prefix = "RMS Graph Delay ch_";
-
+             std::string delay_timing_ch_prefix = "delayTimingChannels";
              for(unsigned int i = 0 ; i < keysTcorrName.size() ; i++)
              {
                if(!keysTcorrName[i].compare(0,deltaWGraph_prefix.size(),deltaWGraph_prefix))
@@ -731,16 +901,28 @@ int main (int argc, char** argv)
                  if(calibGraph)
                    temp_crystal.rms_delay.push_back(calibGraph);
                }
+
+               if(!keysTcorrName[i].compare(0,delay_timing_ch_prefix.size(),delay_timing_ch_prefix))
+               {
+                 //  std::cout << keysCryName[i] << std::endl;
+                 std::stringstream snameCh;
+                 std::vector<int> *v;
+                 gDirectory->GetObject("delayTimingChannels",v);
+                 // snameCh << ((TNamed*) gDirectory->Get(keysCryName[i].c_str()))->GetTitle();
+                 //  TCut* cut = (TCut*) gDirectory->Get( keysCryName[i].c_str());
+                //  istringstream()
+                 temp_crystal.delayTimingChannels = v[0];
+                 //  std::cout <<temp_crystal.detectorChannel << std::endl;
+                //  std::cout << gDirectory->Get(keysCryName[i].c_str())->GetTitle() << "\t"
+                          //  << temp_crystal.detectorChannel << std::endl;
+               }
              }
            }
            gDirectory->cd("..");
          }
 
-
-
          sname << "No correction - Crystal " << temp_crystal.number;
          temp_crystal.simpleCTR = new TH1F(sname.str().c_str(),sname.str().c_str(),histoBins,histoMin,histoMax);
-
 
          TCut globalCut; // the cut for the formula
          globalCut += temp_crystal.CrystalCutWithoutCutG->GetTitle();     // this is BasicCut (XYZ and taggingPhotopeak) + CutTrigger (TriggerChannel and broadcut)
@@ -752,6 +934,7 @@ int main (int argc, char** argv)
 
          sname << "Formula" << temp_crystal.number;
          TTreeFormula* Formula = new TTreeFormula(sname.str().c_str(),globalCut,tree);
+         formulas.Add(Formula);
          temp_crystal.Formula = Formula;
          sname.str("");
 
@@ -767,19 +950,24 @@ int main (int argc, char** argv)
     calibrationFile->cd("Module 0.0");
   }
 
+  //DEBUG
+  for(unsigned int iSat = 0; iSat < detectorSaturation.size(); iSat++)
+  {
+    std::cout << detectorSaturation[iSat].digitizerChannel << " " << detectorSaturation[iSat].saturation << " " << detectorSaturation[iSat].pedestal << std::endl;
+  }
 
   // COINCIDENCE CALIBRATION FILE
   //
-  TFile *coincidenceCalibrationFile = new TFile(coincidenceCalibrationFileName.c_str());
-  coincidenceCalibrationFile->cd("Module 0.0");
-  TList *listModuleCoinc = gDirectory->GetListOfKeys();
-  int nKeysModCoinc = listModuleCoinc->GetEntries();
-  std::vector<std::string> keysModNameCoinc;
-  // fill a vector with the leaves names
-  // std::string mppc_prefixCoinc("MPPC");
-  for(int i = 0 ; i < nKeysModCoinc ; i++){
-    keysModNameCoinc.push_back(listModuleCoinc->At(i)->GetName());
-  }
+  // TFile *coincidenceCalibrationFile = new TFile(coincidenceCalibrationFileName.c_str());
+  // coincidenceCalibrationFile->cd("Module 0.0");
+  // TList *listModuleCoinc = gDirectory->GetListOfKeys();
+  // int nKeysModCoinc = listModuleCoinc->GetEntries();
+  // std::vector<std::string> keysModNameCoinc;
+  // // fill a vector with the leaves names
+  // // std::string mppc_prefixCoinc("MPPC");
+  // for(int i = 0 ; i < nKeysModCoinc ; i++){
+  //   keysModNameCoinc.push_back(listModuleCoinc->At(i)->GetName());
+  // }
 
 //   TCut *taggingPhotopeakCut;
 //   std::string taggingPhotopeakCut_prefix("taggingPhotopeakCut");
@@ -799,11 +987,11 @@ int main (int argc, char** argv)
 //     }
 //   }
 
-  std::stringstream sformulaname;
-  sformulaname << "FormulaTag";
-  TCut taggingPhotopeakCutName;
-  taggingPhotopeakCutName = taggingPhotopeakCut->GetTitle();
-  TTreeFormula* FormulaTag = new TTreeFormula("FormulaTag",taggingPhotopeakCutName,tree);
+  // std::stringstream sformulaname;
+  // sformulaname << "FormulaTag";
+  // TCut taggingPhotopeakCutName;
+  // taggingPhotopeakCutName = taggingPhotopeakCut->GetTitle();
+  // TTreeFormula* FormulaTag = new TTreeFormula("FormulaTag",taggingPhotopeakCutName,tree);
 
   //look only into crystals found in the other calibration file
 //   for(unsigned int iCry = 0 ;  iCry < crystal.size() ; iCry++)
@@ -872,54 +1060,10 @@ int main (int argc, char** argv)
     {
       std::cout << crystal[i].number << std::endl;
     }
-
   }
 
-  Float_t FloodX,FloodY,FloodZ;
-  Float_t ZPosition;
-  TBranch      *bFloodX;
-  TBranch      *bFloodY;
-  TBranch      *bFloodZ;
-  TBranch      *bZPosition;
-  int inputChannels = 32;
-  Float_t      *charge;
-  Float_t      Tagging;
-  Float_t      TaggingTimeStamp;
-  TBranch      *bTagging;
-  TBranch      *bTaggingTimeStamp;
-  TBranch      **bCharge;
-  Float_t      *timeStamp;
-  TBranch      **btimeStamp;
-  charge = new Float_t[inputChannels];
-  timeStamp = new Float_t[inputChannels];
-  bCharge = new TBranch*[inputChannels];
-  btimeStamp = new TBranch*[inputChannels];
-  int triggerChannel;
-  TBranch      *bTriggerChannel;
-
-  for (int i = 0 ; i < detector_channels.size() ; i++)
-  {
-    //empty the stringstreams
-    std::stringstream sname,stype;
-    sname << "ch" << detector_channels[i];
-    // stype << "ch" << i << "/F";
-    tree->SetBranchAddress(sname.str().c_str(),&charge[detector_channels[i]],&bCharge[detector_channels[i]]);
-    sname.str("");
-    stype.str("");
-
-    sname << "t" << detector_channels[i];
-    // stype << "t" << i << "/F";
-    tree->SetBranchAddress(sname.str().c_str(),&timeStamp[detector_channels[i]],&btimeStamp[detector_channels[i]]);
-    sname.str("");
-    stype.str("");
-  }
-  tree->SetBranchAddress("TriggerChannel",&triggerChannel,&bTriggerChannel);
-  tree->SetBranchAddress("FloodX", &FloodX, &bFloodX);
-  tree->SetBranchAddress("FloodY", &FloodY, &bFloodY);
-  tree->SetBranchAddress("FloodZ", &FloodZ, &bFloodZ);
-  tree->SetBranchAddress("ZPosition", &ZPosition, &bZPosition);
-  tree->SetBranchAddress("Tagging", &Tagging, &bTagging);
-  tree->SetBranchAddress("TaggingTimeStamp", &TaggingTimeStamp, &bTaggingTimeStamp);
+  //notify TTreeFormula(s) to TChain
+  tree->SetNotify(&formulas);
 
   //MAIN LOOP
   long long int nevent = tree->GetEntries();
@@ -939,24 +1083,65 @@ int main (int argc, char** argv)
         {
           if(crystal[iCry].Formula->EvalInstance())  //if in global cut of crystal
           {
+
             goodEvents++;
+
+            //temp commented
             Float_t centralcorrection = 0.0;
             Float_t zeroCorrection    = 0.0;
             //no corr
-            crystal[iCry].simpleCTR->Fill(timeStamp[crystal[iCry].detectorChannel] - TaggingTimeStamp);
+            crystal[iCry].simpleCTR->Fill(timeStamp[crystal[iCry].timingChannel] -
+                                          timeStamp[taggingCrystalTimingChannel]);
 
             if(crystal[iCry].tw_correction)
             {
+
+              //calculate FloodZ...
+              Float_t FloodZ;
+              float centralChargeOriginal;
+              float centralSaturation;
+              float centralPedestal;
+              Float_t division = 0.0;
+
+              centralChargeOriginal = charge[crystal[iCry].detectorChannel];
+              for(unsigned int iSat = 0; iSat < detectorSaturation.size(); iSat++)
+              {
+                if( detectorSaturation[iSat].digitizerChannel  == crystal[iCry].detectorChannel)
+                {
+                  centralSaturation = detectorSaturation[iSat].saturation;
+                  centralPedestal = detectorSaturation[iSat].pedestal;
+                }
+              }
+              float centralChargeCorr = ( -centralSaturation * TMath::Log(1.0 - ( ( (centralChargeOriginal-centralPedestal))/(centralSaturation)) ) );
+
+              for (unsigned int iW = 0; iW < crystal[iCry].relevantForW.size(); iW++)
+              {
+                float originalCh = charge[crystal[iCry].relevantForW[iW]];
+                float saturationCh;
+                float pedestalCorr;
+                for(unsigned int iSat = 0; iSat < detectorSaturation.size(); iSat++)
+                {
+                  if( detectorSaturation[iSat].digitizerChannel  == crystal[iCry].relevantForW[iW])
+                  {
+                    saturationCh = detectorSaturation[iSat].saturation;
+                    pedestalCorr = detectorSaturation[iSat].pedestal;
+                  }
+                }
+                division += ( -saturationCh * TMath::Log(1.0 - ( ( (originalCh-pedestalCorr))/(saturationCh)) ) );
+              }
+
+              FloodZ = centralChargeCorr / division;
+
               // central corr
               // std::string deltaWGraph_prefix = "DeltaW Graph";
               // std::string rms_deltaWGraph_prefix = "RMS DeltaW Graph";
-              std::string graph_delay_prefix = "Graph Delay ch_";
-              std::string rms_graph_delay_prefix = "RMS Graph Delay ch_";
+
+
               Float_t averageTimeStamp = 0.0;
               Float_t totalWeight = 0.0;
               // averageTimeStamp += timeStamp[crystal[iCry].detectorChannel];
               centralcorrection = crystal[iCry].tw_correction->Eval(crystal[iCry].wz->Eval(length*doiFraction)) - crystal[iCry].tw_correction->Eval(FloodZ);
-              crystal[iCry].centralCTR->Fill((timeStamp[crystal[iCry].detectorChannel] + (centralcorrection)) - TaggingTimeStamp);
+              crystal[iCry].centralCTR->Fill((timeStamp[crystal[iCry].timingChannel] + (centralcorrection)) - timeStamp[taggingCrystalTimingChannel]);
 
 
               if(crystal[iCry].delay.size())
@@ -967,11 +1152,21 @@ int main (int argc, char** argv)
                 Float_t weight = 0.0;
                 weight = pow(sqrt(pow(crystal[iCry].rms_tw_correction->Eval(FloodZ),2)+pow(crystal[iCry].rms_tw_correction->Eval(crystal[iCry].wz->Eval(length*0)),2)),-2);
 
-                averageTimeStamp += weight*(timeStamp[crystal[iCry].detectorChannel]- zeroCorrection);
+                averageTimeStamp += weight*(timeStamp[crystal[iCry].timingChannel]- zeroCorrection);
                 totalWeight += weight;
                 // std::cout << i << " " << iCry << " " <<  crystal[iCry].number << "\n";
                 for(unsigned int iGraph = 0; iGraph < crystal[iCry].delay.size();iGraph++)
                 {
+                  std::stringstream sname;
+                  sname << "Graph Delay ch_" << crystal[iCry].detectorChannel << "_t_" ;
+                  std::string graph_delay_prefix = sname.str();
+                  sname.str("");
+
+                  sname << "RMS Graph Delay ch_" << crystal[iCry].detectorChannel << "_t_" ;
+                  std::string rms_graph_delay_prefix = sname.str();
+                  sname.str("");
+
+
                   std::string graphName = crystal[iCry].delay[iGraph]->GetName();
                   int graphCh = atoi( graphName.substr( graph_delay_prefix.size(), graphName.size() - graph_delay_prefix.size() ).c_str() );
                   // std::cout << graphCh  << "\t";
@@ -986,9 +1181,10 @@ int main (int argc, char** argv)
                 }
                 averageTimeStamp = averageTimeStamp/totalWeight;
 
-                crystal[iCry].allCTR->Fill(averageTimeStamp + centralcorrection  - TaggingTimeStamp);
+                crystal[iCry].allCTR->Fill(averageTimeStamp + centralcorrection  - timeStamp[taggingCrystalTimingChannel]);
               }
             }
+            // end of temp commented
           }
         }
       }
@@ -1217,7 +1413,7 @@ int main (int argc, char** argv)
   noCorr->Write();
   centralCorr->Write();
   fullCorr->Write();
-  treeFile->Close();
+  // treeFile->Close();
   calibrationFile->Close();
   outputFile->Close();
   return 0;
