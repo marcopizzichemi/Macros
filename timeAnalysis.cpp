@@ -1325,7 +1325,7 @@ int main (int argc, char** argv)
       crystal[iCry].allCTR->SetFillColor(kRed);
       crystal[iCry].allCTR->SetLineColor(kRed);
       crystal[iCry].allCTR->SetStats(0);
-      crystal[iCry].allCTR->Write();
+
       crystal[iCry].allCTR_norm = (TH1F*) crystal[iCry].allCTR->Clone();
       extractCTR(crystal[iCry].allCTR,fitMin,fitMax,divs,ret);
       std::cout << crystal[iCry].allCTR->GetName() << "\t\t";
@@ -1334,7 +1334,7 @@ int main (int argc, char** argv)
       realAllCTRfwhm = ret[0]*1e12;
       realAllCTRfwtm = ret[1]*1e12;
       fullCorr->Fill(ret[0]*1e12);
-
+      crystal[iCry].allCTR->Write();
       crystal[iCry].allCTR_norm->Scale(1.0/crystal[iCry].allCTR_norm->GetMaximum());
       // crystal[iCry].allCTR->Scale(1.0/crystal[iCry].allCTR->GetMaximum());
     }
