@@ -1,9 +1,6 @@
 // compile with
 // g++ -o ../build/timeAnalysis timeAnalysis.cpp `root-config --cflags --glibs` -Wl,--no-as-needed -lHist -lCore -lMathCore -lTree -lTreePlayer
 
-
-// g++ -o ../build/timeCorrection timeCorrection.cpp -pthread -std=c++11 -m64 -I/home/marco/Programs/Root/root-6.10.08/include -L/home/marco/Programs/Root/root-6.10.08/lib -lGui -lCore -lRIO -lNet -lHist -lGraf -lGraf3d -lGpad -lTree -lTreePlayer -lRint -lPostscript -lMatrix -lPhysics -lMathCore -lThread -lMultiProc -pthread -lm -ldl -rdynamic -Wl,--no-as-needed -lHist -lCore -lMathCore -lTree -lTreePlayer
-
 // small program to extract timing calibration and data
 
 #include "TROOT.h"
@@ -89,6 +86,9 @@ struct Crystal_t
   TH1F *simpleCTR;
   TH1F *centralCTR;
   TH1F *allCTR;
+  TH1F *simpleCTR_norm;
+  TH1F *centralCTR_norm;
+  TH1F *allCTR_norm;
   TTreeFormula *Formula;
   std::vector<double> z;
   TGraph* tw_correction;
@@ -127,6 +127,7 @@ void extractCTR(TH1F* histo,double fitMin,double fitMax, int divs, double* res)
   double f1max = histo->GetXaxis()->GetXmax();
   // std::cout << f1min << " " << f1max << std::endl;
   TF1* f1  = new TF1("f1","crystalball");
+  f1->SetLineColor(kBlack);
   f1->SetParameters(histo->GetMaximum(),histo->GetMean(),histo->GetRMS(),1,3);
   histo->Fit(f1,"Q","",fitMin,fitMax);
   double min,max,min10,max10;
@@ -381,7 +382,7 @@ int main (int argc, char** argv)
 		}
 	}
 
-  std::cout << "length * doiFraction = " << length * doiFraction << std::endl;
+  std::cout << "Chosen (length * doiFraction) = " << length * doiFraction << std::endl;
 
   // read file in dir
   std::vector<std::string> v;
@@ -708,6 +709,9 @@ int main (int argc, char** argv)
        temp_crystal.simpleCTR = NULL;
        temp_crystal.centralCTR = NULL;
        temp_crystal.allCTR = NULL;
+       temp_crystal.simpleCTR_norm = NULL;
+       temp_crystal.centralCTR_norm = NULL;
+       temp_crystal.allCTR_norm = NULL;
        temp_crystal.wz = NULL;
        temp_crystal.accepted = true;
        temp_crystal.tw_correction = NULL;
@@ -950,11 +954,11 @@ int main (int argc, char** argv)
     calibrationFile->cd("Module 0.0");
   }
 
-  //DEBUG
-  for(unsigned int iSat = 0; iSat < detectorSaturation.size(); iSat++)
-  {
-    std::cout << detectorSaturation[iSat].digitizerChannel << " " << detectorSaturation[iSat].saturation << " " << detectorSaturation[iSat].pedestal << std::endl;
-  }
+  // //DEBUG
+  // for(unsigned int iSat = 0; iSat < detectorSaturation.size(); iSat++)
+  // {
+  //   std::cout << detectorSaturation[iSat].digitizerChannel << " " << detectorSaturation[iSat].saturation << " " << detectorSaturation[iSat].pedestal << std::endl;
+  // }
 
   // COINCIDENCE CALIBRATION FILE
   //
@@ -1146,42 +1150,73 @@ int main (int argc, char** argv)
 
               if(crystal[iCry].delay.size())
               {
-                //full corr
-                zeroCorrection = crystal[iCry].tw_correction->Eval(crystal[iCry].wz->Eval(length*0)) - crystal[iCry].tw_correction->Eval(FloodZ);
-
+                // full corr v0
+                // first evalutate all ts as if they where read by the central crystal, i.e. correct all the neighboring channels
+                // using the delta
+                //
                 Float_t weight = 0.0;
-                weight = pow(sqrt(pow(crystal[iCry].rms_tw_correction->Eval(FloodZ),2)+pow(crystal[iCry].rms_tw_correction->Eval(crystal[iCry].wz->Eval(length*0)),2)),-2);
-
-                averageTimeStamp += weight*(timeStamp[crystal[iCry].timingChannel]- zeroCorrection);
+                weight = pow(crystal[iCry].rms_tw_correction->Eval(FloodZ),-2);
+                averageTimeStamp += weight * timeStamp[crystal[iCry].timingChannel];
                 totalWeight += weight;
-                // std::cout << i << " " << iCry << " " <<  crystal[iCry].number << "\n";
+                //
+                //full corr
+                // zeroCorrection = crystal[iCry].tw_correction->Eval(crystal[iCry].wz->Eval(length*doiFraction)) - crystal[iCry].tw_correction->Eval(FloodZ);
+                //
+                // Float_t weight = 0.0;
+                // weight = pow(sqrt(pow(crystal[iCry].rms_tw_correction->Eval(FloodZ),2)+pow(crystal[iCry].rms_tw_correction->Eval(crystal[iCry].wz->Eval(length*doiFraction)),2)),-2);
+                //
+                // averageTimeStamp += weight*(timeStamp[crystal[iCry].timingChannel]- zeroCorrection);
+                // totalWeight += weight;
+                // // std::cout << i << " " << iCry << " " <<  crystal[iCry].number << "\n";
                 for(unsigned int iGraph = 0; iGraph < crystal[iCry].delay.size();iGraph++)
                 {
-                  std::stringstream sname;
-                  sname << "Graph Delay ch_" << crystal[iCry].detectorChannel << "_t_" ;
-                  std::string graph_delay_prefix = sname.str();
-                  sname.str("");
-
-                  sname << "RMS Graph Delay ch_" << crystal[iCry].detectorChannel << "_t_" ;
-                  std::string rms_graph_delay_prefix = sname.str();
-                  sname.str("");
-
 
                   std::string graphName = crystal[iCry].delay[iGraph]->GetName();
-                  int graphCh = atoi( graphName.substr( graph_delay_prefix.size(), graphName.size() - graph_delay_prefix.size() ).c_str() );
-                  // std::cout << graphCh  << "\t";
-
                   std::string rmsName = crystal[iCry].rms_delay[iGraph]->GetName();
-                  int rmsCh = atoi( rmsName.substr( rms_graph_delay_prefix.size(), rmsName.size() - rms_graph_delay_prefix.size() ).c_str() );
-                  // std::cout << rmsCh  << "\t";
+
+                  std::size_t foundGraph = graphName.find_last_of("_");
+                  std::size_t foundRms   = rmsName.find_last_of("_");
+
+                  std::string tChannelStringFromGraph = graphName.substr(foundGraph+1);
+                  std::string tChannelStringFromRms   = rmsName.substr(foundRms  +1);
+
+                  // std::stringstream sname;
+                  // sname << "Graph Delay ch_" << crystal[iCry].detectorChannel << "_t_" ;
+                  // std::string graph_delay_prefix = sname.str();
+                  // std::cout << tChannelStringFromGraph << std::endl;
+                  // std::cout << tChannelStringFromRms << std::endl;
+
+                  // sname.str("");
+                  // sname << "RMS Graph Delay ch_" << crystal[iCry].detectorChannel << "_t_" ;
+                  // std::string rms_graph_delay_prefix = sname.str();
+                  // std::cout << tChannelStringFromRms << std::endl;
+                  // sname.str("");
+
+
+
+
+
+
+                  int graphCh = atoi(tChannelStringFromGraph.c_str() );
+                  // std::cout << graphCh  << "\n";
+
+
+                  int rmsCh   = atoi( tChannelStringFromRms.c_str() );
+                  if(graphCh != rmsCh)
+                  {
+                    std::cout << "ERROR! TGraphs of delay and rms are from different timing channels!!!!" << std::endl;
+                    break;
+                  }
+                  // std::cout << rmsCh  << "\n";
                   weight = pow(crystal[iCry].rms_delay[iGraph]->Eval(FloodZ),-2);
                   totalWeight += weight;
                   averageTimeStamp += weight*(timeStamp[graphCh] - crystal[iCry].delay[iGraph]->Eval(FloodZ));
                   // std::cout << timeStamp[graphCh] - crystal[iCry].delay[iGraph]->Eval(FloodZ) << "\t";
                 }
                 averageTimeStamp = averageTimeStamp/totalWeight;
-
-                crystal[iCry].allCTR->Fill(averageTimeStamp + centralcorrection  - timeStamp[taggingCrystalTimingChannel]);
+                // then correct the average of ts for central correction
+                crystal[iCry].allCTR->Fill((averageTimeStamp + (centralcorrection)) - timeStamp[taggingCrystalTimingChannel]);
+                // crystal[iCry].allCTR->Fill(averageTimeStamp + zeroCorrection  - timeStamp[taggingCrystalTimingChannel]);
               }
             }
             // end of temp commented
@@ -1245,6 +1280,11 @@ int main (int argc, char** argv)
     if(crystal[iCry].simpleCTR)
     {
       crystal[iCry].simpleCTR->GetXaxis()->SetTitle("Time [s]");
+      crystal[iCry].simpleCTR->SetFillStyle(3001);
+      crystal[iCry].simpleCTR->SetFillColor(kGreen);
+      crystal[iCry].simpleCTR->SetLineColor(kGreen);
+      crystal[iCry].simpleCTR->SetStats(0);
+      crystal[iCry].simpleCTR_norm = (TH1F*) crystal[iCry].simpleCTR->Clone();
       extractCTR(crystal[iCry].simpleCTR,fitMin,fitMax,divs,ret);
       std::cout << crystal[iCry].simpleCTR->GetName() << "\t\t\t";
       std::cout << ret[0]*1e12 << "\t"
@@ -1252,17 +1292,19 @@ int main (int argc, char** argv)
       realBasicCTRfwhm = ret[0]*1e12;
       realBasicCTRfwtm = ret[1]*1e12;
       noCorr->Fill(ret[0]*1e12);
-      crystal[iCry].simpleCTR->SetFillStyle(3001);
-      crystal[iCry].simpleCTR->SetFillColor(kGreen);
-      crystal[iCry].simpleCTR->SetLineColor(kGreen);
-      crystal[iCry].simpleCTR->SetStats(0);
+
       crystal[iCry].simpleCTR->Write();
-      crystal[iCry].simpleCTR->Scale(1.0/crystal[iCry].simpleCTR->GetMaximum());
+      crystal[iCry].simpleCTR_norm->Scale(1.0/crystal[iCry].simpleCTR_norm->GetMaximum());
     }
 
     if(crystal[iCry].centralCTR)
     {
       crystal[iCry].centralCTR->GetXaxis()->SetTitle("Time [s]");
+      crystal[iCry].centralCTR->SetFillStyle(3001);
+      crystal[iCry].centralCTR->SetFillColor(kBlue);
+      crystal[iCry].centralCTR->SetLineColor(kBlue);
+      crystal[iCry].centralCTR->SetStats(0);
+      crystal[iCry].centralCTR_norm = (TH1F*) crystal[iCry].centralCTR->Clone();
       extractCTR(crystal[iCry].centralCTR,fitMin,fitMax,divs,ret);
       std::cout << crystal[iCry].centralCTR->GetName() << "\t";
       std::cout << ret[0]*1e12 << "\t"
@@ -1270,17 +1312,21 @@ int main (int argc, char** argv)
       realCentralCTRfwhm = ret[0]*1e12;
       realCentralCTRfwtm = ret[1]*1e12;
       centralCorr->Fill(ret[0]*1e12);
-      crystal[iCry].centralCTR->SetFillStyle(3001);
-      crystal[iCry].centralCTR->SetFillColor(kBlue);
-      crystal[iCry].centralCTR->SetLineColor(kBlue);
-      crystal[iCry].centralCTR->SetStats(0);
+
       crystal[iCry].centralCTR->Write();
-      crystal[iCry].centralCTR->Scale(1.0/crystal[iCry].centralCTR->GetMaximum());
+      // crystal[iCry].centralCTR->Scale(1.0/crystal[iCry].centralCTR->GetMaximum());
+      crystal[iCry].centralCTR_norm->Scale(1.0/crystal[iCry].centralCTR_norm->GetMaximum());
     }
 
     if(crystal[iCry].allCTR)
     {
       crystal[iCry].allCTR->GetXaxis()->SetTitle("Time [s]");
+      crystal[iCry].allCTR->SetFillStyle(3001);
+      crystal[iCry].allCTR->SetFillColor(kRed);
+      crystal[iCry].allCTR->SetLineColor(kRed);
+      crystal[iCry].allCTR->SetStats(0);
+      crystal[iCry].allCTR->Write();
+      crystal[iCry].allCTR_norm = (TH1F*) crystal[iCry].allCTR->Clone();
       extractCTR(crystal[iCry].allCTR,fitMin,fitMax,divs,ret);
       std::cout << crystal[iCry].allCTR->GetName() << "\t\t";
       std::cout << ret[0]*1e12 << "\t"
@@ -1288,12 +1334,9 @@ int main (int argc, char** argv)
       realAllCTRfwhm = ret[0]*1e12;
       realAllCTRfwtm = ret[1]*1e12;
       fullCorr->Fill(ret[0]*1e12);
-      crystal[iCry].allCTR->SetFillStyle(3001);
-      crystal[iCry].allCTR->SetFillColor(kRed);
-      crystal[iCry].allCTR->SetLineColor(kRed);
-      crystal[iCry].allCTR->SetStats(0);
-      crystal[iCry].allCTR->Write();
-      crystal[iCry].allCTR->Scale(1.0/crystal[iCry].allCTR->GetMaximum());
+
+      crystal[iCry].allCTR_norm->Scale(1.0/crystal[iCry].allCTR_norm->GetMaximum());
+      // crystal[iCry].allCTR->Scale(1.0/crystal[iCry].allCTR->GetMaximum());
     }
 
     sname.str("");
@@ -1302,14 +1345,14 @@ int main (int argc, char** argv)
     TCanvas* c_summary = new TCanvas(sname.str().c_str(),sname.str().c_str(),1200,800);
     c_summary->cd();
     THStack *hs = new THStack("hs","");
-    hs->Add(crystal[iCry].simpleCTR);
-    hs->Add(crystal[iCry].centralCTR);
-    hs->Add(crystal[iCry].allCTR);
+    hs->Add(crystal[iCry].simpleCTR_norm);
+    hs->Add(crystal[iCry].centralCTR_norm);
+    hs->Add(crystal[iCry].allCTR_norm);
 
 
     // std::cout << "Crystal " << crystal[iCry].number << std::endl;
     // std::cout << "CTR FWHM [ps] " << std::endl;
-    hs->Draw("nostack");
+    hs->Draw("hist nostack");
     sname.str("");
     sname << "CTR - Crystal " << crystal[iCry].number << " - width in FWHM";
     hs->SetTitle(sname.str().c_str());
@@ -1363,7 +1406,7 @@ int main (int argc, char** argv)
     TCanvas* c_multi = new TCanvas(sname.str().c_str(),sname.str().c_str(),1800,1400);
     c_multi->Divide(2,2);
 
-    if(crystal[iCry].simpleCTR)
+    if(crystal[iCry].simpleCTR_norm)
     {
       cloneBasic   = (TH1F*) crystal[iCry].simpleCTR->Clone();
       c_multi->cd(1);
@@ -1373,7 +1416,7 @@ int main (int argc, char** argv)
       cloneBasic->Draw();
       legend1->Draw();
     }
-    if(crystal[iCry].centralCTR)
+    if(crystal[iCry].centralCTR_norm)
     {
       cloneCentral = (TH1F*) crystal[iCry].centralCTR->Clone();
       c_multi->cd(2);
@@ -1385,7 +1428,7 @@ int main (int argc, char** argv)
       cloneCentral->Draw();
       legend2->Draw();
     }
-    if(crystal[iCry].allCTR)
+    if(crystal[iCry].allCTR_norm)
     {
       cloneAll     = (TH1F*) crystal[iCry].allCTR->Clone();
       c_multi->cd(3);
@@ -1406,7 +1449,7 @@ int main (int argc, char** argv)
 
     c_multi->cd(4);
     c_multi->cd(4)->SetGrid();
-    cloneHs->Draw("nostack");
+    cloneHs->Draw("hist nostack");
     c_multi->Write();
 
   }
