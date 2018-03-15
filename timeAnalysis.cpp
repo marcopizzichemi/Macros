@@ -121,7 +121,7 @@ float ComputeFWHM(TH1F* histo)
    return ret;
 }
 
-void extractCTR(TH1F* histo,double fitMin,double fitMax, int divs, double* res)
+void extractCTR(TH1F* histo,double fitMin,double fitMax, int divs, double tagFwhm, double* res)
 {
   double f1min = histo->GetXaxis()->GetXmin();
   double f1max = histo->GetXaxis()->GetXmax();
@@ -153,8 +153,8 @@ void extractCTR(TH1F* histo,double fitMin,double fitMax, int divs, double* res)
       max10 = f1min + (i+0.5)*step;
     }
   }
-  res[0] = sqrt(2)*sqrt(pow((max-min),2)-pow(70e-12,2));
-  res[1] = sqrt(2)*sqrt(pow((max10-min10),2)-pow((70e-12/2.355)*4.29,2));
+  res[0] = sqrt(2)*sqrt(pow((max-min),2)-pow(tagFwhm,2));
+  res[1] = sqrt(2)*sqrt(pow((max10-min10),2)-pow((tagFwhm/2.355)*4.29,2));
 }
 
 /*** find effective sigma ***/
@@ -398,6 +398,16 @@ int main (int argc, char** argv)
       listInputFiles.push_back(v[i]);
     }
   }
+
+
+  //prepare output text file
+  std::string textFileName = outputFileName.substr(0,outputFileName.size()-5);
+  textFileName += ".txt";
+  // std::cout << textFileName << std::endl;
+
+  std::ofstream textfile;
+  textfile.open (textFileName.c_str(),std::ofstream::out);
+
 
 
 
@@ -1276,7 +1286,7 @@ int main (int argc, char** argv)
     double ret[2];
 
     // std::cout << "BASIC CTRs --------------------" << std::endl;
-
+    // std::cout << crystal[iCry]
     if(crystal[iCry].simpleCTR)
     {
       crystal[iCry].simpleCTR->GetXaxis()->SetTitle("Time [s]");
@@ -1285,10 +1295,16 @@ int main (int argc, char** argv)
       crystal[iCry].simpleCTR->SetLineColor(kGreen);
       crystal[iCry].simpleCTR->SetStats(0);
       crystal[iCry].simpleCTR_norm = (TH1F*) crystal[iCry].simpleCTR->Clone();
-      extractCTR(crystal[iCry].simpleCTR,fitMin,fitMax,divs,ret);
-      std::cout << crystal[iCry].simpleCTR->GetName() << "\t\t\t";
-      std::cout << ret[0]*1e12 << "\t"
+      extractCTR(crystal[iCry].simpleCTR,fitMin,fitMax,divs,tagFwhm,ret);
+
+      std::cout << "No corr    - cry " << crystal[iCry].number << "\t"
+                << ret[0]*1e12 << "\t"
                 << ret[1]*1e12 << std::endl;
+
+      textfile  << "No corr    - cry " << crystal[iCry].number << "\t"
+                << ret[0]*1e12 << "\t"
+                << ret[1]*1e12 << std::endl;
+
       realBasicCTRfwhm = ret[0]*1e12;
       realBasicCTRfwtm = ret[1]*1e12;
       noCorr->Fill(ret[0]*1e12);
@@ -1305,10 +1321,16 @@ int main (int argc, char** argv)
       crystal[iCry].centralCTR->SetLineColor(kBlue);
       crystal[iCry].centralCTR->SetStats(0);
       crystal[iCry].centralCTR_norm = (TH1F*) crystal[iCry].centralCTR->Clone();
-      extractCTR(crystal[iCry].centralCTR,fitMin,fitMax,divs,ret);
-      std::cout << crystal[iCry].centralCTR->GetName() << "\t";
-      std::cout << ret[0]*1e12 << "\t"
+      extractCTR(crystal[iCry].centralCTR,fitMin,fitMax,divs,tagFwhm,ret);
+
+      std::cout << "Central    - cry " << crystal[iCry].number << "\t"
+                << ret[0]*1e12 << "\t"
                 << ret[1]*1e12 << std::endl;
+
+      textfile  << "Central    - cry " << crystal[iCry].number << "\t"
+                << ret[0]*1e12 << "\t"
+                << ret[1]*1e12 << std::endl;
+
       realCentralCTRfwhm = ret[0]*1e12;
       realCentralCTRfwtm = ret[1]*1e12;
       centralCorr->Fill(ret[0]*1e12);
@@ -1327,10 +1349,16 @@ int main (int argc, char** argv)
       crystal[iCry].allCTR->SetStats(0);
 
       crystal[iCry].allCTR_norm = (TH1F*) crystal[iCry].allCTR->Clone();
-      extractCTR(crystal[iCry].allCTR,fitMin,fitMax,divs,ret);
-      std::cout << crystal[iCry].allCTR->GetName() << "\t\t";
-      std::cout << ret[0]*1e12 << "\t"
+      extractCTR(crystal[iCry].allCTR,fitMin,fitMax,divs,tagFwhm,ret);
+
+      std::cout << "Full corr. - cry " << crystal[iCry].number << "\t"
+                << ret[0]*1e12 << "\t"
                 << ret[1]*1e12 << std::endl;
+
+      textfile  << "Full corr. - cry " << crystal[iCry].number << "\t"
+                << ret[0]*1e12 << "\t"
+                << ret[1]*1e12 << std::endl;
+
       realAllCTRfwhm = ret[0]*1e12;
       realAllCTRfwtm = ret[1]*1e12;
       fullCorr->Fill(ret[0]*1e12);
@@ -1457,7 +1485,12 @@ int main (int argc, char** argv)
   centralCorr->Write();
   fullCorr->Write();
   // treeFile->Close();
+
   calibrationFile->Close();
   outputFile->Close();
+  textfile.close();
+  std::cout << std::endl;
+  std::cout << "Histograms saved in   " << outputFileName << std::endl;
+  std::cout << "Text summary saved in " << textFileName << std::endl;
   return 0;
 }
