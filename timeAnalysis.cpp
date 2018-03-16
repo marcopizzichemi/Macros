@@ -121,16 +121,28 @@ float ComputeFWHM(TH1F* histo)
    return ret;
 }
 
-void extractCTR(TH1F* histo,double fitMin,double fitMax, int divs, double tagFwhm, double* res)
+void extractCTR(TH1F* histo,double fitPercMin,double fitPercMax, int divs, double tagFwhm, double* res)
 {
+  //first, dummy gaussian fit
+  TF1 *gaussDummy = new TF1("gaussDummy","gaus");
+  histo->Fit(gaussDummy,"QN");
+
   double f1min = histo->GetXaxis()->GetXmin();
   double f1max = histo->GetXaxis()->GetXmax();
   // std::cout << f1min << " " << f1max << std::endl;
   TF1* f1  = new TF1("f1","crystalball");
   f1->SetLineColor(kBlack);
-  f1->SetParameters(histo->GetMaximum(),histo->GetMean(),histo->GetRMS(),1,3);
-  fitMin = histo->GetMean() - (histo->GetRMS()/2.0);
-  fitMax = histo->GetMean() + (histo->GetRMS()/2.0);
+  f1->SetParameters(gaussDummy->GetParameter(0),gaussDummy->GetParameter(1),gaussDummy->GetParameter(2),1,3);
+  double fitMin = gaussDummy->GetParameter(1) - fitPercMin*(gaussDummy->GetParameter(2));
+  double fitMax = gaussDummy->GetParameter(1) + fitPercMax*(gaussDummy->GetParameter(2));
+  if(fitMin < f1min)
+  {
+    fitMin = f1min;
+  }
+  if(fitMax > f1max)
+  {
+    fitMax = f1max;
+  }
   histo->Fit(f1,"Q","",fitMin,fitMax);
   double min,max,min10,max10;
   // int divs = 3000;
@@ -245,11 +257,11 @@ void usage()
             << "\t\t" << "--histoMin <value>                                 - lower limit of CTR spectra, in sec - default = -15e-9"  << std::endl
             << "\t\t" << "--histoMax <value>                                 - upper limit of CTR spectra, in sec - default = 15e-9"  << std::endl
             << "\t\t" << "--histoBins <value>                                - n of bins for CTR spectra - default = 500"  << std::endl
-            << "\t\t" << "--smooth <value>                                 - n of iteration in CTR histograms smoothing - default = 0 (no smoothing)"  << std::endl
-            << "\t\t" << "--fitMin <value>                                 - min of crystalball fit in sec - default = -9.4e-9"  << std::endl
-            << "\t\t" << "--fitMax <value>                                 - max of crystalball fit in sec - default = -8.1e-9"  << std::endl
-            << "\t\t" << "--divs <value>                                   - n of divisions when looking for FWHM - default = 10000"  << std::endl
-            << "\t\t" << "--bins <value>                                   - n of bins in summary CTR histograms - deafult 40"  << std::endl
+            << "\t\t" << "--smooth <value>                                   - n of iteration in CTR histograms smoothing - default = 0 (no smoothing)"  << std::endl
+            << "\t\t" << "--fitPercMin <value>                               - time fit min is set to ((histo mean) - fitPercMin*(histo_sigma))  - default = 2.5"  << std::endl
+            << "\t\t" << "--fitPercMax <value>                               - time fit max is set to ((histo mean) - fitPercMax*(histo_sigma))  - default = 1.5" << std::endl
+            << "\t\t" << "--divs <value>                                     - n of divisions when looking for FWHM - default = 10000"  << std::endl
+            << "\t\t" << "--bins <value>                                     - n of bins in summary CTR histograms - deafult 40"  << std::endl
             << "\t\t" << std::endl;
 }
 
@@ -274,8 +286,8 @@ int main (int argc, char** argv)
   Float_t rmsHigh = 1.75;
   Float_t histoMin = -15e-9;//s
   Float_t histoMax = 15e-9;//s
-  Float_t fitMin = -9.4e-9; // s
-  Float_t fitMax = -8.1e-9; //s
+  Float_t fitPercMin = 2.5;
+  Float_t fitPercMax = 1.5;
   int divs       = 10000;
   int histoBins = 500;
   int smooth = 0; //
@@ -300,8 +312,8 @@ int main (int argc, char** argv)
       { "histoMax", required_argument, 0, 0 },
       { "histoBins", required_argument, 0, 0 },
       { "smooth", required_argument, 0, 0 },
-      { "fitMin", required_argument, 0, 0 },
-      { "fitMax", required_argument, 0, 0 },
+      { "fitPercMin", required_argument, 0, 0 },
+      { "fitPercMax", required_argument, 0, 0 },
       { "divs", required_argument, 0, 0 },
       { "bins", required_argument, 0, 0 },
 			{ NULL, 0, 0, 0 }
@@ -366,10 +378,10 @@ int main (int argc, char** argv)
       smooth = atoi((char *)optarg);
     }
     else if (c == 0 && optionIndex == 13){
-      fitMin = atof((char *)optarg);
+      fitPercMin = atof((char *)optarg);
     }
     else if (c == 0 && optionIndex == 14){
-      fitMax = atof((char *)optarg);
+      fitPercMax = atof((char *)optarg);
     }
     else if (c == 0 && optionIndex == 15){
       divs = atoi((char *)optarg);
@@ -1297,7 +1309,7 @@ int main (int argc, char** argv)
       crystal[iCry].simpleCTR->SetLineColor(kGreen);
       crystal[iCry].simpleCTR->SetStats(0);
       crystal[iCry].simpleCTR_norm = (TH1F*) crystal[iCry].simpleCTR->Clone();
-      extractCTR(crystal[iCry].simpleCTR,fitMin,fitMax,divs,tagFwhm,ret);
+      extractCTR(crystal[iCry].simpleCTR,fitPercMin,fitPercMax,divs,tagFwhm,ret);
 
       std::cout << "No corr    - cry " << crystal[iCry].number << "\t"
                 << ret[0]*1e12 << "\t"
@@ -1323,7 +1335,7 @@ int main (int argc, char** argv)
       crystal[iCry].centralCTR->SetLineColor(kBlue);
       crystal[iCry].centralCTR->SetStats(0);
       crystal[iCry].centralCTR_norm = (TH1F*) crystal[iCry].centralCTR->Clone();
-      extractCTR(crystal[iCry].centralCTR,fitMin,fitMax,divs,tagFwhm,ret);
+      extractCTR(crystal[iCry].centralCTR,fitPercMin,fitPercMax,divs,tagFwhm,ret);
 
       std::cout << "Central    - cry " << crystal[iCry].number << "\t"
                 << ret[0]*1e12 << "\t"
@@ -1351,7 +1363,7 @@ int main (int argc, char** argv)
       crystal[iCry].allCTR->SetStats(0);
 
       crystal[iCry].allCTR_norm = (TH1F*) crystal[iCry].allCTR->Clone();
-      extractCTR(crystal[iCry].allCTR,fitMin,fitMax,divs,tagFwhm,ret);
+      extractCTR(crystal[iCry].allCTR,fitPercMin,fitPercMax,divs,tagFwhm,ret);
 
       std::cout << "Full corr. - cry " << crystal[iCry].number << "\t"
                 << ret[0]*1e12 << "\t"
