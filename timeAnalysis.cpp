@@ -129,6 +129,8 @@ void extractCTR(TH1F* histo,double fitMin,double fitMax, int divs, double tagFwh
   TF1* f1  = new TF1("f1","crystalball");
   f1->SetLineColor(kBlack);
   f1->SetParameters(histo->GetMaximum(),histo->GetMean(),histo->GetRMS(),1,3);
+  fitMin = histo->GetMean() - (histo->GetRMS()/2.0);
+  fitMax = histo->GetMean() + (histo->GetRMS()/2.0);
   histo->Fit(f1,"Q","",fitMin,fitMax);
   double min,max,min10,max10;
   // int divs = 3000;
