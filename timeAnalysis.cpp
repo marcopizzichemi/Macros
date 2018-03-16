@@ -124,6 +124,7 @@ float ComputeFWHM(TH1F* histo)
 void extractCTR(TH1F* histo,double fitPercMin,double fitPercMax, int divs, double tagFwhm, double* res)
 {
   //first, dummy gaussian fit
+  TCanvas *cTemp  = new TCanvas("temp","temp");
   TF1 *gaussDummy = new TF1("gaussDummy","gaus");
   histo->Fit(gaussDummy,"QN");
 
@@ -169,6 +170,7 @@ void extractCTR(TH1F* histo,double fitPercMin,double fitPercMax, int divs, doubl
   }
   res[0] = sqrt(2)*sqrt(pow((max-min),2)-pow(tagFwhm,2));
   res[1] = sqrt(2)*sqrt(pow((max10-min10),2)-pow((tagFwhm/2.355)*4.29,2));
+  delete cTemp;
 }
 
 /*** find effective sigma ***/
@@ -258,8 +260,8 @@ void usage()
             << "\t\t" << "--histoMax <value>                                 - upper limit of CTR spectra, in sec - default = 15e-9"  << std::endl
             << "\t\t" << "--histoBins <value>                                - n of bins for CTR spectra - default = 500"  << std::endl
             << "\t\t" << "--smooth <value>                                   - n of iteration in CTR histograms smoothing - default = 0 (no smoothing)"  << std::endl
-            << "\t\t" << "--fitPercMin <value>                               - time fit min is set to ((histo mean) - fitPercMin*(histo_sigma))  - default = 2.5"  << std::endl
-            << "\t\t" << "--fitPercMax <value>                               - time fit max is set to ((histo mean) - fitPercMax*(histo_sigma))  - default = 1.5" << std::endl
+            << "\t\t" << "--fitPercMin <value>                               - time fit min is set to ((gauss fit mean) - fitPercMin*(gauss fit sigma))  - default = 5"  << std::endl
+            << "\t\t" << "--fitPercMax <value>                               - time fit max is set to ((gauus fit mean) - fitPercMax*(gauss fit sigma))  - default = 6" << std::endl
             << "\t\t" << "--divs <value>                                     - n of divisions when looking for FWHM - default = 10000"  << std::endl
             << "\t\t" << "--bins <value>                                     - n of bins in summary CTR histograms - deafult 40"  << std::endl
             << "\t\t" << std::endl;
@@ -286,8 +288,8 @@ int main (int argc, char** argv)
   Float_t rmsHigh = 1.75;
   Float_t histoMin = -15e-9;//s
   Float_t histoMax = 15e-9;//s
-  Float_t fitPercMin = 2.5;
-  Float_t fitPercMax = 1.5;
+  Float_t fitPercMin = 5;
+  Float_t fitPercMax = 6;
   int divs       = 10000;
   int histoBins = 500;
   int smooth = 0; //
@@ -1268,6 +1270,18 @@ int main (int argc, char** argv)
   TH1F* fullCorr = new TH1F("Full Correction","Full Correction",bins,minCTR,maxCTR);
   // std::vector<TH1F*> histograms;
 
+  // do summary canvases for checking the fits
+
+  int sqrtCrystals = ceil(sqrt( crystal.size() ) );
+
+  TCanvas *cSumSimple  = new TCanvas("Summary Basic CTR","Summary Basic CTR",1200,1200);
+  TCanvas *cSumCentral = new TCanvas("Summary Central CTR","Summary Central CTR",1200,1200);
+  TCanvas *cSumAll     = new TCanvas("Summary Full CTR","Summary Full CTR",1200,1200);
+  cSumSimple ->Divide(sqrtCrystals,sqrtCrystals);
+  cSumCentral->Divide(sqrtCrystals,sqrtCrystals);
+  cSumAll->Divide(sqrtCrystals,sqrtCrystals);
+
+
   TFile *outputFile = new TFile(outputFileName.c_str(),"RECREATE");
   outputFile->cd();
   for(unsigned int iCry = 0 ;  iCry < crystal.size() ; iCry++)
@@ -1324,6 +1338,8 @@ int main (int argc, char** argv)
       noCorr->Fill(ret[0]*1e12);
 
       crystal[iCry].simpleCTR->Write();
+      cSumSimple->cd(iCry+1);
+      crystal[iCry].simpleCTR->Draw();
       crystal[iCry].simpleCTR_norm->Scale(1.0/crystal[iCry].simpleCTR_norm->GetMaximum());
     }
 
@@ -1350,6 +1366,8 @@ int main (int argc, char** argv)
       centralCorr->Fill(ret[0]*1e12);
 
       crystal[iCry].centralCTR->Write();
+      cSumCentral->cd(iCry+1);
+      crystal[iCry].centralCTR->Draw();
       // crystal[iCry].centralCTR->Scale(1.0/crystal[iCry].centralCTR->GetMaximum());
       crystal[iCry].centralCTR_norm->Scale(1.0/crystal[iCry].centralCTR_norm->GetMaximum());
     }
@@ -1377,6 +1395,8 @@ int main (int argc, char** argv)
       realAllCTRfwtm = ret[1]*1e12;
       fullCorr->Fill(ret[0]*1e12);
       crystal[iCry].allCTR->Write();
+      cSumAll->cd(iCry+1);
+      crystal[iCry].allCTR->Draw();
       crystal[iCry].allCTR_norm->Scale(1.0/crystal[iCry].allCTR_norm->GetMaximum());
       // crystal[iCry].allCTR->Scale(1.0/crystal[iCry].allCTR->GetMaximum());
     }
@@ -1498,6 +1518,10 @@ int main (int argc, char** argv)
   noCorr->Write();
   centralCorr->Write();
   fullCorr->Write();
+
+  cSumSimple ->Write();
+  cSumCentral->Write();
+  cSumAll->Write();
   // treeFile->Close();
 
   calibrationFile->Close();
