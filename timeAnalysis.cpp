@@ -86,9 +86,11 @@ struct Crystal_t
   TH1F *simpleCTR;
   TH1F *centralCTR;
   TH1F *allCTR;
+  TH1F *poliCorrCTR;
   TH1F *simpleCTR_norm;
   TH1F *centralCTR_norm;
   TH1F *allCTR_norm;
+  TH1F *poliCorrCTR_norm;
   TTreeFormula *Formula;
   std::vector<double> z;
   TGraph* tw_correction;
@@ -97,6 +99,10 @@ struct Crystal_t
   std::vector<TGraph*> rms_delay;
   const char* path;
   bool accepted;
+  bool polishedCorrection;
+  std::vector<int>    tChannelsForPolishedCorrection;
+  std::vector<double> meanForPolishedCorrection;
+  std::vector<double> fwhmForPolishedCorrection;
   // TCanvas
 };
 
@@ -735,12 +741,15 @@ int main (int argc, char** argv)
        temp_crystal.simpleCTR = NULL;
        temp_crystal.centralCTR = NULL;
        temp_crystal.allCTR = NULL;
+       temp_crystal.poliCorrCTR = NULL;
        temp_crystal.simpleCTR_norm = NULL;
        temp_crystal.centralCTR_norm = NULL;
        temp_crystal.allCTR_norm = NULL;
+       temp_crystal.poliCorrCTR_norm = NULL;
        temp_crystal.wz = NULL;
        temp_crystal.accepted = true;
        temp_crystal.tw_correction = NULL;
+       temp_crystal.polishedCorrection = false;
 
 
        //get crystal number
@@ -767,6 +776,9 @@ int main (int argc, char** argv)
          std::string w_channels_prefix("channelsNumRelevantForW");
          std::string timing_channel_prefix("timingChannel");
          std::string wz_prefix("w(z)");
+         std::string t_channels_for_poli_prefix("tChannelsForPolishedCorrection");
+         std::string mean_for_poli_prefix("meanForPolishedCorrection");
+         std::string fwhm_for_poli_prefix("fwhmForPolishedCorrection");
         //  std::string correction_prefix("Correction Graph");
         //  std::string correction_rms_prefix("RMS Correction Graphs");
          for(unsigned int i = 0 ; i < keysCryName.size() ; i++)
@@ -841,6 +853,8 @@ int main (int argc, char** argv)
 
 
 
+
+
            if(!keysCryName[i].compare(0,timing_channel_prefix.size(),timing_channel_prefix)) // find timing channel
            {
              //  std::cout << keysCryName[i] << std::endl;
@@ -868,6 +882,31 @@ int main (int argc, char** argv)
             //  std::cout << gDirectory->Get(keysCryName[i].c_str())->GetTitle() << "\t"
                       //  << temp_crystal.detectorChannel << std::endl;
            }
+
+           if(!keysCryName[i].compare(0,t_channels_for_poli_prefix.size(),t_channels_for_poli_prefix))
+           {
+             std::vector<int> *v;
+             gDirectory->GetObject("tChannelsForPolishedCorrection",v);
+             temp_crystal.polishedCorrection = true;
+             temp_crystal.tChannelsForPolishedCorrection = v[0];
+           }
+
+           if(!keysCryName[i].compare(0,mean_for_poli_prefix.size(),mean_for_poli_prefix))
+           {
+             std::vector<double> *v;
+             gDirectory->GetObject("meanForPolishedCorrection",v);
+             temp_crystal.meanForPolishedCorrection = v[0];
+           }
+
+           if(!keysCryName[i].compare(0,fwhm_for_poli_prefix.size(),fwhm_for_poli_prefix))
+           {
+             std::vector<double> *v;
+             gDirectory->GetObject("fwhmForPolishedCorrection",v);
+             temp_crystal.fwhmForPolishedCorrection = v[0];
+           }
+
+
+
          }
 
          bool dirExists;
@@ -953,7 +992,10 @@ int main (int argc, char** argv)
 
          sname << "No correction - Crystal " << temp_crystal.number;
          temp_crystal.simpleCTR = new TH1F(sname.str().c_str(),sname.str().c_str(),histoBins,histoMin,histoMax);
-
+         sname.str("");
+         sname << "Polished correction - Crystal " << temp_crystal.number;
+         temp_crystal.poliCorrCTR = new TH1F(sname.str().c_str(),sname.str().c_str(),histoBins,histoMin,histoMax);
+         sname.str("");
          TCut globalCut; // the cut for the formula
          globalCut += temp_crystal.CrystalCutWithoutCutG->GetTitle();     // this is BasicCut (XYZ and taggingPhotopeak) + CutTrigger (TriggerChannel and broadcut)
          globalCut += temp_crystal.PhotopeakEnergyCut->GetTitle();        // this is the cut on photopeak energy of the corrected spectrum for this crystal
@@ -961,6 +1003,7 @@ int main (int argc, char** argv)
          {
            globalCut += temp_crystal.cutg[iCutg]->GetName();              // these are the two cutg for this crystal
          }
+         sname.str("");
 
          sname << "Formula" << temp_crystal.number;
          TTreeFormula* Formula = new TTreeFormula(sname.str().c_str(),globalCut,tree);
@@ -1245,6 +1288,49 @@ int main (int argc, char** argv)
                 // crystal[iCry].allCTR->Fill(averageTimeStamp + zeroCorrection  - timeStamp[taggingCrystalTimingChannel]);
               }
             }
+
+            if(crystal[iCry].polishedCorrection)
+            {
+              //central time stamp
+              // std::cout << "----------------" << std::endl;
+              float weight = 0.0;
+              float meanTimeStamp = 0.0;
+              float sumWeight = 0.0;
+              // std::cout << "crystal[iCry].fwhmForPolishedCorrection[0] = " << crystal[iCry].fwhmForPolishedCorrection[0]<< std::endl;
+
+              weight = pow(crystal[iCry].fwhmForPolishedCorrection[0],-2);
+              float t_0 = timeStamp[crystal[iCry].tChannelsForPolishedCorrection[0]];
+
+              meanTimeStamp += weight * t_0;
+              sumWeight += weight;
+              // std::cout << weight << " " << t_0 << " " << meanTimeStamp << " " << sumWeight << std::endl;
+
+              // std::cout << t_0 << "\t";
+
+              for(unsigned int iPoli = 1; iPoli < crystal[iCry].tChannelsForPolishedCorrection.size(); iPoli++)
+              {
+                // std::cout << iPoli << std::endl;
+                // std::cout << "timeStamp[crystal[iCry].tChannelsForPolishedCorrection[iPoli]] = " << timeStamp[crystal[iCry].tChannelsForPolishedCorrection[iPoli]] << std::endl;
+                // std::cout << "crystal[iCry].meanForPolishedCorrection[iPoli] = " << crystal[iCry].meanForPolishedCorrection[iPoli] << std::endl;
+
+                float t_i = timeStamp[crystal[iCry].tChannelsForPolishedCorrection[iPoli]] - crystal[iCry].meanForPolishedCorrection[iPoli];
+                float weight_i = pow(crystal[iCry].fwhmForPolishedCorrection[iPoli],-2);
+                meanTimeStamp += weight_i * t_i;
+                sumWeight += weight_i;
+                // std::cout << weight_i << " " << t_i << " " << meanTimeStamp << " " << sumWeight << std::endl;
+                // std::cout << t_i << "\t";
+              }
+              // std::cout << std::endl;
+              meanTimeStamp = meanTimeStamp / sumWeight;
+              // std::cout << std::endl
+              //           << meanTimeStamp << "\t"
+              //           << std::endl;
+              crystal[iCry].poliCorrCTR->Fill(meanTimeStamp - timeStamp[taggingCrystalTimingChannel]);
+
+            }
+
+
+
             // end of temp commented
           }
         }
@@ -1268,6 +1354,7 @@ int main (int argc, char** argv)
   TH1F* noCorr = new TH1F("No Correction","No Correction",bins,minCTR,maxCTR);
   TH1F* centralCorr = new TH1F("Central Correction","Central Correction",bins,minCTR,maxCTR);
   TH1F* fullCorr = new TH1F("Full Correction","Full Correction",bins,minCTR,maxCTR);
+  TH1F* poliCorr = new TH1F("Polished Correction","Polished Correction",bins,minCTR,maxCTR);
   // std::vector<TH1F*> histograms;
 
   // do summary canvases for checking the fits
@@ -1277,10 +1364,11 @@ int main (int argc, char** argv)
   TCanvas *cSumSimple  = new TCanvas("Summary Basic CTR","Summary Basic CTR",1200,1200);
   TCanvas *cSumCentral = new TCanvas("Summary Central CTR","Summary Central CTR",1200,1200);
   TCanvas *cSumAll     = new TCanvas("Summary Full CTR","Summary Full CTR",1200,1200);
+  TCanvas *cPoliAll     = new TCanvas("Summary Polished CTR","Summary Polished CTR",1200,1200);
   cSumSimple ->Divide(sqrtCrystals,sqrtCrystals);
   cSumCentral->Divide(sqrtCrystals,sqrtCrystals);
   cSumAll->Divide(sqrtCrystals,sqrtCrystals);
-
+  cPoliAll->Divide(sqrtCrystals,sqrtCrystals);
 
   TFile *outputFile = new TFile(outputFileName.c_str(),"RECREATE");
   outputFile->cd();
@@ -1305,12 +1393,17 @@ int main (int argc, char** argv)
       {
         crystal[iCry].allCTR ->Smooth(smooth);
       }
+      if(crystal[iCry].poliCorrCTR)
+      {
+        crystal[iCry].poliCorrCTR ->Smooth(smooth);
+      }
     }
 
 
     Float_t realBasicCTRfwhm,realBasicCTRfwtm ;
     Float_t realCentralCTRfwhm,realCentralCTRfwtm;
     Float_t realAllCTRfwhm,realAllCTRfwtm;
+    Float_t poliCorrCTRfwhm,poliCorrCTRfwtm;
     double ret[2];
 
     // std::cout << "BASIC CTRs --------------------" << std::endl;
@@ -1401,6 +1494,37 @@ int main (int argc, char** argv)
       // crystal[iCry].allCTR->Scale(1.0/crystal[iCry].allCTR->GetMaximum());
     }
 
+    if(crystal[iCry].poliCorrCTR)
+    {
+      crystal[iCry].poliCorrCTR->GetXaxis()->SetTitle("Time [s]");
+      crystal[iCry].poliCorrCTR->SetFillStyle(3001);
+      crystal[iCry].poliCorrCTR->SetFillColor(kBlack);
+      crystal[iCry].poliCorrCTR->SetLineColor(kBlack);
+      crystal[iCry].poliCorrCTR->SetStats(0);
+
+      crystal[iCry].poliCorrCTR_norm = (TH1F*) crystal[iCry].poliCorrCTR->Clone();
+      extractCTR(crystal[iCry].poliCorrCTR,fitPercMin,fitPercMax,divs,tagFwhm,ret);
+
+      std::cout << "Polished corr. - cry " << crystal[iCry].number << "\t"
+                << ret[0]*1e12 << "\t"
+                << ret[1]*1e12 << std::endl;
+
+      textfile  << "Polished corr. - cry " << crystal[iCry].number << "\t"
+                << ret[0]*1e12 << "\t"
+                << ret[1]*1e12 << std::endl;
+
+      poliCorrCTRfwhm = ret[0]*1e12;
+      poliCorrCTRfwtm = ret[1]*1e12;
+      poliCorr->Fill(ret[0]*1e12);
+      crystal[iCry].poliCorrCTR->Write();
+      cPoliAll->cd(iCry+1);
+      crystal[iCry].poliCorrCTR->Draw();
+      crystal[iCry].poliCorrCTR_norm->Scale(1.0/crystal[iCry].poliCorrCTR_norm->GetMaximum());
+      // crystal[iCry].allCTR->Scale(1.0/crystal[iCry].allCTR->GetMaximum());
+    }
+
+
+
     sname.str("");
 
     sname << "Summary - Crystal " << crystal[iCry].number;
@@ -1410,6 +1534,7 @@ int main (int argc, char** argv)
     hs->Add(crystal[iCry].simpleCTR_norm);
     hs->Add(crystal[iCry].centralCTR_norm);
     hs->Add(crystal[iCry].allCTR_norm);
+    hs->Add(crystal[iCry].poliCorrCTR_norm);
 
 
     // std::cout << "Crystal " << crystal[iCry].number << std::endl;
@@ -1446,6 +1571,14 @@ int main (int argc, char** argv)
       legend->AddEntry(crystal[iCry].allCTR,sname.str().c_str(),"f");
       // std::cout << "Full correction     = "<< realAllCTRfwhm     << " ps" << std::endl;
     }
+    if(crystal[iCry].poliCorrCTR)
+    {
+      sname.str("");
+      sname << "Polished correction       = " << poliCorrCTRfwhm << "ps";
+      legend->AddEntry(crystal[iCry].poliCorrCTR,sname.str().c_str(),"f");
+      // std::cout << "Full correction     = "<< realAllCTRfwhm     << " ps" << std::endl;
+    }
+
 
     sname.str("");
     legend->Draw();
@@ -1460,6 +1593,7 @@ int main (int argc, char** argv)
     TH1F* cloneBasic;
     TH1F* cloneCentral;
     TH1F* cloneAll;
+    TH1F* clonePoli;
     THStack *cloneHs = (THStack*) hs->Clone();
     TLegend *legend1 = new TLegend(0.15,0.69,0.49,0.89,"");
     legend1->SetFillStyle(0);
@@ -1503,10 +1637,18 @@ int main (int argc, char** argv)
       legend3->Draw();
     }
 
-
-
-
-
+    // if(crystal[iCry].poliCorrCTR_norm)
+    // {
+    //   clonePoli     = (TH1F*) crystal[iCry].poliCorrCTR->Clone();
+    //   c_multi->cd(3);
+    //   TLegend *legend3 = new TLegend(0.15,0.69,0.49,0.89,"");
+    //   legend3->SetFillStyle(0);
+    //   sname.str("");
+    //   sname << "Polished correction      = " << poliCorrCTRfwhm << "ps";
+    //   legend3->AddEntry(cloneAll,sname.str().c_str(),"f");
+    //   cloneAll->Draw();
+    //   legend3->Draw();
+    // }
 
 
     c_multi->cd(4);
@@ -1518,10 +1660,12 @@ int main (int argc, char** argv)
   noCorr->Write();
   centralCorr->Write();
   fullCorr->Write();
+  poliCorr->Write();
 
   cSumSimple ->Write();
   cSumCentral->Write();
   cSumAll->Write();
+  cPoliAll->Write();
   // treeFile->Close();
 
   calibrationFile->Close();
