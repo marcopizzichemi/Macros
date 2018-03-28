@@ -1,8 +1,9 @@
-void timePlots(std::string fileName, int nx = 8, int ny = 8)
+void timePlots(std::string fileName, int nmppcx = 4, int nmppcy = 4, int ncryx = 2, int ncryy = 2)
 {
   std::ifstream inputFile;
   inputFile.open(fileName.c_str(), std::ios::in);
-
+  int nx = nmppcx*ncryx;
+  int ny = nmppcy*ncryy;
   TH2F* histo2d = new TH2F("histo2","CTR FWHM vs. i,j",nx,0,nx,ny,0,ny);
   histo2d->GetXaxis()->SetTitle("i");
   histo2d->GetYaxis()->SetTitle("j");
@@ -24,7 +25,7 @@ void timePlots(std::string fileName, int nx = 8, int ny = 8)
         histo_fwhm->Fill(fwhm);
         int i = num / nx;
         int j = num % nx;
-        if(i > 1 && i < (nx - 2) && j > 1 && j < (ny -2))
+        if( (i > (ncryx-1)) && (i < (nx - (ncryx))) && (j > (ncryy-1)) && (j < (ny -(ncryy))) )
         {
           histo_fwhm_central->Fill(fwhm);
         }
@@ -38,4 +39,16 @@ void timePlots(std::string fileName, int nx = 8, int ny = 8)
   histo_fwhm_central->Draw();
   TCanvas *c2 = new TCanvas("c2","c2",800,800);
   histo2d->Draw("LEGO2");
+
+  //save plots to file
+  std::string outputFileName = fileName.substr(0,fileName.size()-5);
+  TFile *outputFile = new TFile(outputFileName.c_str(),"RECREATE");
+  outputFile->cd();
+  c1->Write();
+  c1_2->Write();
+  c2->Write();
+  histo_fwhm->Write();
+  histo_fwhm_central->Write();
+  histo2d->Write();
+  outputFile->Close();
 }
