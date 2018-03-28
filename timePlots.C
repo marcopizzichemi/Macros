@@ -41,8 +41,12 @@ void timePlots(std::string fileName, int nmppcx = 4, int nmppcy = 4, int ncryx =
   histo2d->Draw("LEGO2");
 
   //output averages
-  std::cout << "All " << histo_fwhm->GetEntries() << " crystals\t=" << histo_fwhm->GetMean() << " " << histo_fwhm->GetRMS() << std::endl;
-  std::cout << "Central crystals (" << histo_fwhm_central->GetEntries() << ")\t=" << histo_fwhm_central->GetMean() << " " << histo_fwhm_central->GetRMS() << std::endl;
+  std::cout << "Summary " << std::endl;
+  std::cout << "CTR FWHM [ps]  " << std::endl;
+  std::cout << "All crystals" << std::endl;
+  std::cout << "Central crystals" << std::endl;
+  std::cout << histo_fwhm->GetMean() << " +/- " << histo_fwhm->GetRMS() / sqrt(histo_fwhm->GetEntries())  << std::endl;
+  std::cout << histo_fwhm_central->GetMean() << " +/- " << histo_fwhm_central->GetRMS() / sqrt(histo_fwhm_central->GetEntries())  << std::endl;
 
   //save plots to file
   std::string outputFileName = fileName.substr(0,fileName.size()-4);
