@@ -18,9 +18,9 @@ void timePlots(std::string fileName, int nx = 8, int ny = 8)
   {
     while (!inputFile.eof())
     {
+      inputFile >> num >> fwhm >> fwtm;
       if(!inputFile.eof())
       {
-        inputFile >> num >> fwhm >> fwtm;
         histo_fwhm->Fill(fwhm);
         int i = num / nx;
         int j = num % nx;
