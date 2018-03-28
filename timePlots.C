@@ -40,6 +40,10 @@ void timePlots(std::string fileName, int nmppcx = 4, int nmppcy = 4, int ncryx =
   TCanvas *c2 = new TCanvas("c2","c2",800,800);
   histo2d->Draw("LEGO2");
 
+  //output averages
+  std::cout << "All " << histo_fwhm->GetEntries() << " crystals\t=" << histo_fwhm->GetMean() << " " << histo_fwhm->GetRMS() << std::endl;
+  std::cout << "Central crystals (" << histo_fwhm_central->GetEntries() << ")\t=" << histo_fwhm_central->GetMean() << " " << histo_fwhm_central->GetRMS() << std::endl;
+
   //save plots to file
   std::string outputFileName = fileName.substr(0,fileName.size()-4);
   outputFileName += ".root";
