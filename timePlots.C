@@ -41,7 +41,8 @@ void timePlots(std::string fileName, int nmppcx = 4, int nmppcy = 4, int ncryx =
   histo2d->Draw("LEGO2");
 
   //save plots to file
-  std::string outputFileName = fileName.substr(0,fileName.size()-5);
+  std::string outputFileName = fileName.substr(0,fileName.size()-4);
+  outputFileName += ".root";
   TFile *outputFile = new TFile(outputFileName.c_str(),"RECREATE");
   outputFile->cd();
   c1->Write();
