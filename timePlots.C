@@ -42,9 +42,9 @@ void timePlots(std::string fileName, int nmppcx = 4, int nmppcy = 4, int ncryx =
 
   //output averages
   std::cout << "Summary " << std::endl;
-  std::cout << "CTR FWHM [ps]  " << std::endl;
-  std::cout << "All crystals" << std::endl;
-  std::cout << "Central crystals" << std::endl;
+  std::cout << "CTR FWHM [ps]" << std::endl;
+  std::cout << "All crystals " << "(" << histo_fwhm->GetEntries()<< ")" << std::endl;
+  std::cout << "Central crystals " << "(" << histo_fwhm_central->GetEntries()<< ")" << std::endl;
   std::cout << histo_fwhm->GetMean() << " +/- " << histo_fwhm->GetRMS() / sqrt(histo_fwhm->GetEntries())  << std::endl;
   std::cout << histo_fwhm_central->GetMean() << " +/- " << histo_fwhm_central->GetRMS() / sqrt(histo_fwhm_central->GetEntries())  << std::endl;
 

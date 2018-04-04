@@ -115,16 +115,91 @@ struct detector_t
 
 
 /*** find width at half max ***/
-float ComputeFWHM(TH1F* histo)
+// float ComputeFWHM(TH1F* histo)
+// {
+//    float max = histo->GetMaximum();
+//    float halfMax = max / 2.0;
+//    int binMin = histo->FindFirstBinAbove(halfMax);
+//    int binMax = histo->FindLastBinAbove(halfMax);
+//    float down = histo->GetBinCenter(binMin);
+//    float up   = histo->GetBinCenter(binMax);
+//    float ret = up -down;
+//    return ret;
+// }
+
+void extractWithGaussAndExp(TH1F* histo,double fitPercMin,double fitPercMax, int divs, double tagFwhm, double* res)
 {
-   float max = histo->GetMaximum();
-   float halfMax = max / 2.0;
-   int binMin = histo->FindFirstBinAbove(halfMax);
-   int binMax = histo->FindLastBinAbove(halfMax);
-   float down = histo->GetBinCenter(binMin);
-   float up   = histo->GetBinCenter(binMax);
-   float ret = up -down;
-   return ret;
+  TCanvas *cTemp  = new TCanvas("temp","temp");
+  TF1 *gaussDummy = new TF1("gaussDummy","gaus");
+  histo->Fit(gaussDummy,"QN");
+
+  double f1min = histo->GetXaxis()->GetXmin();
+  double f1max = histo->GetXaxis()->GetXmax();
+
+
+  TF1* f1  = new TF1("f1","[0]/sqrt(2)*exp([2]^2/2/[3]^2-(x-[1])/[3])*(1-TMath::Erf(([1]-x+[2]^2/[3])/(sqrt(2*[2]^2))))");
+  f1->SetLineColor(kBlack);
+  f1->SetParName(0,"N");
+  f1->SetParName(1,"Mean");
+  f1->SetParName(2,"Sigma");
+  f1->SetParName(3,"tau");
+  // f1->SetParameters(gaussDummy->GetParameter(0),gaussDummy->GetParameter(1),gaussDummy->GetParameter(2),1,3);
+  f1->SetParameter(0,gaussDummy->GetParameter(0));
+  f1->SetParameter(1,gaussDummy->GetParameter(1));
+  f1->SetParameter(2,gaussDummy->GetParameter(2));
+  f1->SetParameter(3,5e-9);
+  double fitMin = gaussDummy->GetParameter(1) - fitPercMin*(gaussDummy->GetParameter(2));
+  double fitMax = gaussDummy->GetParameter(1) + fitPercMax*(gaussDummy->GetParameter(2));
+  if(fitMin < f1min)
+  {
+    fitMin = f1min;
+  }
+  if(fitMax > f1max)
+  {
+    fitMax = f1max;
+  }
+
+  histo->Fit(f1,"","",fitMin,fitMax);
+  std::cout << "-----------------------------------------------------------------------" << std::endl;
+  std::cout << histo->GetName() << std::endl;
+  std::cout << f1->GetMaximum(fitMin,fitMax)    << "\t"
+            // << fitMin              << "\t"
+            // << fitMax              << "\t"
+            << f1->GetParameter(0) << "\t"
+            << f1->GetParameter(1) << "\t"
+            << f1->GetParameter(2) << "\t"
+            << f1->GetParameter(3) << "\t"
+            << std::endl;
+  double min,max,min10,max10;
+  // int divs = 3000;
+  double step = (fitMin-fitMax)/divs;
+  // is [0] the max of the function???
+  for(int i = 0 ; i < divs ; i++)
+  {
+    if( (f1->Eval(fitMin + i*step) < f1->GetMaximum(fitMin,fitMax)/2.0) && (f1->Eval(fitMin + (i+1)*step) > f1->GetMaximum(fitMin,fitMax)/2.0) )
+    {
+      min = fitMin + (i+0.5)*step;
+    }
+    if( (f1->Eval(fitMin + i*step) > f1->GetMaximum(fitMin,fitMax)/2.0) && (f1->Eval(fitMin + (i+1)*step) < f1->GetMaximum(fitMin,fitMax)/2.0) )
+    {
+      max = fitMin + (i+0.5)*step;
+    }
+    if( (f1->Eval(fitMin + i*step) < f1->GetMaximum(fitMin,fitMax)/10.0) && (f1->Eval(fitMin + (i+1)*step) > f1->GetMaximum(fitMin,fitMax)/10.0) )
+    {
+      min10 = fitMin + (i+0.5)*step;
+    }
+    if( (f1->Eval(fitMin + i*step) > f1->GetMaximum(fitMin,fitMax)/10.0) && (f1->Eval(fitMin + (i+1)*step) < f1->GetMaximum(fitMin,fitMax)/10.0) )
+    {
+      max10 = fitMin + (i+0.5)*step;
+    }
+  }
+  // res[0] = f1->GetParameter(1);  // res[0] is mean
+  // res[1] = max-min;              // res[1] is FWHM
+  res[0] = sqrt(2)*sqrt(pow((max-min),2)-pow(tagFwhm,2));
+  res[1] = sqrt(2)*sqrt(pow((max10-min10),2)-pow((tagFwhm/2.355)*4.29,2));
+  std::cout <<"----> " << res[0] << " " << res[1]<< std::endl;
+  delete cTemp;
+
 }
 
 void extractCTR(TH1F* histo,double fitPercMin,double fitPercMax, int divs, double tagFwhm, double* res)
@@ -180,66 +255,66 @@ void extractCTR(TH1F* histo,double fitPercMin,double fitPercMax, int divs, doubl
 }
 
 /*** find effective sigma ***/
-void FindSmallestInterval(float* ret, TH1F* histo, const float&
-fraction, const bool& verbosity)
-{
-   float integralMax = fraction * histo->Integral();
-
-   int N = histo -> GetNbinsX();
-   std::vector<float> binCenters(N);
-   std::vector<float> binContents(N);
-   std::vector<float> binIntegrals(N);
-   for(int bin1 = 0; bin1 < N; ++bin1)
-   {
-     binCenters[bin1] = histo->GetBinCenter(bin1+1);
-     binContents[bin1] = histo->GetBinContent(bin1+1);
-
-     for(int bin2 = 0; bin2 <= bin1; ++bin2)
-       binIntegrals[bin1] += binContents[bin2];
-   }
-
-   float min = 0.;
-   float max = 0.;
-   float delta = 999999.;
-   for(int bin1 = 0; bin1 < N; ++bin1)
-   {
-     for(int bin2 = bin1+1; bin2 < N; ++bin2)
-     {
-       if( (binIntegrals[bin2]-binIntegrals[bin1]) < integralMax ) continue;
-
-       float tmpMin = histo -> GetBinCenter(bin1);
-       float tmpMax = histo -> GetBinCenter(bin2);
-
-       if( (tmpMax-tmpMin) < delta )
-       {
-         delta = (tmpMax - tmpMin);
-         min = tmpMin;
-         max = tmpMax;
-       }
-
-       break;
-     }
-   }
-
-   TH1F* smallHisto = (TH1F*)( histo->Clone("smallHisto") );
-   for(int bin = 1; bin <= smallHisto->GetNbinsX(); ++bin)
-   {
-     if( smallHisto->GetBinCenter(bin) < min )
-       smallHisto -> SetBinContent(bin,0);
-
-     if( smallHisto->GetBinCenter(bin) > max )
-       smallHisto -> SetBinContent(bin,0);
-   }
-   smallHisto -> SetFillColor(kYellow);
-
-   float mean = smallHisto -> GetMean();
-   float meanErr = smallHisto -> GetMeanError();
-
-   ret[0] = mean;
-   ret[1] = meanErr;
-   ret[2] = min;
-   ret[3] = max;
-}
+// void FindSmallestInterval(float* ret, TH1F* histo, const float&
+// fraction, const bool& verbosity)
+// {
+//    float integralMax = fraction * histo->Integral();
+//
+//    int N = histo -> GetNbinsX();
+//    std::vector<float> binCenters(N);
+//    std::vector<float> binContents(N);
+//    std::vector<float> binIntegrals(N);
+//    for(int bin1 = 0; bin1 < N; ++bin1)
+//    {
+//      binCenters[bin1] = histo->GetBinCenter(bin1+1);
+//      binContents[bin1] = histo->GetBinContent(bin1+1);
+//
+//      for(int bin2 = 0; bin2 <= bin1; ++bin2)
+//        binIntegrals[bin1] += binContents[bin2];
+//    }
+//
+//    float min = 0.;
+//    float max = 0.;
+//    float delta = 999999.;
+//    for(int bin1 = 0; bin1 < N; ++bin1)
+//    {
+//      for(int bin2 = bin1+1; bin2 < N; ++bin2)
+//      {
+//        if( (binIntegrals[bin2]-binIntegrals[bin1]) < integralMax ) continue;
+//
+//        float tmpMin = histo -> GetBinCenter(bin1);
+//        float tmpMax = histo -> GetBinCenter(bin2);
+//
+//        if( (tmpMax-tmpMin) < delta )
+//        {
+//          delta = (tmpMax - tmpMin);
+//          min = tmpMin;
+//          max = tmpMax;
+//        }
+//
+//        break;
+//      }
+//    }
+//
+//    TH1F* smallHisto = (TH1F*)( histo->Clone("smallHisto") );
+//    for(int bin = 1; bin <= smallHisto->GetNbinsX(); ++bin)
+//    {
+//      if( smallHisto->GetBinCenter(bin) < min )
+//        smallHisto -> SetBinContent(bin,0);
+//
+//      if( smallHisto->GetBinCenter(bin) > max )
+//        smallHisto -> SetBinContent(bin,0);
+//    }
+//    smallHisto -> SetFillColor(kYellow);
+//
+//    float mean = smallHisto -> GetMean();
+//    float meanErr = smallHisto -> GetMeanError();
+//
+//    ret[0] = mean;
+//    ret[1] = meanErr;
+//    ret[2] = min;
+//    ret[3] = max;
+// }
 
 
 bool compareByNumber(const Crystal_t &a,const Crystal_t  &b)
@@ -270,6 +345,9 @@ void usage()
             << "\t\t" << "--fitPercMax <value>                               - time fit max is set to ((gauus fit mean) - fitPercMax*(gauss fit sigma))  - default = 6" << std::endl
             << "\t\t" << "--divs <value>                                     - n of divisions when looking for FWHM - default = 10000"  << std::endl
             << "\t\t" << "--bins <value>                                     - n of bins in summary CTR histograms - deafult 40"  << std::endl
+            << "\t\t" << "--func <value>                                     - function for fitting (default = 0)"  << std::endl
+            << "\t\t" << "                                                   - 0 = crystalball "  << std::endl
+            << "\t\t" << "                                                   - 1 = gauss+exp "  << std::endl
             << "\t\t" << std::endl;
 }
 
@@ -302,6 +380,7 @@ int main (int argc, char** argv)
   int bins = 40;
   double minCTR = 100;
   double maxCTR = 500;
+  int func = 0;
 
   // parse arguments
   static struct option longOptions[] =
@@ -324,6 +403,7 @@ int main (int argc, char** argv)
       { "fitPercMax", required_argument, 0, 0 },
       { "divs", required_argument, 0, 0 },
       { "bins", required_argument, 0, 0 },
+      { "func", required_argument, 0, 0 },
 			{ NULL, 0, 0, 0 }
 	};
 
@@ -396,6 +476,9 @@ int main (int argc, char** argv)
     }
     else if (c == 0 && optionIndex == 16){
       bins = atoi((char *)optarg);
+    }
+    else if (c == 0 && optionIndex == 17){
+      func = atoi((char *)optarg);
     }
 		else {
       std::cout	<< "Usage: " << argv[0] << std::endl;
@@ -1416,7 +1499,15 @@ int main (int argc, char** argv)
       crystal[iCry].simpleCTR->SetLineColor(kGreen);
       crystal[iCry].simpleCTR->SetStats(0);
       crystal[iCry].simpleCTR_norm = (TH1F*) crystal[iCry].simpleCTR->Clone();
-      extractCTR(crystal[iCry].simpleCTR,fitPercMin,fitPercMax,divs,tagFwhm,ret);
+      if(func == 0)
+      {
+        extractCTR(crystal[iCry].simpleCTR,fitPercMin,fitPercMax,divs,tagFwhm,ret);
+      }
+      else
+      {
+        extractWithGaussAndExp(crystal[iCry].simpleCTR,fitPercMin,fitPercMax,divs,tagFwhm,ret);
+      }
+
 
       std::cout << "No corr    - cry " << crystal[iCry].number << "\t"
                 << ret[0]*1e12 << "\t"
@@ -1444,7 +1535,15 @@ int main (int argc, char** argv)
       crystal[iCry].centralCTR->SetLineColor(kBlue);
       crystal[iCry].centralCTR->SetStats(0);
       crystal[iCry].centralCTR_norm = (TH1F*) crystal[iCry].centralCTR->Clone();
-      extractCTR(crystal[iCry].centralCTR,fitPercMin,fitPercMax,divs,tagFwhm,ret);
+      if(func == 0)
+      {
+        extractCTR(crystal[iCry].centralCTR,fitPercMin,fitPercMax,divs,tagFwhm,ret);
+      }
+      else
+      {
+        extractWithGaussAndExp(crystal[iCry].centralCTR,fitPercMin,fitPercMax,divs,tagFwhm,ret);
+      }
+
 
       std::cout << "Central    - cry " << crystal[iCry].number << "\t"
                 << ret[0]*1e12 << "\t"
@@ -1474,7 +1573,15 @@ int main (int argc, char** argv)
       crystal[iCry].allCTR->SetStats(0);
 
       crystal[iCry].allCTR_norm = (TH1F*) crystal[iCry].allCTR->Clone();
-      extractCTR(crystal[iCry].allCTR,fitPercMin,fitPercMax,divs,tagFwhm,ret);
+      if(func == 0)
+      {
+        extractCTR(crystal[iCry].allCTR,fitPercMin,fitPercMax,divs,tagFwhm,ret);
+      }
+      else
+      {
+        extractWithGaussAndExp(crystal[iCry].allCTR,fitPercMin,fitPercMax,divs,tagFwhm,ret);
+      }
+
 
       std::cout << "Full corr. - cry " << crystal[iCry].number << "\t"
                 << ret[0]*1e12 << "\t"
@@ -1503,7 +1610,15 @@ int main (int argc, char** argv)
       crystal[iCry].poliCorrCTR->SetStats(0);
 
       crystal[iCry].poliCorrCTR_norm = (TH1F*) crystal[iCry].poliCorrCTR->Clone();
-      extractCTR(crystal[iCry].poliCorrCTR,fitPercMin,fitPercMax,divs,tagFwhm,ret);
+      if(func == 0)
+      {
+        extractCTR(crystal[iCry].poliCorrCTR,fitPercMin,fitPercMax,divs,tagFwhm,ret);
+      }
+      else
+      {
+        extractWithGaussAndExp(crystal[iCry].poliCorrCTR,fitPercMin,fitPercMax,divs,tagFwhm,ret);
+      }
+
 
       std::cout << "Polished corr. - cry " << crystal[iCry].number << "\t"
                 << ret[0]*1e12 << "\t"
