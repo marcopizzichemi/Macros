@@ -173,24 +173,24 @@ void extractWithGaussAndExp(TH1F* histo,double fitPercMin,double fitPercMax, int
   double min,max,min10,max10;
   // int divs = 3000;
   double step = (fitMin-fitMax)/divs;
-  // is [0] the max of the function???
+  double funcMax = f1->GetMaximum(fitMin,fitMax);
   for(int i = 0 ; i < divs ; i++)
   {
-    if( (f1->Eval(fitMin + i*step) < f1->GetMaximum(fitMin,fitMax)/2.0) && (f1->Eval(fitMin + (i+1)*step) > f1->GetMaximum(fitMin,fitMax)/2.0) )
+    if( (f1->Eval(f1min + i*step) < funcMax/2.0) && (f1->Eval(f1min + (i+1)*step) > funcMax/2.0) )
     {
-      min = fitMin + (i+0.5)*step;
+      min = f1min + (i+0.5)*step;
     }
-    if( (f1->Eval(fitMin + i*step) > f1->GetMaximum(fitMin,fitMax)/2.0) && (f1->Eval(fitMin + (i+1)*step) < f1->GetMaximum(fitMin,fitMax)/2.0) )
+    if( (f1->Eval(f1min + i*step) > funcMax/2.0) && (f1->Eval(f1min + (i+1)*step) < funcMax/2.0) )
     {
-      max = fitMin + (i+0.5)*step;
+      max = f1min + (i+0.5)*step;
     }
-    if( (f1->Eval(fitMin + i*step) < f1->GetMaximum(fitMin,fitMax)/10.0) && (f1->Eval(fitMin + (i+1)*step) > f1->GetMaximum(fitMin,fitMax)/10.0) )
+    if( (f1->Eval(f1min + i*step) < funcMax/10.0) && (f1->Eval(f1min + (i+1)*step) > funcMax/10.0) )
     {
-      min10 = fitMin + (i+0.5)*step;
+      min10 = f1min + (i+0.5)*step;
     }
-    if( (f1->Eval(fitMin + i*step) > f1->GetMaximum(fitMin,fitMax)/10.0) && (f1->Eval(fitMin + (i+1)*step) < f1->GetMaximum(fitMin,fitMax)/10.0) )
+    if( (f1->Eval(f1min + i*step) > funcMax/10.0) && (f1->Eval(f1min + (i+1)*step) < funcMax/10.0) )
     {
-      max10 = fitMin + (i+0.5)*step;
+      max10 = f1min + (i+0.5)*step;
     }
   }
   // res[0] = f1->GetParameter(1);  // res[0] is mean
@@ -229,22 +229,22 @@ void extractCTR(TH1F* histo,double fitPercMin,double fitPercMax, int divs, doubl
   double min,max,min10,max10;
   // int divs = 3000;
   double step = (f1max-f1min)/divs;
-  // is [0] the max of the function???
+  double funcMax = f1->GetMaximum(fitMin,fitMax);
   for(int i = 0 ; i < divs ; i++)
   {
-    if( (f1->Eval(f1min + i*step) < f1->GetParameter(0)/2.0) && (f1->Eval(f1min + (i+1)*step) > f1->GetParameter(0)/2.0) )
+    if( (f1->Eval(f1min + i*step) < funcMax/2.0) && (f1->Eval(f1min + (i+1)*step) > funcMax/2.0) )
     {
       min = f1min + (i+0.5)*step;
     }
-    if( (f1->Eval(f1min + i*step) > f1->GetParameter(0)/2.0) && (f1->Eval(f1min + (i+1)*step) < f1->GetParameter(0)/2.0) )
+    if( (f1->Eval(f1min + i*step) > funcMax/2.0) && (f1->Eval(f1min + (i+1)*step) < funcMax/2.0) )
     {
       max = f1min + (i+0.5)*step;
     }
-    if( (f1->Eval(f1min + i*step) < f1->GetParameter(0)/10.0) && (f1->Eval(f1min + (i+1)*step) > f1->GetParameter(0)/10.0) )
+    if( (f1->Eval(f1min + i*step) < funcMax/10.0) && (f1->Eval(f1min + (i+1)*step) > funcMax/10.0) )
     {
       min10 = f1min + (i+0.5)*step;
     }
-    if( (f1->Eval(f1min + i*step) > f1->GetParameter(0)/10.0) && (f1->Eval(f1min + (i+1)*step) < f1->GetParameter(0)/10.0) )
+    if( (f1->Eval(f1min + i*step) > funcMax/10.0) && (f1->Eval(f1min + (i+1)*step) < funcMax/10.0) )
     {
       max10 = f1min + (i+0.5)*step;
     }
