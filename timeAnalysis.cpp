@@ -87,6 +87,10 @@ struct Crystal_t
   TH1F *centralCTR;
   TH1F *allCTR;
   TH1F *poliCorrCTR;
+  std::vector<double> vSimple;
+  std::vector<double> vCentral;
+  std::vector<double> vAll;
+  std::vector<double> vPoli;
   TH1F *simpleCTR_norm;
   TH1F *centralCTR_norm;
   TH1F *allCTR_norm;
@@ -254,67 +258,113 @@ void extractCTR(TH1F* histo,double fitPercMin,double fitPercMax, int divs, doubl
   delete cTemp;
 }
 
+
+//**** per std::vector -- non binnata
+double FindSmallestInterval(double& mean,
+                            double& meanErr,
+                            double& min,
+                            double& max,
+                            std::vector<double>& vals,
+                            const double& fraction,
+                            const bool& verbosity)
+{
+   if( verbosity )
+     std::cout << ">>>>>> FindSmallestInterval" << std::endl;
+
+
+   std::sort(vals.begin(),vals.end());
+
+   unsigned int nPoints = vals.size();
+   unsigned int maxPoints = (unsigned int)(fraction * nPoints);
+
+   unsigned int minPoint = 0;
+   unsigned int maxPoint = 0;
+   double delta = 999999.;
+   for(unsigned int point = 0; point < nPoints-maxPoints; ++point)
+   {
+     double tmpMin = vals.at(point);
+     double tmpMax = vals.at(point+maxPoints-1);
+     if( tmpMax-tmpMin < delta )
+     {
+       delta = tmpMax - tmpMin;
+       min = tmpMin;
+       max = tmpMax;
+       minPoint = point;
+       maxPoint = point + maxPoints - 1;
+     }
+   }
+   return delta;
+}
+
+
 /*** find effective sigma ***/
-// void FindSmallestInterval(float* ret, TH1F* histo, const float&
-// fraction, const bool& verbosity)
-// {
-//    float integralMax = fraction * histo->Integral();
-//
-//    int N = histo -> GetNbinsX();
-//    std::vector<float> binCenters(N);
-//    std::vector<float> binContents(N);
-//    std::vector<float> binIntegrals(N);
-//    for(int bin1 = 0; bin1 < N; ++bin1)
-//    {
-//      binCenters[bin1] = histo->GetBinCenter(bin1+1);
-//      binContents[bin1] = histo->GetBinContent(bin1+1);
-//
-//      for(int bin2 = 0; bin2 <= bin1; ++bin2)
-//        binIntegrals[bin1] += binContents[bin2];
-//    }
-//
-//    float min = 0.;
-//    float max = 0.;
-//    float delta = 999999.;
-//    for(int bin1 = 0; bin1 < N; ++bin1)
-//    {
-//      for(int bin2 = bin1+1; bin2 < N; ++bin2)
-//      {
-//        if( (binIntegrals[bin2]-binIntegrals[bin1]) < integralMax ) continue;
-//
-//        float tmpMin = histo -> GetBinCenter(bin1);
-//        float tmpMax = histo -> GetBinCenter(bin2);
-//
-//        if( (tmpMax-tmpMin) < delta )
-//        {
-//          delta = (tmpMax - tmpMin);
-//          min = tmpMin;
-//          max = tmpMax;
-//        }
-//
-//        break;
-//      }
-//    }
-//
-//    TH1F* smallHisto = (TH1F*)( histo->Clone("smallHisto") );
-//    for(int bin = 1; bin <= smallHisto->GetNbinsX(); ++bin)
-//    {
-//      if( smallHisto->GetBinCenter(bin) < min )
-//        smallHisto -> SetBinContent(bin,0);
-//
-//      if( smallHisto->GetBinCenter(bin) > max )
-//        smallHisto -> SetBinContent(bin,0);
-//    }
-//    smallHisto -> SetFillColor(kYellow);
-//
-//    float mean = smallHisto -> GetMean();
-//    float meanErr = smallHisto -> GetMeanError();
-//
-//    ret[0] = mean;
-//    ret[1] = meanErr;
-//    ret[2] = min;
-//    ret[3] = max;
-// }
+void FindSmallestInterval(double* retValues, TH1F* histo, const float&
+fraction, const bool& verbosity, double tagFwhm)
+{
+  float ret[4];
+   float integralMax = fraction * histo->Integral();
+
+   int N = histo -> GetNbinsX();
+   std::vector<float> binCenters(N);
+   std::vector<float> binContents(N);
+   std::vector<float> binIntegrals(N);
+   for(int bin1 = 0; bin1 < N; ++bin1)
+   {
+     binCenters[bin1] = histo->GetBinCenter(bin1+1);
+     binContents[bin1] = histo->GetBinContent(bin1+1);
+
+     for(int bin2 = 0; bin2 <= bin1; ++bin2)
+       binIntegrals[bin1] += binContents[bin2];
+   }
+
+   float min = 0.;
+   float max = 0.;
+   float delta = 999999.;
+   for(int bin1 = 0; bin1 < N; ++bin1)
+   {
+     for(int bin2 = bin1+1; bin2 < N; ++bin2)
+     {
+       if( (binIntegrals[bin2]-binIntegrals[bin1]) < integralMax ) continue;
+
+       float tmpMin = histo -> GetBinCenter(bin1);
+       float tmpMax = histo -> GetBinCenter(bin2);
+
+       if( (tmpMax-tmpMin) < delta )
+       {
+         delta = (tmpMax - tmpMin);
+         min = tmpMin;
+         max = tmpMax;
+       }
+
+       break;
+     }
+   }
+
+   TH1F* smallHisto = (TH1F*)( histo->Clone("smallHisto") );
+   for(int bin = 1; bin <= smallHisto->GetNbinsX(); ++bin)
+   {
+     if( smallHisto->GetBinCenter(bin) < min )
+       smallHisto -> SetBinContent(bin,0);
+
+     if( smallHisto->GetBinCenter(bin) > max )
+       smallHisto -> SetBinContent(bin,0);
+   }
+   smallHisto -> SetFillColor(kYellow);
+
+   float mean = smallHisto -> GetMean();
+   float meanErr = smallHisto -> GetMeanError();
+
+   ret[0] = mean;
+   ret[1] = meanErr;
+   ret[2] = min;
+   ret[3] = max;
+
+   //mean is the smallest interval containing the 68% (fraction) of data. this would be from -1 sigma to +1 sigma, so 2 sigmas. therefore we get teh "fwhm" of this distro by
+   double fwhm = 2.355* ((max-min) / 2.0);
+
+   retValues[0] = sqrt(2)*sqrt(pow(fwhm,2)-pow(tagFwhm,2));
+   retValues[1] = 0;
+}
 
 
 bool compareByNumber(const Crystal_t &a,const Crystal_t  &b)
@@ -348,6 +398,7 @@ void usage()
             << "\t\t" << "--func <value>                                     - function for fitting (default = 0)"  << std::endl
             << "\t\t" << "                                                   - 0 = crystalball "  << std::endl
             << "\t\t" << "                                                   - 1 = gauss+exp "  << std::endl
+            << "\t\t" << "--unbinned                                         - use also the unbinned method to calculate CTR - default = 0 (false)"  << std::endl
             << "\t\t" << std::endl;
 }
 
@@ -381,6 +432,7 @@ int main (int argc, char** argv)
   double minCTR = 100;
   double maxCTR = 500;
   int func = 0;
+  bool unbinned = false;
 
   // parse arguments
   static struct option longOptions[] =
@@ -404,6 +456,7 @@ int main (int argc, char** argv)
       { "divs", required_argument, 0, 0 },
       { "bins", required_argument, 0, 0 },
       { "func", required_argument, 0, 0 },
+      { "unbinned", no_argument, 0, 0 },
 			{ NULL, 0, 0, 0 }
 	};
 
@@ -479,6 +532,9 @@ int main (int argc, char** argv)
     }
     else if (c == 0 && optionIndex == 17){
       func = atoi((char *)optarg);
+    }
+    else if (c == 0 && optionIndex == 18){
+      unbinned = true;
     }
 		else {
       std::cout	<< "Usage: " << argv[0] << std::endl;
@@ -1246,8 +1302,9 @@ int main (int argc, char** argv)
             Float_t centralcorrection = 0.0;
             Float_t zeroCorrection    = 0.0;
             //no corr
-            crystal[iCry].simpleCTR->Fill(timeStamp[crystal[iCry].timingChannel] -
-                                          timeStamp[taggingCrystalTimingChannel]);
+            double simpleCTR = timeStamp[crystal[iCry].timingChannel] - timeStamp[taggingCrystalTimingChannel];
+            crystal[iCry].simpleCTR->Fill(simpleCTR);
+            crystal[iCry].vSimple.push_back(simpleCTR);
 
             if(crystal[iCry].tw_correction)
             {
@@ -1297,7 +1354,9 @@ int main (int argc, char** argv)
               Float_t totalWeight = 0.0;
               // averageTimeStamp += timeStamp[crystal[iCry].detectorChannel];
               centralcorrection = crystal[iCry].tw_correction->Eval(crystal[iCry].wz->Eval(length*doiFraction)) - crystal[iCry].tw_correction->Eval(FloodZ);
-              crystal[iCry].centralCTR->Fill((timeStamp[crystal[iCry].timingChannel] + (centralcorrection)) - timeStamp[taggingCrystalTimingChannel]);
+              double centralCTR = (timeStamp[crystal[iCry].timingChannel] + (centralcorrection)) - timeStamp[taggingCrystalTimingChannel];
+              crystal[iCry].centralCTR->Fill(centralCTR);
+              crystal[iCry].vCentral.push_back(centralCTR);
 
 
               if(crystal[iCry].delay.size())
@@ -1367,7 +1426,10 @@ int main (int argc, char** argv)
                 }
                 averageTimeStamp = averageTimeStamp/totalWeight;
                 // then correct the average of ts for central correction
-                crystal[iCry].allCTR->Fill((averageTimeStamp + (centralcorrection)) - timeStamp[taggingCrystalTimingChannel]);
+                double allCTR = (averageTimeStamp + (centralcorrection)) - timeStamp[taggingCrystalTimingChannel];
+                crystal[iCry].allCTR->Fill(allCTR);
+                crystal[iCry].vAll.push_back(allCTR);
+
                 // crystal[iCry].allCTR->Fill(averageTimeStamp + zeroCorrection  - timeStamp[taggingCrystalTimingChannel]);
               }
             }
@@ -1408,7 +1470,10 @@ int main (int argc, char** argv)
               // std::cout << std::endl
               //           << meanTimeStamp << "\t"
               //           << std::endl;
-              crystal[iCry].poliCorrCTR->Fill(meanTimeStamp - timeStamp[taggingCrystalTimingChannel]);
+              double poliCorrCTR = meanTimeStamp - timeStamp[taggingCrystalTimingChannel];
+              crystal[iCry].poliCorrCTR->Fill(poliCorrCTR);
+              crystal[iCry].vPoli.push_back(poliCorrCTR);
+
 
             }
 
@@ -1438,6 +1503,12 @@ int main (int argc, char** argv)
   TH1F* centralCorr = new TH1F("Central Correction","Central Correction",bins,minCTR,maxCTR);
   TH1F* fullCorr = new TH1F("Full Correction","Full Correction",bins,minCTR,maxCTR);
   TH1F* poliCorr = new TH1F("Polished Correction","Polished Correction",bins,minCTR,maxCTR);
+
+  TH1F* unbinnednoCorr      = new TH1F("Unbinned No Correction","No Correction",bins,minCTR,maxCTR);
+  TH1F* unbinnedcentralCorr = new TH1F("Unbinned Central Correction","Central Correction",bins,minCTR,maxCTR);
+  TH1F* unbinnedfullCorr    = new TH1F("Unbinned Full Correction","Full Correction",bins,minCTR,maxCTR);
+  TH1F* unbinnedpoliCorr    = new TH1F("Unbinned Polished Correction","Polished Correction",bins,minCTR,maxCTR);
+
   // std::vector<TH1F*> histograms;
 
   // do summary canvases for checking the fits
@@ -1487,6 +1558,10 @@ int main (int argc, char** argv)
     Float_t realCentralCTRfwhm,realCentralCTRfwtm;
     Float_t realAllCTRfwhm,realAllCTRfwtm;
     Float_t poliCorrCTRfwhm,poliCorrCTRfwtm;
+    double unbinnedSimpleCTR;
+    double unbinnedCentralCTR;
+    double unbinnedAllCTR;
+    double unbinnedPoliCTR;
     double ret[2];
 
     // std::cout << "BASIC CTRs --------------------" << std::endl;
@@ -1505,7 +1580,14 @@ int main (int argc, char** argv)
       }
       else
       {
-        extractWithGaussAndExp(crystal[iCry].simpleCTR,fitPercMin,fitPercMax,divs,tagFwhm,ret);
+        if(func ==1)
+        {
+          extractWithGaussAndExp(crystal[iCry].simpleCTR,fitPercMin,fitPercMax,divs,tagFwhm,ret);
+        }
+        else
+        { //(double* retValues, TH1F* histo, const float& fraction, const bool& verbosity)
+          FindSmallestInterval(ret,crystal[iCry].simpleCTR,0.68,true,tagFwhm);
+        }
       }
 
 
@@ -1525,6 +1607,34 @@ int main (int argc, char** argv)
       cSumSimple->cd(iCry+1);
       crystal[iCry].simpleCTR->Draw();
       crystal[iCry].simpleCTR_norm->Scale(1.0/crystal[iCry].simpleCTR_norm->GetMaximum());
+
+      // use unbinned method
+      if(unbinned)
+      {
+        double mean,meanErr,min,max;
+        double delta = FindSmallestInterval(mean,
+                                            meanErr,
+                                            min,
+                                            max,
+                                            crystal[iCry].vSimple,
+                                            0.68,
+                                            true);
+        //now pass to fwhm
+        double fwhm = 2.355 * (delta/2.0);
+        unbinnedSimpleCTR = 1e12*sqrt(2)*sqrt(pow(fwhm,2)-pow(tagFwhm,2));
+        unbinnednoCorr->Fill(unbinnedSimpleCTR);
+
+        std::cout << "Unbinned No corr    - cry " << crystal[iCry].number << "\t"
+                  << unbinnedSimpleCTR << "\t"
+                  << 0 << std::endl;
+
+        textfile  << "Unbinned No corr    - cry " << crystal[iCry].number << "\t"
+                  << unbinnedSimpleCTR << "\t"
+                  << 0 << std::endl;
+
+
+      }
+
     }
 
     if(crystal[iCry].centralCTR)
@@ -1535,13 +1645,28 @@ int main (int argc, char** argv)
       crystal[iCry].centralCTR->SetLineColor(kBlue);
       crystal[iCry].centralCTR->SetStats(0);
       crystal[iCry].centralCTR_norm = (TH1F*) crystal[iCry].centralCTR->Clone();
+      // if(func == 0)
+      // {
+      //   extractCTR(crystal[iCry].centralCTR,fitPercMin,fitPercMax,divs,tagFwhm,ret);
+      // }
+      // else
+      // {
+      //   extractWithGaussAndExp(crystal[iCry].centralCTR,fitPercMin,fitPercMax,divs,tagFwhm,ret);
+      // }
       if(func == 0)
       {
         extractCTR(crystal[iCry].centralCTR,fitPercMin,fitPercMax,divs,tagFwhm,ret);
       }
       else
       {
-        extractWithGaussAndExp(crystal[iCry].centralCTR,fitPercMin,fitPercMax,divs,tagFwhm,ret);
+        if(func ==1)
+        {
+          extractWithGaussAndExp(crystal[iCry].centralCTR,fitPercMin,fitPercMax,divs,tagFwhm,ret);
+        }
+        else
+        { //(double* retValues, TH1F* histo, const float& fraction, const bool& verbosity)
+          FindSmallestInterval(ret,crystal[iCry].centralCTR,0.68,true,tagFwhm);
+        }
       }
 
 
@@ -1562,6 +1687,31 @@ int main (int argc, char** argv)
       crystal[iCry].centralCTR->Draw();
       // crystal[iCry].centralCTR->Scale(1.0/crystal[iCry].centralCTR->GetMaximum());
       crystal[iCry].centralCTR_norm->Scale(1.0/crystal[iCry].centralCTR_norm->GetMaximum());
+
+      // use unbinned method
+      if(unbinned)
+      {
+        double mean,meanErr,min,max;
+        double delta = FindSmallestInterval(mean,
+                                            meanErr,
+                                            min,
+                                            max,
+                                            crystal[iCry].vCentral,
+                                            0.68,
+                                            true);
+        //now pass to fwhm
+        double fwhm = 2.355 * (delta/2.0);
+        unbinnedCentralCTR = 1e12*sqrt(2)*sqrt(pow(fwhm,2)-pow(tagFwhm,2));
+        unbinnedcentralCorr->Fill(unbinnedCentralCTR);
+
+        std::cout << "Unbinned Central    - cry " << crystal[iCry].number << "\t"
+                  << unbinnedCentralCTR << "\t"
+                  << 0 << std::endl;
+
+        textfile  << "Unbinned Central    - cry " << crystal[iCry].number << "\t"
+                  << unbinnedCentralCTR << "\t"
+                  << 0 << std::endl;
+      }
     }
 
     if(crystal[iCry].allCTR)
@@ -1573,13 +1723,28 @@ int main (int argc, char** argv)
       crystal[iCry].allCTR->SetStats(0);
 
       crystal[iCry].allCTR_norm = (TH1F*) crystal[iCry].allCTR->Clone();
+      // if(func == 0)
+      // {
+      //   extractCTR(crystal[iCry].allCTR,fitPercMin,fitPercMax,divs,tagFwhm,ret);
+      // }
+      // else
+      // {
+      //   extractWithGaussAndExp(crystal[iCry].allCTR,fitPercMin,fitPercMax,divs,tagFwhm,ret);
+      // }
       if(func == 0)
       {
         extractCTR(crystal[iCry].allCTR,fitPercMin,fitPercMax,divs,tagFwhm,ret);
       }
       else
       {
-        extractWithGaussAndExp(crystal[iCry].allCTR,fitPercMin,fitPercMax,divs,tagFwhm,ret);
+        if(func ==1)
+        {
+          extractWithGaussAndExp(crystal[iCry].allCTR,fitPercMin,fitPercMax,divs,tagFwhm,ret);
+        }
+        else
+        { //(double* retValues, TH1F* histo, const float& fraction, const bool& verbosity)
+          FindSmallestInterval(ret,crystal[iCry].allCTR,0.68,true,tagFwhm);
+        }
       }
 
 
@@ -1599,6 +1764,31 @@ int main (int argc, char** argv)
       crystal[iCry].allCTR->Draw();
       crystal[iCry].allCTR_norm->Scale(1.0/crystal[iCry].allCTR_norm->GetMaximum());
       // crystal[iCry].allCTR->Scale(1.0/crystal[iCry].allCTR->GetMaximum());
+
+      // use unbinned method
+      if(unbinned)
+      {
+        double mean,meanErr,min,max;
+        double delta = FindSmallestInterval(mean,
+                                            meanErr,
+                                            min,
+                                            max,
+                                            crystal[iCry].vAll,
+                                            0.68,
+                                            true);
+        //now pass to fwhm
+        double fwhm = 2.355 * (delta/2.0);
+        unbinnedAllCTR = 1e12*sqrt(2)*sqrt(pow(fwhm,2)-pow(tagFwhm,2));
+        unbinnedfullCorr->Fill(unbinnedAllCTR);
+
+        std::cout << "Unbinned Full corr. - cry " << crystal[iCry].number << "\t"
+                  << unbinnedAllCTR << "\t"
+                  << 0 << std::endl;
+
+        textfile  << "Unbinned Full corr. - cry " << crystal[iCry].number << "\t"
+                  << unbinnedAllCTR << "\t"
+                  << 0 << std::endl;
+      }
     }
 
     if(crystal[iCry].poliCorrCTR)
@@ -1610,13 +1800,28 @@ int main (int argc, char** argv)
       crystal[iCry].poliCorrCTR->SetStats(0);
 
       crystal[iCry].poliCorrCTR_norm = (TH1F*) crystal[iCry].poliCorrCTR->Clone();
+      // if(func == 0)
+      // {
+      //   extractCTR(crystal[iCry].poliCorrCTR,fitPercMin,fitPercMax,divs,tagFwhm,ret);
+      // }
+      // else
+      // {
+      //   extractWithGaussAndExp(crystal[iCry].poliCorrCTR,fitPercMin,fitPercMax,divs,tagFwhm,ret);
+      // }
       if(func == 0)
       {
         extractCTR(crystal[iCry].poliCorrCTR,fitPercMin,fitPercMax,divs,tagFwhm,ret);
       }
       else
       {
-        extractWithGaussAndExp(crystal[iCry].poliCorrCTR,fitPercMin,fitPercMax,divs,tagFwhm,ret);
+        if(func ==1)
+        {
+          extractWithGaussAndExp(crystal[iCry].poliCorrCTR,fitPercMin,fitPercMax,divs,tagFwhm,ret);
+        }
+        else
+        { //(double* retValues, TH1F* histo, const float& fraction, const bool& verbosity)
+          FindSmallestInterval(ret,crystal[iCry].poliCorrCTR,0.68,true,tagFwhm);
+        }
       }
 
 
@@ -1636,6 +1841,32 @@ int main (int argc, char** argv)
       crystal[iCry].poliCorrCTR->Draw();
       crystal[iCry].poliCorrCTR_norm->Scale(1.0/crystal[iCry].poliCorrCTR_norm->GetMaximum());
       // crystal[iCry].allCTR->Scale(1.0/crystal[iCry].allCTR->GetMaximum());
+
+
+      // use unbinned method
+      if(unbinned)
+      {
+        double mean,meanErr,min,max;
+        double delta = FindSmallestInterval(mean,
+                                            meanErr,
+                                            min,
+                                            max,
+                                            crystal[iCry].vPoli,
+                                            0.68,
+                                            true);
+        //now pass to fwhm
+        double fwhm = 2.355 * (delta/2.0);
+        unbinnedPoliCTR = 1e12*sqrt(2)*sqrt(pow(fwhm,2)-pow(tagFwhm,2));
+        unbinnedpoliCorr->Fill(unbinnedPoliCTR);
+
+        std::cout << "Unbinned Polished corr. - cry " << crystal[iCry].number << "\t"
+                  << unbinnedPoliCTR << "\t"
+                  << 0 << std::endl;
+
+        textfile  << "Unbinned Polished corr. - cry " << crystal[iCry].number << "\t"
+                  << unbinnedPoliCTR << "\t"
+                  << 0 << std::endl;
+      }
     }
 
 
@@ -1776,6 +2007,11 @@ int main (int argc, char** argv)
   centralCorr->Write();
   fullCorr->Write();
   poliCorr->Write();
+
+  unbinnednoCorr->Write();
+  unbinnedcentralCorr->Write();
+  unbinnedfullCorr->Write();
+  unbinnedpoliCorr->Write();
 
   cSumSimple ->Write();
   cSumCentral->Write();
