@@ -78,7 +78,7 @@ void read_directory(const std::string& name, std::vector<std::string> &v)
 }
 
 
-void demoDoi(TH2F* original_histoADCvsDt,TH2F* original_histo1_5,TCanvas* canvas,double min,double max, double length,double minADC,double maxADC,double minT,double maxT)
+void demoDoi(TH2F* original_histoADCvsDt,TH2F* original_histo1_5,TCanvas* canvas,double min,double max, double length,double minADC,double maxADC,double minT,double maxT,int rebin_all,int rebin_slice)
 {
 
   // TFile *inputFile = new TFile(fileName.c_str());
@@ -105,11 +105,11 @@ void demoDoi(TH2F* original_histoADCvsDt,TH2F* original_histo1_5,TCanvas* canvas
   clone_histo1_5    ->SetTitle(sname.str().c_str());
   sname.str("");
 
-  clone_histoADCvsDt->Rebin2D(10,10);
-  clone_histo1_5->Rebin2D(10,10);
+  clone_histoADCvsDt->Rebin2D(rebin_all,rebin_all);
+  clone_histo1_5->Rebin2D(rebin_all,rebin_all);
 
-  histoADCvsDt->Rebin2D(30,30);
-  histo1_5->Rebin2D(30,30);
+  histoADCvsDt->Rebin2D(rebin_slice,rebin_slice);
+  histo1_5->Rebin2D(rebin_slice,rebin_slice);
   histoADCvsDt->ProfileX();
   histo1_5->ProfileX();
 
@@ -177,8 +177,8 @@ void demoDoi(TH2F* original_histoADCvsDt,TH2F* original_histo1_5,TCanvas* canvas
 
   canvas->cd(4);
   histoADCvsDt_pfx->SetTitle("511 KeV Amplitude range");
-  histoADCvsDt_pfx->Draw("hist");
-  histo1_5_pfx->Draw("same hist");
+  histoADCvsDt_pfx->Draw();
+  histo1_5_pfx->Draw("same");
   legend2->Draw("same");
 }
 
@@ -374,10 +374,12 @@ void usage()
             << "\t\t" << "--histoMin <value>                                 - lower limit of CTR spectra, in sec - default = -15e-9"  << std::endl
             << "\t\t" << "--histoMax <value>                                 - upper limit of CTR spectra, in sec - default = 15e-9"  << std::endl
             << "\t\t" << "--histoBins <value>                                - n of bins for spectra - default = 500"  << std::endl
-            << "\t\t" << "--adcMinSat <value>                                  - max of adc histograms - default 50000"  << std::endl
-            << "\t\t" << "--adcMaxSat <value>                                  - max of adc histograms - default 90000"  << std::endl
-            << "\t\t" << "--adcMinNoSat <value>                                  - max of adc histograms - default 34000"  << std::endl
-            << "\t\t" << "--adcMaxNoSat <value>                                  - max of adc histograms - default 46000"  << std::endl
+            << "\t\t" << "--adcMinSat <value>                                - min of adc histograms - default = 50000"  << std::endl
+            << "\t\t" << "--adcMaxSat <value>                                - max of adc histograms - default = 90000"  << std::endl
+            << "\t\t" << "--adcMinNoSat <value>                              - min of adc histograms - default = 34000"  << std::endl
+            << "\t\t" << "--adcMaxNoSat <value>                              - max of adc histograms - default = 46000"  << std::endl
+            << "\t\t" << "--rebin_all <value>                                - rebin value for all ADCvsCTR spectra - default = 10"  << std::endl
+            << "\t\t" << "--rebin_slice <value>                              - rebin value for slice ADCvsCTR spectra - default = 30"  << std::endl
 
 
 
@@ -406,6 +408,8 @@ int main (int argc, char** argv)
   int steps = 15;
   int crystalNum = 0;
   double length = 15.0; //mm
+  int rebin_all = 10;
+  int rebin_slice = 30;
 
   Float_t histoMin = -15e-9;//s
   Float_t histoMax = 15e-9;//s
@@ -437,6 +441,8 @@ int main (int argc, char** argv)
       { "adcMaxSat", required_argument, 0, 0 },
       { "adcMinNoSat", required_argument, 0, 0 },
       { "adcMaxNoSat", required_argument, 0, 0 },
+      { "rebin_all", required_argument, 0, 0 },
+      { "rebin_slice", required_argument, 0, 0 },
 			{ NULL, 0, 0, 0 }
 	};
 
@@ -497,6 +503,12 @@ int main (int argc, char** argv)
     }
     else if (c == 0 && optionIndex == 13){
       adcMaxNoSat = atof((char *)optarg);
+    }
+    else if (c == 0 && optionIndex == 14){
+      rebin_all = atoi((char *)optarg);
+    }
+    else if (c == 0 && optionIndex == 15){
+      rebin_slice = atoi((char *)optarg);
     }
 
 		else {
@@ -1683,9 +1695,9 @@ int main (int argc, char** argv)
   for(unsigned int i = 0 ; i < histoSat.size(); i++)
   {
     std::stringstream canvas_name;
-    canvas_name << "With saturation corretion - " << (length/steps)*i << "_" << (length/steps)*(i+1);
+    canvas_name << "With saturation correction - " << (length/steps)*i << "_" << (length/steps)*(i+1);
     TCanvas *canvas = new TCanvas(canvas_name.str().c_str(),canvas_name.str().c_str(),1600,1300);
-    demoDoi(histoADCvsDt,histoSat[i],canvas,(length/steps)*i,(length/steps)*(i+1),length,adcMinSat,adcMaxSat,minT,maxT);
+    demoDoi(histoADCvsDt,histoSat[i],canvas,(length/steps)*i,(length/steps)*(i+1),length,adcMinSat,adcMaxSat,minT,maxT,rebin_all,rebin_slice);
     histoSat[i]->Write();
     canvas->Write();
   }
@@ -1746,7 +1758,7 @@ int main (int argc, char** argv)
     std::stringstream canvas_name;
     canvas_name << "Without saturation corretion - " << (length/steps)*i << "_" << (length/steps)*(i+1);
     TCanvas *canvas = new TCanvas(canvas_name.str().c_str(),canvas_name.str().c_str(),1600,1300);
-    demoDoi(histoADCvsDtNoSat,histoNoSat[i],canvas,(length/steps)*i,(length/steps)*(i+1),length,adcMinNoSat,adcMaxNoSat,minT,maxT);
+    demoDoi(histoADCvsDtNoSat,histoNoSat[i],canvas,(length/steps)*i,(length/steps)*(i+1),length,adcMinNoSat,adcMaxNoSat,minT,maxT,rebin_all,rebin_slice);
     histoNoSat[i]->Write();
     canvas->Write();
   }
