@@ -1348,113 +1348,69 @@ int main (int argc, char** argv)
             {
               if(crystal[iCry].tw_correction)
               {
-              //calculate FloodZ...
-              Float_t FloodZ;
-              float centralChargeOriginal;
-              float centralSaturation;
-              float centralPedestal;
-              Float_t division = 0.0;
+                goodEvents++;
+                //calculate FloodZ...
+                Float_t FloodZ;
+                float centralChargeOriginal;
+                float centralSaturation;
+                float centralPedestal;
+                Float_t division = 0.0;
 
-              centralChargeOriginal = charge[crystal[iCry].detectorChannel];
-              for(unsigned int iSat = 0; iSat < detectorSaturation.size(); iSat++)
-              {
-                if( detectorSaturation[iSat].digitizerChannel  == crystal[iCry].detectorChannel)
-                {
-                  centralSaturation = detectorSaturation[iSat].saturation;
-                  centralPedestal = detectorSaturation[iSat].pedestal;
-                }
-              }
-              float centralChargeCorr = ( -centralSaturation * TMath::Log(1.0 - ( ( (centralChargeOriginal-centralPedestal))/(centralSaturation)) ) );
-
-              for (unsigned int iW = 0; iW < crystal[iCry].relevantForW.size(); iW++)
-              {
-                float originalCh = charge[crystal[iCry].relevantForW[iW]];
-                float saturationCh;
-                float pedestalCorr;
+                centralChargeOriginal = charge[crystal[iCry].detectorChannel];
                 for(unsigned int iSat = 0; iSat < detectorSaturation.size(); iSat++)
                 {
-                  if( detectorSaturation[iSat].digitizerChannel  == crystal[iCry].relevantForW[iW])
+                  if( detectorSaturation[iSat].digitizerChannel  == crystal[iCry].detectorChannel)
                   {
-                    saturationCh = detectorSaturation[iSat].saturation;
-                    pedestalCorr = detectorSaturation[iSat].pedestal;
+                    centralSaturation = detectorSaturation[iSat].saturation;
+                    centralPedestal = detectorSaturation[iSat].pedestal;
                   }
                 }
-                division += ( -saturationCh * TMath::Log(1.0 - ( ( (originalCh-pedestalCorr))/(saturationCh)) ) );
-              }
+                float centralChargeCorr = ( -centralSaturation * TMath::Log(1.0 - ( ( (centralChargeOriginal-centralPedestal))/(centralSaturation)) ) );
 
-              FloodZ = centralChargeCorr / division;
-
-              histoADCvsW->Fill(centralChargeCorr,FloodZ);
-              double ctr = timeStamp[crystal[iCry].timingChannel] - timeStamp[taggingCrystalTimingChannel];
-
-
-              basicCTR->Fill(ctr);
-              singleChargeSpectrum_NoSat ->Fill(centralChargeOriginal);
-              singleChargeSpectrum_Sat   ->Fill(centralChargeCorr);
-
-              // find wlimits
-              // choose 1 mm steps
-
-
-              for(int iW = 0; iW < steps; iW++)
-              {
-                // std::stringstream sname;
-                // sname << "histoSat_" << (length/steps)*i << "_" << (length/steps)*i;
-                // TH2F* tempHisto = new TH2F(sname.str().c_str(),sname.str().c_str(),1000,0,100000,1000,-9.5e-9,-7.5e-9);
-                // histoSat.push_back(tempHisto);
-                // if(FloodZ >= 0.485 && FloodZ <= 0.495)
-                // {
-                  // goodEvents++;
-                if( (FloodZ <=   (crystal[iCry].wz->Eval( ((length/steps)*iW) )))  &&  (FloodZ >=   (crystal[iCry].wz->Eval( ((length/steps)*(iW+1)) )))  )
+                for (unsigned int iW = 0; iW < crystal[iCry].relevantForW.size(); iW++)
                 {
-                  histoSat[iW]->Fill(centralChargeCorr,ctr);
-                  histoNoSat[iW]->Fill(centralChargeOriginal,ctr);
+                  float originalCh = charge[crystal[iCry].relevantForW[iW]];
+                  float saturationCh;
+                  float pedestalCorr;
+                  for(unsigned int iSat = 0; iSat < detectorSaturation.size(); iSat++)
+                  {
+                    if( detectorSaturation[iSat].digitizerChannel  == crystal[iCry].relevantForW[iW])
+                    {
+                      saturationCh = detectorSaturation[iSat].saturation;
+                      pedestalCorr = detectorSaturation[iSat].pedestal;
+                    }
+                  }
+                  division += ( -saturationCh * TMath::Log(1.0 - ( ( (originalCh-pedestalCorr))/(saturationCh)) ) );
                 }
-                  // histoNoSat[iW]->Fill(centralChargeOriginal,ctr);
+
+                FloodZ = centralChargeCorr / division;
+
+                histoADCvsW->Fill(centralChargeCorr,FloodZ);
+                double ctr = timeStamp[crystal[iCry].timingChannel] - timeStamp[taggingCrystalTimingChannel];
 
 
-                  // if(crystal[iCry].FormulaPhotopeak->EvalInstance())
-                  // {
-                  //   double centralT = -8.6098103E-09;
-                  //   double m = -2.79918e-15;
-                  //   double q = -8.37188e-09;
-                  //   double corrT = ctr + ( centralT - (centralChargeCorr*m + q));
-                  //   standardCTR_w->Fill(ctr);
-                  //   amplCorrCTR_w->Fill(corrT);
-                  // }
-                // }
+                basicCTR->Fill(ctr);
+                singleChargeSpectrum_NoSat ->Fill(centralChargeOriginal);
+                singleChargeSpectrum_Sat   ->Fill(centralChargeCorr);
+
+                // find wlimits
+                // choose 1 mm steps
+
+
+                for(int iW = 0; iW < steps; iW++)
+                {
+                  if( (FloodZ <=   (crystal[iCry].wz->Eval( ((length/steps)*iW) )))  &&  (FloodZ >=   (crystal[iCry].wz->Eval( ((length/steps)*(iW+1)) )))  )
+                  {
+                    histoSat[iW]->Fill(centralChargeCorr,ctr);
+                    histoNoSat[iW]->Fill(centralChargeOriginal,ctr);
+                  }
+
+                }
+
+                histoADCvsDt->Fill(centralChargeCorr,ctr);
+                histoADCvsDtNoSat->Fill(centralChargeOriginal,ctr);
               }
-
-
-
-
-              // if(crystal[iCry].FormulaPhotopeak->EvalInstance())
-              // {
-              //   double centralT = -8.5063105e-09;
-              //   double m = -6.09115e-15;
-              //   double q = -8.07993e-09;
-              //   double corrT = ctr + ( centralT - (centralChargeCorr*m + q));
-              //   standardCTR->Fill(ctr);
-              //   amplCorrCTR->Fill(corrT);
-              // }
-              //
-              // if(crystal[iCry].FormulaPhotopeak->EvalInstance())
-              // {
-              //   double centralT = -8.6098103E-09;
-              //   double m = -2.79918e-15;
-              //   double q = -8.37188e-09;
-              //   double corrT = ctr + ( centralT - (centralChargeCorr*m + q));
-              //   standardCTR_corr2->Fill(ctr);
-              //   amplCorrCTR_corr2->Fill(corrT);
-              // }
-
-
-              histoADCvsDt->Fill(centralChargeCorr,ctr);
-              histoADCvsDtNoSat->Fill(centralChargeOriginal,ctr);
-
-
             }
-          }
 
 
 
@@ -1706,7 +1662,8 @@ int main (int argc, char** argv)
     }
   }
 
-
+  std::cout << std::endl;
+  std::cout << "Crystal " << crystalNum << " = " << goodEvents << " events" << std::endl;
 
   //write data
   basicCTR->Write();
