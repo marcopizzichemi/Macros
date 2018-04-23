@@ -78,7 +78,7 @@ void read_directory(const std::string& name, std::vector<std::string> &v)
 }
 
 
-void demoDoi(TH2F* original_histoADCvsDt,TH2F* original_histo1_5,TCanvas* canvas,double min,double max, double length,double minADC,double maxADC,double minT,double maxT,int rebin_all,int rebin_slice)
+void demoDoi(TH2F* original_histoADCvsDt,TH2F* original_histo1_5,TCanvas* canvas,double min,double max, double length,double minADC,double maxADC,double minT,double maxT,int rebin_all,int rebin_slice,TCanvas* single_canvases[4])
 {
 
   // TFile *inputFile = new TFile(fileName.c_str());
@@ -167,15 +167,31 @@ void demoDoi(TH2F* original_histoADCvsDt,TH2F* original_histo1_5,TCanvas* canvas
   canvas->Divide(2,2);
   canvas->cd(1);
   clone_histoADCvsDt->Draw("COLZ");
+  single_canvases[0]->cd();
+  clone_histoADCvsDt->Draw("COLZ");
+
   canvas->cd(2);
   clone_histo1_5->Draw("COLZ");
+  single_canvases[1]->cd();
+  clone_histo1_5->Draw("COLZ");
+
   canvas->cd(3);
+  clone_histoADCvsDt_pfx->SetTitle("All Amplitude range");
+  clone_histoADCvsDt_pfx->Draw();
+  clone_histo1_5_pfx->Draw("same");
+  legend1->Draw("same");
+  single_canvases[2]->cd();
   clone_histoADCvsDt_pfx->SetTitle("All Amplitude range");
   clone_histoADCvsDt_pfx->Draw();
   clone_histo1_5_pfx->Draw("same");
   legend1->Draw("same");
 
   canvas->cd(4);
+  histoADCvsDt_pfx->SetTitle("511 KeV Amplitude range");
+  histoADCvsDt_pfx->Draw();
+  histo1_5_pfx->Draw("same");
+  legend2->Draw("same");
+  single_canvases[3]->cd();
   histoADCvsDt_pfx->SetTitle("511 KeV Amplitude range");
   histoADCvsDt_pfx->Draw();
   histo1_5_pfx->Draw("same");
@@ -1643,126 +1659,56 @@ int main (int argc, char** argv)
   double minT = basicCTR->GetMean() - 3.0*basicCTR->GetRMS();
   double maxT = basicCTR->GetMean() + 3.0*basicCTR->GetRMS();
 
-  // double minADCSat;
-  // double maxADCSat;
-  //
-  // TSpectrum *sTagCrystal;
-  // sTagCrystal = new TSpectrum(2);
-  // Int_t TagCrystalPeaksN = sTagCrystal->Search(singleChargeSpectrum_Sat,1,"",0.5);
-  // Double_t *TagCrystalPeaks  = sTagCrystal->GetPositionX();
-  // Double_t *TagCrystalPeaksY = sTagCrystal->GetPositionY();
-  // // float saturationPeakFraction
-  // //delete s;
-  // // float distPeak = INFINITY;
-  // float maxPeak = 0.0;
-  // int peakID = 0;
-  // for (int peakCounter = 0 ; peakCounter < TagCrystalPeaksN ; peakCounter++ )
-  // {
-  //
-  //   if(TagCrystalPeaksY[peakCounter] > maxPeak)
-  //   {
-  //     maxPeak = TagCrystalPeaksY[peakCounter];
-  //     peakID = peakCounter;
-  //   }
-  // }
-  // TF1 *gaussTag = new TF1("gaussTag",
-  //                         "gaus",
-  //                         TagCrystalPeaks[peakID] - tagFitLowerFraction*TagCrystalPeaks[peakID],
-  //                         TagCrystalPeaks[peakID] + tagFitUpperFraction*TagCrystalPeaks[peakID]);
-  //
-  //
-  // // TF1 *gaussTag = new TF1("gaussTag",
-  // //                         "gaus",
-  // //                         taggingPeakMin,
-  // //                         taggingPeakMax);
-  //
-  // gaussTag->SetParameter(0,TagCrystalPeaksY[peakID]); // heigth
-  // gaussTag->SetParameter(1,TagCrystalPeaks[peakID]); //mean
-  // gaussTag->SetParameter(2,(0.15*TagCrystalPeaks[peakID])/2.355); //
-  //
-  // singleChargeSpectrum_Sat->Fit(gaussTag,
-  //                             "Q",
-  //                             "",
-  //                             TagCrystalPeaks[peakID] - tagFitLowerFraction*TagCrystalPeaks[peakID],
-  //                             TagCrystalPeaks[peakID] + tagFitUpperFraction*TagCrystalPeaks[peakID]);
-  // // // DEBUG
-  // // std::cout << "fit pars " << gaussTag->GetParameter(1) << "\t" << gaussTag->GetParameter(2) << std::endl;
-  // // TaggingCrystalSpectrum->GetXaxis()->SetRangeUser(taggingSpectrumMin,taggingSpectrumMax);
-  // //define a TCut for this peak
-  // minADC = gaussTag->GetParameter(1) - 3.0*gaussTag->GetParameter(2);
-  // maxADC = gaussTag->GetParameter(1) + 3.0*gaussTag->GetParameter(2);
+
 
   for(unsigned int i = 0 ; i < histoSat.size(); i++)
   {
     std::stringstream canvas_name;
     canvas_name << "With saturation correction - " << (length/steps)*i << "_" << (length/steps)*(i+1);
     TCanvas *canvas = new TCanvas(canvas_name.str().c_str(),canvas_name.str().c_str(),1600,1300);
-    demoDoi(histoADCvsDt,histoSat[i],canvas,(length/steps)*i,(length/steps)*(i+1),length,adcMinSat,adcMaxSat,minT,maxT,rebin_all,rebin_slice);
+    TCanvas* single_canvases[4];
+    for(int j = 0 ; j < 4 ; j++)
+    {
+      std::stringstream name2;
+      name2 << canvas_name.str() <<"_Canvas_" << j+1 ;
+      single_canvases[j] = new TCanvas(name2.str().c_str(),name2.str().c_str(),1200,800);
+    }
+
+    demoDoi(histoADCvsDt,histoSat[i],canvas,(length/steps)*i,(length/steps)*(i+1),length,adcMinSat,adcMaxSat,minT,maxT,rebin_all,rebin_slice,single_canvases);
     histoSat[i]->Write();
     canvas->Write();
+    for(int j = 0 ; j < 4 ; j++)
+    {
+      single_canvases[j]->Write();
+    }
   }
 
 
-  // double minADC;
-  // double maxADC;
 
-  // TSpectrum *sTagCrystal;
-  // sTagCrystal = new TSpectrum(2);
-  // TagCrystalPeaksN = sTagCrystal->Search(singleChargeSpectrum_NoSat,1,"",0.5);
-  // TagCrystalPeaks  = sTagCrystal->GetPositionX();
-  // TagCrystalPeaksY = sTagCrystal->GetPositionY();
-  // // float saturationPeakFraction
-  // //delete s;
-  // // float distPeak = INFINITY;
-  // maxPeak = 0.0;
-  // peakID = 0;
-  // for (int peakCounter = 0 ; peakCounter < TagCrystalPeaksN ; peakCounter++ )
-  // {
-  //
-  //   if(TagCrystalPeaksY[peakCounter] > maxPeak)
-  //   {
-  //     maxPeak = TagCrystalPeaksY[peakCounter];
-  //     peakID = peakCounter;
-  //   }
-  // }
-  // gaussTag = new TF1("gaussTag",
-  //                         "gaus",
-  //                         TagCrystalPeaks[peakID] - 1.8*TagCrystalPeaks[peakID],
-  //                         TagCrystalPeaks[peakID] + 2.0*TagCrystalPeaks[peakID]);
-  //
-  //
-  // // TF1 *gaussTag = new TF1("gaussTag",
-  // //                         "gaus",
-  // //                         taggingPeakMin,
-  // //                         taggingPeakMax);
-  //
-  // gaussTag->SetParameter(0,TagCrystalPeaksY[peakID]); // heigth
-  // gaussTag->SetParameter(1,TagCrystalPeaks[peakID]); //mean
-  // gaussTag->SetParameter(2,(0.15*TagCrystalPeaks[peakID])/2.355); //
-  //
-  // singleChargeSpectrum_NoSat->Fit(gaussTag,
-  //                             "Q",
-  //                             "",
-  //                             TagCrystalPeaks[peakID] - tagFitLowerFraction*TagCrystalPeaks[peakID],
-  //                             TagCrystalPeaks[peakID] + tagFitUpperFraction*TagCrystalPeaks[peakID]);
-  // // // DEBUG
-  // // std::cout << "fit pars " << gaussTag->GetParameter(1) << "\t" << gaussTag->GetParameter(2) << std::endl;
-  // // TaggingCrystalSpectrum->GetXaxis()->SetRangeUser(taggingSpectrumMin,taggingSpectrumMax);
-  // //define a TCut for this peak
-  // minADC = gaussTag->GetParameter(1) - 3.0*gaussTag->GetParameter(2);
-  // maxADC = gaussTag->GetParameter(1) + 3.0*gaussTag->GetParameter(2);
   for(unsigned int i = 0 ; i < histoNoSat.size(); i++)
   {
-
-
     std::stringstream canvas_name;
     canvas_name << "Without saturation corretion - " << (length/steps)*i << "_" << (length/steps)*(i+1);
     TCanvas *canvas = new TCanvas(canvas_name.str().c_str(),canvas_name.str().c_str(),1600,1300);
-    demoDoi(histoADCvsDtNoSat,histoNoSat[i],canvas,(length/steps)*i,(length/steps)*(i+1),length,adcMinNoSat,adcMaxNoSat,minT,maxT,rebin_all,rebin_slice);
+    TCanvas* single_canvases[4];
+    for(int j = 0 ; j < 4 ; j++)
+    {
+      std::stringstream name2;
+      name2 << canvas_name.str() <<"_Canvas_" << j+1 ;
+      single_canvases[j] = new TCanvas(name2.str().c_str(),name2.str().c_str(),1200,800);
+    }
+    demoDoi(histoADCvsDtNoSat,histoNoSat[i],canvas,(length/steps)*i,(length/steps)*(i+1),length,adcMinNoSat,adcMaxNoSat,minT,maxT,rebin_all,rebin_slice,single_canvases);
     histoNoSat[i]->Write();
     canvas->Write();
+    for(int j = 0 ; j < 4 ; j++)
+    {
+      single_canvases[j]->Write();
+    }
   }
 
+
+
+  //write data
   basicCTR->Write();
   singleChargeSpectrum_Sat->Write();
   singleChargeSpectrum_NoSat->Write();
@@ -1771,337 +1717,9 @@ int main (int argc, char** argv)
   histoADCvsDt->Write();
   histoADCvsDtNoSat->Write();
 
-  // standardCTR->Write();
-  // amplCorrCTR->Write();
-  // standardCTR_w->Write();
-  // amplCorrCTR_w->Write();
-  // standardCTR_corr2->Write();
-  // amplCorrCTR_corr2->Write();
-
 
   calibrationFile->Close();
   outputFile->Close();
-  // TH1F* noCorr = new TH1F("No Correction","No Correction",bins,minCTR,maxCTR);
-  // TH1F* centralCorr = new TH1F("Central Correction","Central Correction",bins,minCTR,maxCTR);
-  // TH1F* fullCorr = new TH1F("Full Correction","Full Correction",bins,minCTR,maxCTR);
-  // TH1F* poliCorr = new TH1F("Polished Correction","Polished Correction",bins,minCTR,maxCTR);
-  // // std::vector<TH1F*> histograms;
-  //
-  // // do summary canvases for checking the fits
-  //
-  // int sqrtCrystals = ceil(sqrt( crystal.size() ) );
-  //
-  // TCanvas *cSumSimple  = new TCanvas("Summary Basic CTR","Summary Basic CTR",1200,1200);
-  // TCanvas *cSumCentral = new TCanvas("Summary Central CTR","Summary Central CTR",1200,1200);
-  // TCanvas *cSumAll     = new TCanvas("Summary Full CTR","Summary Full CTR",1200,1200);
-  // TCanvas *cPoliAll     = new TCanvas("Summary Polished CTR","Summary Polished CTR",1200,1200);
-  // cSumSimple ->Divide(sqrtCrystals,sqrtCrystals);
-  // cSumCentral->Divide(sqrtCrystals,sqrtCrystals);
-  // cSumAll->Divide(sqrtCrystals,sqrtCrystals);
-  // cPoliAll->Divide(sqrtCrystals,sqrtCrystals);
-  //
-  // TFile *outputFile = new TFile(outputFileName.c_str(),"RECREATE");
-  // outputFile->cd();
-  // for(unsigned int iCry = 0 ;  iCry < crystal.size() ; iCry++)
-  // {
-  //
-  //   std::stringstream sname;
-  //
-  //
-  //
-  //   if(smooth)
-  //   {
-  //     if(crystal[iCry].simpleCTR)
-  //     {
-  //       crystal[iCry].simpleCTR ->Smooth(smooth);
-  //     }
-  //     if(crystal[iCry].centralCTR)
-  //     {
-  //       crystal[iCry].centralCTR ->Smooth(smooth);
-  //     }
-  //     if(crystal[iCry].allCTR)
-  //     {
-  //       crystal[iCry].allCTR ->Smooth(smooth);
-  //     }
-  //     if(crystal[iCry].poliCorrCTR)
-  //     {
-  //       crystal[iCry].poliCorrCTR ->Smooth(smooth);
-  //     }
-  //   }
-  //
-  //
-  //   Float_t realBasicCTRfwhm,realBasicCTRfwtm ;
-  //   Float_t realCentralCTRfwhm,realCentralCTRfwtm;
-  //   Float_t realAllCTRfwhm,realAllCTRfwtm;
-  //   Float_t poliCorrCTRfwhm,poliCorrCTRfwtm;
-  //   double ret[2];
-  //
-  //   // std::cout << "BASIC CTRs --------------------" << std::endl;
-  //   // std::cout << crystal[iCry]
-  //   if(crystal[iCry].simpleCTR)
-  //   {
-  //     crystal[iCry].simpleCTR->GetXaxis()->SetTitle("Time [s]");
-  //     crystal[iCry].simpleCTR->SetFillStyle(3001);
-  //     crystal[iCry].simpleCTR->SetFillColor(kGreen);
-  //     crystal[iCry].simpleCTR->SetLineColor(kGreen);
-  //     crystal[iCry].simpleCTR->SetStats(0);
-  //     crystal[iCry].simpleCTR_norm = (TH1F*) crystal[iCry].simpleCTR->Clone();
-  //     extractCTR(crystal[iCry].simpleCTR,fitPercMin,fitPercMax,divs,tagFwhm,ret);
-  //
-  //     std::cout << "No corr    - cry " << crystal[iCry].number << "\t"
-  //               << ret[0]*1e12 << "\t"
-  //               << ret[1]*1e12 << std::endl;
-  //
-  //     textfile  << "No corr    - cry " << crystal[iCry].number << "\t"
-  //               << ret[0]*1e12 << "\t"
-  //               << ret[1]*1e12 << std::endl;
-  //
-  //     realBasicCTRfwhm = ret[0]*1e12;
-  //     realBasicCTRfwtm = ret[1]*1e12;
-  //     noCorr->Fill(ret[0]*1e12);
-  //
-  //     crystal[iCry].simpleCTR->Write();
-  //     cSumSimple->cd(iCry+1);
-  //     crystal[iCry].simpleCTR->Draw();
-  //     crystal[iCry].simpleCTR_norm->Scale(1.0/crystal[iCry].simpleCTR_norm->GetMaximum());
-  //   }
-  //
-  //   if(crystal[iCry].centralCTR)
-  //   {
-  //     crystal[iCry].centralCTR->GetXaxis()->SetTitle("Time [s]");
-  //     crystal[iCry].centralCTR->SetFillStyle(3001);
-  //     crystal[iCry].centralCTR->SetFillColor(kBlue);
-  //     crystal[iCry].centralCTR->SetLineColor(kBlue);
-  //     crystal[iCry].centralCTR->SetStats(0);
-  //     crystal[iCry].centralCTR_norm = (TH1F*) crystal[iCry].centralCTR->Clone();
-  //     extractCTR(crystal[iCry].centralCTR,fitPercMin,fitPercMax,divs,tagFwhm,ret);
-  //
-  //     std::cout << "Central    - cry " << crystal[iCry].number << "\t"
-  //               << ret[0]*1e12 << "\t"
-  //               << ret[1]*1e12 << std::endl;
-  //
-  //     textfile  << "Central    - cry " << crystal[iCry].number << "\t"
-  //               << ret[0]*1e12 << "\t"
-  //               << ret[1]*1e12 << std::endl;
-  //
-  //     realCentralCTRfwhm = ret[0]*1e12;
-  //     realCentralCTRfwtm = ret[1]*1e12;
-  //     centralCorr->Fill(ret[0]*1e12);
-  //
-  //     crystal[iCry].centralCTR->Write();
-  //     cSumCentral->cd(iCry+1);
-  //     crystal[iCry].centralCTR->Draw();
-  //     // crystal[iCry].centralCTR->Scale(1.0/crystal[iCry].centralCTR->GetMaximum());
-  //     crystal[iCry].centralCTR_norm->Scale(1.0/crystal[iCry].centralCTR_norm->GetMaximum());
-  //   }
-  //
-  //   if(crystal[iCry].allCTR)
-  //   {
-  //     crystal[iCry].allCTR->GetXaxis()->SetTitle("Time [s]");
-  //     crystal[iCry].allCTR->SetFillStyle(3001);
-  //     crystal[iCry].allCTR->SetFillColor(kRed);
-  //     crystal[iCry].allCTR->SetLineColor(kRed);
-  //     crystal[iCry].allCTR->SetStats(0);
-  //
-  //     crystal[iCry].allCTR_norm = (TH1F*) crystal[iCry].allCTR->Clone();
-  //     extractCTR(crystal[iCry].allCTR,fitPercMin,fitPercMax,divs,tagFwhm,ret);
-  //
-  //     std::cout << "Full corr. - cry " << crystal[iCry].number << "\t"
-  //               << ret[0]*1e12 << "\t"
-  //               << ret[1]*1e12 << std::endl;
-  //
-  //     textfile  << "Full corr. - cry " << crystal[iCry].number << "\t"
-  //               << ret[0]*1e12 << "\t"
-  //               << ret[1]*1e12 << std::endl;
-  //
-  //     realAllCTRfwhm = ret[0]*1e12;
-  //     realAllCTRfwtm = ret[1]*1e12;
-  //     fullCorr->Fill(ret[0]*1e12);
-  //     crystal[iCry].allCTR->Write();
-  //     cSumAll->cd(iCry+1);
-  //     crystal[iCry].allCTR->Draw();
-  //     crystal[iCry].allCTR_norm->Scale(1.0/crystal[iCry].allCTR_norm->GetMaximum());
-  //     // crystal[iCry].allCTR->Scale(1.0/crystal[iCry].allCTR->GetMaximum());
-  //   }
-  //
-  //   if(crystal[iCry].poliCorrCTR)
-  //   {
-  //     crystal[iCry].poliCorrCTR->GetXaxis()->SetTitle("Time [s]");
-  //     crystal[iCry].poliCorrCTR->SetFillStyle(3001);
-  //     crystal[iCry].poliCorrCTR->SetFillColor(kBlack);
-  //     crystal[iCry].poliCorrCTR->SetLineColor(kBlack);
-  //     crystal[iCry].poliCorrCTR->SetStats(0);
-  //
-  //     crystal[iCry].poliCorrCTR_norm = (TH1F*) crystal[iCry].poliCorrCTR->Clone();
-  //     extractCTR(crystal[iCry].poliCorrCTR,fitPercMin,fitPercMax,divs,tagFwhm,ret);
-  //
-  //     std::cout << "Polished corr. - cry " << crystal[iCry].number << "\t"
-  //               << ret[0]*1e12 << "\t"
-  //               << ret[1]*1e12 << std::endl;
-  //
-  //     textfile  << "Polished corr. - cry " << crystal[iCry].number << "\t"
-  //               << ret[0]*1e12 << "\t"
-  //               << ret[1]*1e12 << std::endl;
-  //
-  //     poliCorrCTRfwhm = ret[0]*1e12;
-  //     poliCorrCTRfwtm = ret[1]*1e12;
-  //     poliCorr->Fill(ret[0]*1e12);
-  //     crystal[iCry].poliCorrCTR->Write();
-  //     cPoliAll->cd(iCry+1);
-  //     crystal[iCry].poliCorrCTR->Draw();
-  //     crystal[iCry].poliCorrCTR_norm->Scale(1.0/crystal[iCry].poliCorrCTR_norm->GetMaximum());
-  //     // crystal[iCry].allCTR->Scale(1.0/crystal[iCry].allCTR->GetMaximum());
-  //   }
-  //
-  //
-  //
-  //   sname.str("");
-  //
-  //   sname << "Summary - Crystal " << crystal[iCry].number;
-  //   TCanvas* c_summary = new TCanvas(sname.str().c_str(),sname.str().c_str(),1200,800);
-  //   c_summary->cd();
-  //   THStack *hs = new THStack("hs","");
-  //   hs->Add(crystal[iCry].simpleCTR_norm);
-  //   hs->Add(crystal[iCry].centralCTR_norm);
-  //   hs->Add(crystal[iCry].allCTR_norm);
-  //   hs->Add(crystal[iCry].poliCorrCTR_norm);
-  //
-  //
-  //   // std::cout << "Crystal " << crystal[iCry].number << std::endl;
-  //   // std::cout << "CTR FWHM [ps] " << std::endl;
-  //   hs->Draw("hist nostack");
-  //   sname.str("");
-  //   sname << "CTR - Crystal " << crystal[iCry].number << " - width in FWHM";
-  //   hs->SetTitle(sname.str().c_str());
-  //   hs->GetXaxis()->SetTitle("Time [s]");
-  //   hs->GetXaxis()->SetTitleOffset(1);
-  //   hs->GetXaxis()->SetTitleSize(0.045);
-  //   hs->GetXaxis()->SetLabelSize(0.045);
-  //   hs->GetYaxis()->SetLabelSize(0.045);
-  //   TLegend *legend = new TLegend(0.54,0.62,0.89,0.89,"");
-  //   legend->SetFillStyle(0);
-  //   if(crystal[iCry].simpleCTR)
-  //   {
-  //     sname.str("");
-  //     sname << "No correction        = " << realBasicCTRfwhm << "ps";
-  //     legend->AddEntry(crystal[iCry].simpleCTR,sname.str().c_str(),"f");
-  //     // std::cout << "No correction       = "<< realBasicCTRfwhm   << " ps" << std::endl;
-  //   }
-  //   if(crystal[iCry].centralCTR)
-  //   {
-  //     sname.str("");
-  //     sname << "Central correction = " << realCentralCTRfwhm << "ps";
-  //     legend->AddEntry(crystal[iCry].centralCTR,sname.str().c_str(),"f");
-  //     // std::cout << "Central correction  = "<< realCentralCTRfwhm << " ps" << std::endl;
-  //   }
-  //   if(crystal[iCry].allCTR)
-  //   {
-  //     sname.str("");
-  //     sname << "Full correction       = " << realAllCTRfwhm << "ps";
-  //     legend->AddEntry(crystal[iCry].allCTR,sname.str().c_str(),"f");
-  //     // std::cout << "Full correction     = "<< realAllCTRfwhm     << " ps" << std::endl;
-  //   }
-  //   if(crystal[iCry].poliCorrCTR)
-  //   {
-  //     sname.str("");
-  //     sname << "Polished correction       = " << poliCorrCTRfwhm << "ps";
-  //     legend->AddEntry(crystal[iCry].poliCorrCTR,sname.str().c_str(),"f");
-  //     // std::cout << "Full correction     = "<< realAllCTRfwhm     << " ps" << std::endl;
-  //   }
-  //
-  //
-  //   sname.str("");
-  //   legend->Draw();
-  //   gStyle->SetOptTitle(0);
-  //   TPaveLabel *title = new TPaveLabel(.11,.95,.35,.99,"new title","brndc");
-  //   title->Draw();
-  //   // std::cout << std::endl;
-  //
-  //   c_summary->Write();
-  //
-  //
-  //   TH1F* cloneBasic;
-  //   TH1F* cloneCentral;
-  //   TH1F* cloneAll;
-  //   TH1F* clonePoli;
-  //   THStack *cloneHs = (THStack*) hs->Clone();
-  //   TLegend *legend1 = new TLegend(0.15,0.69,0.49,0.89,"");
-  //   legend1->SetFillStyle(0);
-  //   sname.str("");
-  //   sname << "Multi - Crystal " << crystal[iCry].number;
-  //   TCanvas* c_multi = new TCanvas(sname.str().c_str(),sname.str().c_str(),1800,1400);
-  //   c_multi->Divide(2,2);
-  //
-  //   if(crystal[iCry].simpleCTR_norm)
-  //   {
-  //     cloneBasic   = (TH1F*) crystal[iCry].simpleCTR->Clone();
-  //     c_multi->cd(1);
-  //     sname.str("");
-  //     sname << "No correction        = " << realBasicCTRfwhm << "ps";
-  //     legend1->AddEntry(cloneBasic,sname.str().c_str(),"f");
-  //     cloneBasic->Draw();
-  //     legend1->Draw();
-  //   }
-  //   if(crystal[iCry].centralCTR_norm)
-  //   {
-  //     cloneCentral = (TH1F*) crystal[iCry].centralCTR->Clone();
-  //     c_multi->cd(2);
-  //     TLegend *legend2 = new TLegend(0.15,0.69,0.49,0.89,"");
-  //     legend2->SetFillStyle(0);
-  //     sname.str("");
-  //     sname << "Central correction   = " << realCentralCTRfwhm << "ps";
-  //     legend2->AddEntry(cloneCentral,sname.str().c_str(),"f");
-  //     cloneCentral->Draw();
-  //     legend2->Draw();
-  //   }
-  //   if(crystal[iCry].allCTR_norm)
-  //   {
-  //     cloneAll     = (TH1F*) crystal[iCry].allCTR->Clone();
-  //     c_multi->cd(3);
-  //     TLegend *legend3 = new TLegend(0.15,0.69,0.49,0.89,"");
-  //     legend3->SetFillStyle(0);
-  //     sname.str("");
-  //     sname << "Full correction      = " << realAllCTRfwhm << "ps";
-  //     legend3->AddEntry(cloneAll,sname.str().c_str(),"f");
-  //     cloneAll->Draw();
-  //     legend3->Draw();
-  //   }
-  //
-  //   // if(crystal[iCry].poliCorrCTR_norm)
-  //   // {
-  //   //   clonePoli     = (TH1F*) crystal[iCry].poliCorrCTR->Clone();
-  //   //   c_multi->cd(3);
-  //   //   TLegend *legend3 = new TLegend(0.15,0.69,0.49,0.89,"");
-  //   //   legend3->SetFillStyle(0);
-  //   //   sname.str("");
-  //   //   sname << "Polished correction      = " << poliCorrCTRfwhm << "ps";
-  //   //   legend3->AddEntry(cloneAll,sname.str().c_str(),"f");
-  //   //   cloneAll->Draw();
-  //   //   legend3->Draw();
-  //   // }
-  //
-  //
-  //   c_multi->cd(4);
-  //   c_multi->cd(4)->SetGrid();
-  //   cloneHs->Draw("hist nostack");
-  //   c_multi->Write();
-  //
-  // }
-  // noCorr->Write();
-  // centralCorr->Write();
-  // fullCorr->Write();
-  // poliCorr->Write();
-  //
-  // cSumSimple ->Write();
-  // cSumCentral->Write();
-  // cSumAll->Write();
-  // cPoliAll->Write();
-  // // treeFile->Close();
 
-
-  // textfile.close();
-  // std::cout << std::endl;
-  // std::cout << "Histograms saved in   " << outputFileName << std::endl;
-  // std::cout << "Text summary saved in " << textFileName << std::endl;
   return 0;
 }
