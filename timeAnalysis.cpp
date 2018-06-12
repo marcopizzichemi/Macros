@@ -1526,7 +1526,7 @@ int main (int argc, char** argv)
   long int goodEvents = 0;
   long int counter = 0;
 
-  TH1F *tempH = new TH1F("tempH","tempH",200,-12e-9,-8e-9);
+  TH1F *tempH = new TH1F("tempH","tempH",200,-2e-9,0e-9);
   // for (long long int i=0;i<1000000;i++)
   for (long long int i=0;i<nevent;i++)
   {
