@@ -43,7 +43,6 @@
 #include "TNamed.h"
 #include "TPaveLabel.h"
 #include "THStack.h"
-#include "TFitResult.h"
 
 #include <iostream>
 #include <fstream>
@@ -70,161 +69,6 @@ void read_directory(const std::string& name, std::vector<std::string> &v)
     closedir(dirp);
 }
 
-
-struct data_t
-{
-  double x;
-  double y;
-};
-
-bool compareByY(const data_t &a,const data_t  &b)
-{
-  return a.y > b.y;
-}
-
-
-
-int extract(double w,TH2F* h2, double* res)
-{
-
-  // file->cd("/Module 0.0/MPPC C2 - 0.0-1.2/Crystal 28/LikelihoodCorrection");
-  // TH2F* h2 = (TH2F*) gDirectory->Get(histogramName);
-
-  // double w = 0.32;
-
-  Int_t binx = h2->GetXaxis()->FindBin(w);
-
-  TH1D *histo = h2->ProjectionY("hpy",binx,binx);
-
-  double fitPercMin = 5.0;
-  double fitPercMax = 6.0;
-
-  // preliminary gauss fit
-  // TCanvas *cTemp  = new TCanvas("temp","temp");
-  TF1 *gaussDummy = new TF1("gaussDummy","gaus");
-  // gaussDummy->SetLineColor(kRed);
-  histo->Fit(gaussDummy,"QN");
-  double f1min = histo->GetXaxis()->GetXmin();
-  double f1max = histo->GetXaxis()->GetXmax();
-  int nBins = histo->GetNbinsX() ;
-  double binWidth = (f1max - f1min) / nBins;
-  // std::cout << binWidth << std::endl;
-  double fitMin = gaussDummy->GetParameter(1) - fitPercMin*(gaussDummy->GetParameter(2));
-  double fitMax = gaussDummy->GetParameter(1) + fitPercMax*(gaussDummy->GetParameter(2));
-  if(fitMin < f1min)
-  {
-    fitMin = f1min;
-  }
-  if(fitMax > f1max)
-  {
-    fitMax = f1max;
-  }
-
-  //fit with crystalball
-  TF1 *cb  = new TF1("cb","crystalball",f1min,f1max);
-  // cb->SetLineColor(kBlue);
-  cb->SetParameters(gaussDummy->GetParameter(0),gaussDummy->GetParameter(1),gaussDummy->GetParameter(2),1,3);
-  TFitResultPtr rCb = histo->Fit(cb,"SQN","",fitMin,fitMax);
-
-  //fit with gauss + exp
-  TF1* gexp  = new TF1("gexp","[0]/sqrt(2)*exp([2]^2/2/[3]^2-(x-[1])/[3])*(1-TMath::Erf(([1]-x+[2]^2/[3])/(sqrt(2*[2]^2))))",f1min,f1max);
-  // gexp->SetLineColor(kGreen);
-  gexp->SetParName(0,"N");
-  gexp->SetParName(1,"Mean");
-  gexp->SetParName(2,"Sigma");
-  gexp->SetParName(3,"tau");
-  // f1->SetParameters(gaussDummy->GetParameter(0),gaussDummy->GetParameter(1),gaussDummy->GetParameter(2),1,3);
-  gexp->SetParameter(0,gaussDummy->GetParameter(0));
-  gexp->SetParameter(1,gaussDummy->GetParameter(1));
-  gexp->SetParameter(2,gaussDummy->GetParameter(2));
-  gexp->SetParameter(3,gaussDummy->GetParameter(2)); // ROOT really needs all parameters initialized, and a "good" guess for tau is the sigma of the previous fit...
-  TFitResultPtr rGexp = histo->Fit(gexp,"SQN","",fitMin,fitMax);
-
-  double chi2gexp = rGexp->Chi2();
-  double chi2cb   = rCb->Chi2();
-
-  // histo->Draw();
-  // cb->Draw("same");
-  // gexp->Drsaw("same");
-  //set function to measure
-  // std::cout << "cb   = " << chi2cb   << std::endl;
-  // std::cout << "gexp = " << chi2gexp << std::endl;
-  TF1 *f1;
-  if(chi2gexp > chi2cb)
-  {
-    f1 = cb;
-    double integral = f1->GetHistogram()->Integral();
-    TF1 *f2 = (TF1*) f1->Clone();
-    f2->SetParameter(0,f1->GetParameter(0)/integral);
-
-    // function = new TF1("function","crystalball",f1min,f1max);
-    // function->SetParameters(f2->GetParameter(0),
-                            // f2->GetParameter(1),
-                            // f2->GetParameter(2),
-                            // f2->GetParameter(3),
-                            // f2->GetParameter(4));
-    res[0] = binWidth;
-    res[1] = f2->GetParameter(0);
-    res[2] = f2->GetParameter(1);
-    res[3] = f2->GetParameter(2);
-    res[4] = f2->GetParameter(3);
-    res[5] = f2->GetParameter(4);
-    res[6] = f1min;
-    res[7] = f1max;
-    return 0;
-
-    // delete gexp;
-  }
-  else
-  {
-    f1 = gexp;
-    double integral = f1->GetHistogram()->Integral();
-    TF1 *f2 = (TF1*) f1->Clone();
-    f2->SetParameter(0,f1->GetParameter(0)/integral);
-
-    res[0] = binWidth;
-    res[1] = f2->GetParameter(0);
-    res[2] = f2->GetParameter(1);
-    res[3] = f2->GetParameter(2);
-    res[4] = f2->GetParameter(3);
-    res[5] = 0;
-    res[6] = f1min;
-    res[7] = f1max;
-    return 1;
-    //
-    // function  = new TF1("function","[0]/sqrt(2)*exp([2]^2/2/[3]^2-(x-[1])/[3])*(1-TMath::Erf(([1]-x+[2]^2/[3])/(sqrt(2*[2]^2))))",f1min,f1max);
-    // // gexp->SetLineColor(kGreen);
-    // function->SetParName(0,"N");
-    // function->SetParName(1,"Mean");
-    // function->SetParName(2,"Sigma");
-    // function->SetParName(3,"tau");
-    // // f1->SetParameters(gaussDummy->GetParameter(0),gaussDummy->GetParameter(1),gaussDummy->GetParameter(2),1,3);
-    // function->SetParameter(0,f2->GetParameter(0));
-    // function->SetParameter(1,f2->GetParameter(1));
-    // function->SetParameter(2,f2->GetParameter(2));
-    // function->SetParameter(3,f2->GetParameter(3));
-    // delete cb;
-  }
-  // f1->Draw("same");
-
-  // double mean = f1->GetHistogram()->GetMean();  // res[0] is mean
-  // double rms = f1->GetHistogram()->GetRMS();   // res[1] is now RMS
-  // std::cout << "mean = " << mean   << std::endl;
-  // std::cout << "rms  = " << rms    << std::endl;
-
-   // std::cout <<  function->GetParameter(0) << "\n";
-
-
-  // f2->Draw("same");
-  // std::cout <<  f2->Eval(t)    << "\t"
-            // <<  f2->Eval(t-tint) << "\t"
-            // <<  histo->GetBinWidth(binx) << std::endl;
-            //
-            // double p = f2->Eval(t-tint)*histo->GetBinWidth(binx);
-            //
-            // return p;
-  // return 0;
-}
 
 struct Crystal_t
 {
@@ -257,9 +101,6 @@ struct Crystal_t
   TGraph* rms_tw_correction;
   std::vector<TGraph*> delay;
   std::vector<TGraph*> rms_delay;
-
-  TH2F *central_likelihood;
-  std::vector<TH2F*> lat_likelihood;
   const char* path;
   bool accepted;
   bool polishedCorrection;
@@ -310,7 +151,7 @@ void extractWithGaussAndExp(TH1F* histo,double fitPercMin,double fitPercMax, int
   f1->SetParameter(0,gaussDummy->GetParameter(0));
   f1->SetParameter(1,gaussDummy->GetParameter(1));
   f1->SetParameter(2,gaussDummy->GetParameter(2));
-  f1->SetParameter(3,gaussDummy->GetParameter(2)); // ROOT really needs all parameters initialized, and a "good" guess for tau is the sigma of the previous fit...
+  f1->SetParameter(3,5e-9);
   double fitMin = gaussDummy->GetParameter(1) - fitPercMin*(gaussDummy->GetParameter(2));
   double fitMax = gaussDummy->GetParameter(1) + fitPercMax*(gaussDummy->GetParameter(2));
   if(fitMin < f1min)
@@ -1288,90 +1129,6 @@ int main (int argc, char** argv)
            gDirectory->cd("..");
          }
 
-         bool dirLikeExists;
-         // std::stringstream sname;
-         dirLikeExists = gDirectory->cd("LikelihoodCorrection");
-         if(dirLikeExists)
-         {
-           TList *listTcorr = gDirectory->GetListOfKeys();
-           int nKeysTcorr = listTcorr->GetEntries();
-           std::vector<std::string> keysTcorrName;
-           if(nKeysTcorr) //if directory not empty
-           {
-             for(int i = 0 ; i < nKeysTcorr ; i++){
-               keysTcorrName.push_back(listTcorr->At(i)->GetName());
-             }
-
-             std::string central_prefix = "Delta T vs. W";
-             std::string side_prefix = "T_Channel_";
-             std::string side_suffix = "vs. W";
-
-             for(unsigned int i = 0 ; i < keysTcorrName.size() ; i++)
-             {
-               if(!keysTcorrName[i].compare(0,central_prefix.size(),central_prefix))
-               {
-                 // std::cout << "found1" << std::endl;
-                 TH2F *histo2D = NULL;
-                 histo2D = (TH2F*) gDirectory->Get(keysTcorrName[i].c_str());
-                 if(histo2D)
-                   temp_crystal.central_likelihood = histo2D;
-               }
-               if(!keysTcorrName[i].compare(0,side_prefix.size(),side_prefix))
-               {
-                 if(!keysTcorrName[i].compare(keysTcorrName[i].size()-side_suffix.size(),side_suffix.size(),side_suffix))
-                 {
-                   // std::cout << "found" << std::endl;
-                   TH2F *histo2D = NULL;
-                   histo2D = (TH2F*) gDirectory->Get(keysTcorrName[i].c_str());
-                   if(histo2D)
-                     temp_crystal.lat_likelihood.push_back(histo2D);
-                 }
-               }
-
-               // if(!keysTcorrName[i].compare(0,rms_deltaWGraph_prefix.size(),rms_deltaWGraph_prefix))
-               // {
-               //  TGraph *calibGraph = NULL;
-               //  calibGraph = (TGraph*) gDirectory->Get(keysTcorrName[i].c_str());
-               //  if(calibGraph)
-               //     temp_crystal.rms_tw_correction = calibGraph;
-               // }
-               //
-               // if(!keysTcorrName[i].compare(0,graph_delay_prefix.size(),graph_delay_prefix))
-               // {
-               //   TGraph *calibGraph = NULL;
-               //   calibGraph = (TGraph*) gDirectory->Get(keysTcorrName[i].c_str());
-               //   if(calibGraph)
-               //     temp_crystal.delay.push_back(calibGraph);
-               // }
-               //
-               // if(!keysTcorrName[i].compare(0,rms_graph_delay_prefix.size(),rms_graph_delay_prefix))
-               // {
-               //   TGraph *calibGraph = NULL;
-               //   calibGraph = (TGraph*) gDirectory->Get(keysTcorrName[i].c_str());
-               //   if(calibGraph)
-               //     temp_crystal.rms_delay.push_back(calibGraph);
-               // }
-               //
-               // if(!keysTcorrName[i].compare(0,delay_timing_ch_prefix.size(),delay_timing_ch_prefix))
-               // {
-               //   //  std::cout << keysCryName[i] << std::endl;
-               //   std::stringstream snameCh;
-               //   std::vector<int> *v;
-               //   gDirectory->GetObject("delayTimingChannels",v);
-               //   // snameCh << ((TNamed*) gDirectory->Get(keysCryName[i].c_str()))->GetTitle();
-               //   //  TCut* cut = (TCut*) gDirectory->Get( keysCryName[i].c_str());
-               //  //  istringstream()
-               //   temp_crystal.delayTimingChannels = v[0];
-               //   //  std::cout <<temp_crystal.detectorChannel << std::endl;
-               //  //  std::cout << gDirectory->Get(keysCryName[i].c_str())->GetTitle() << "\t"
-               //            //  << temp_crystal.detectorChannel << std::endl;
-               // }
-             }
-           }
-           gDirectory->cd("..");
-
-         }
-
          sname << "No correction - Crystal " << temp_crystal.number;
          temp_crystal.simpleCTR = new TH1F(sname.str().c_str(),sname.str().c_str(),histoBins,histoMin,histoMax);
          sname.str("");
@@ -1525,8 +1282,6 @@ int main (int argc, char** argv)
   std::cout << "Total number of events = " << nevent << std::endl;
   long int goodEvents = 0;
   long int counter = 0;
-
-  TH1F *tempH = new TH1F("tempH","tempH",200,-2e-9,0e-9);
   // for (long long int i=0;i<1000000;i++)
   for (long long int i=0;i<nevent;i++)
   {
@@ -1551,48 +1306,44 @@ int main (int argc, char** argv)
             crystal[iCry].simpleCTR->Fill(simpleCTR);
             crystal[iCry].vSimple.push_back(simpleCTR);
 
-            //calculate FloodZ...
-            Float_t FloodZ;
-            float centralChargeOriginal;
-            float centralSaturation;
-            float centralPedestal;
-            Float_t division = 0.0;
-
-            centralChargeOriginal = charge[crystal[iCry].detectorChannel];
-            for(unsigned int iSat = 0; iSat < detectorSaturation.size(); iSat++)
-            {
-              if( detectorSaturation[iSat].digitizerChannel  == crystal[iCry].detectorChannel)
-              {
-                centralSaturation = detectorSaturation[iSat].saturation;
-                centralPedestal = detectorSaturation[iSat].pedestal;
-              }
-            }
-            float centralChargeCorr = ( -centralSaturation * TMath::Log(1.0 - ( ( (centralChargeOriginal-centralPedestal))/(centralSaturation)) ) );
-
-            for (unsigned int iW = 0; iW < crystal[iCry].relevantForW.size(); iW++)
-            {
-              float originalCh = charge[crystal[iCry].relevantForW[iW]];
-              float saturationCh;
-              float pedestalCorr;
-              for(unsigned int iSat = 0; iSat < detectorSaturation.size(); iSat++)
-              {
-                if( detectorSaturation[iSat].digitizerChannel  == crystal[iCry].relevantForW[iW])
-                {
-                  saturationCh = detectorSaturation[iSat].saturation;
-                  pedestalCorr = detectorSaturation[iSat].pedestal;
-                }
-              }
-              division += ( -saturationCh * TMath::Log(1.0 - ( ( (originalCh-pedestalCorr))/(saturationCh)) ) );
-            }
-
-            FloodZ = centralChargeCorr / division;
-
-            // std::cout << "FloodZ = " << FloodZ << std::endl;
-
             if(crystal[iCry].tw_correction)
             {
 
+              //calculate FloodZ...
+              Float_t FloodZ;
+              float centralChargeOriginal;
+              float centralSaturation;
+              float centralPedestal;
+              Float_t division = 0.0;
 
+              centralChargeOriginal = charge[crystal[iCry].detectorChannel];
+              for(unsigned int iSat = 0; iSat < detectorSaturation.size(); iSat++)
+              {
+                if( detectorSaturation[iSat].digitizerChannel  == crystal[iCry].detectorChannel)
+                {
+                  centralSaturation = detectorSaturation[iSat].saturation;
+                  centralPedestal = detectorSaturation[iSat].pedestal;
+                }
+              }
+              float centralChargeCorr = ( -centralSaturation * TMath::Log(1.0 - ( ( (centralChargeOriginal-centralPedestal))/(centralSaturation)) ) );
+
+              for (unsigned int iW = 0; iW < crystal[iCry].relevantForW.size(); iW++)
+              {
+                float originalCh = charge[crystal[iCry].relevantForW[iW]];
+                float saturationCh;
+                float pedestalCorr;
+                for(unsigned int iSat = 0; iSat < detectorSaturation.size(); iSat++)
+                {
+                  if( detectorSaturation[iSat].digitizerChannel  == crystal[iCry].relevantForW[iW])
+                  {
+                    saturationCh = detectorSaturation[iSat].saturation;
+                    pedestalCorr = detectorSaturation[iSat].pedestal;
+                  }
+                }
+                division += ( -saturationCh * TMath::Log(1.0 - ( ( (originalCh-pedestalCorr))/(saturationCh)) ) );
+              }
+
+              FloodZ = centralChargeCorr / division;
 
               // central corr
               // std::string deltaWGraph_prefix = "DeltaW Graph";
@@ -1727,156 +1478,8 @@ int main (int argc, char** argv)
             }
 
 
-            if(crystal[iCry].central_likelihood)
-            // if(0)
-            {
-              // extract functions
 
-              struct like_t
-              {
-                double timestamp;
-                TF1 *pdf;
-                double binsize;
-              };
-
-              std::vector<like_t> likeData;
-
-              TF1 *f_central ;
-              // std::cout << f_central << std::endl;
-              double res2[8] = {0,0,0,0,0,0,0,0};
-              int ftype;
-              like_t tempLikeData;
-              tempLikeData.timestamp = timeStamp[crystal[iCry].timingChannel];
-              // tempLikeData.pdf = f_central;
-              // tempLikeData.binsize = binsize;
-              ftype = extract(FloodZ,crystal[iCry].central_likelihood,res2);
-
-              // std::cout << res2[0] << "\n"
-              //           << res2[1] << "\n"
-              //           << res2[2] << "\n"
-              //           << res2[3] << "\n"
-              //           << res2[4] << "\n"
-              //           << res2[5] << "\n"
-              //           << res2[6] << "\n"
-              //           << res2[7] << "\n\n";
-
-              if(ftype == 0) //crystalball
-              {
-                tempLikeData.binsize = res2[0];
-                // tempLikeData.pdf = new TF1("cb","crystalball",res[6],res[7]);
-                tempLikeData.pdf = new TF1("cb","crystalball");
-                tempLikeData.pdf->SetParameters(res2[1],
-                                                res2[2],
-                                                res2[3],
-                                                res2[4],
-                                                res2[5]);
-              }
-              else //g+exp
-              {
-                tempLikeData.binsize = res2[0];
-                tempLikeData.pdf =new TF1("gexp","[0]/sqrt(2)*exp([2]^2/2/[3]^2-(x-[1])/[3])*(1-TMath::Erf(([1]-x+[2]^2/[3])/(sqrt(2*[2]^2))))");
-                // tempLikeData.pdf =new TF1("gexp","[0]/sqrt(2)*exp([2]^2/2/[3]^2-(x-[1])/[3])*(1-TMath::Erf(([1]-x+[2]^2/[3])/(sqrt(2*[2]^2))))",res[6],res[7]);
-                tempLikeData.pdf->SetParameters(res2[1],
-                                                res2[2],
-                                                res2[3],
-                                                res2[4]);
-
-              }
-              // std::cout << f_central->GetParameter(0) << std::endl;
-              // std::cout << f_central << std::endl;
-
-
-
-              likeData.push_back(tempLikeData);
-
-              for(int iLat = 0 ; iLat < crystal[iCry].lat_likelihood.size() ; iLat++)
-              {
-                //get ch numb
-                std::string plotName = crystal[iCry].lat_likelihood[iLat]->GetName();
-                std::string strCh = plotName.substr(10,2);
-                int ch = atoi(strCh.c_str());
-
-                TF1 *f_side ;
-                like_t tempLikeData2;
-                double res3[8] = {0,0,0,0,0,0,0,0};
-                tempLikeData2.timestamp = timeStamp[ch];
-                // tempLikeData2.pdf = f_side;
-                // tempLikeData2.binsize = binsize;
-                ftype = extract(FloodZ,crystal[iCry].lat_likelihood[iLat],res3);
-                if(ftype == 0) //crystalball
-                {
-                  tempLikeData2.binsize = res3[0];
-                  tempLikeData2.pdf = new TF1("cb","crystalball");
-                  // tempLikeData.pdf = new TF1("cb","crystalball",res[6],res[7]);
-                  tempLikeData2.pdf->SetParameters(res3[1],
-                                                  res3[2],
-                                                  res3[3],
-                                                  res3[4],
-                                                  res3[5]);
-                }
-                else //g+exp
-                {
-                  tempLikeData2.binsize = res3[0];
-                  tempLikeData2.pdf = new TF1("gexp","[0]/sqrt(2)*exp([2]^2/2/[3]^2-(x-[1])/[3])*(1-TMath::Erf(([1]-x+[2]^2/[3])/(sqrt(2*[2]^2))))");
-                  // tempLikeData.pdf =new TF1("gexp","[0]/sqrt(2)*exp([2]^2/2/[3]^2-(x-[1])/[3])*(1-TMath::Erf(([1]-x+[2]^2/[3])/(sqrt(2*[2]^2))))",res[6],res[7]);
-                  tempLikeData2.pdf->SetParameters(res3[1],
-                                                  res3[2],
-                                                  res3[3],
-                                                  res3[4]);
-
-                }
-
-                // std::cout << res3[0] << "\n"
-                //           << res3[1] << "\n"
-                //           << res3[2] << "\n"
-                //           << res3[3] << "\n"
-                //           << res3[4] << "\n"
-                //           << res3[5] << "\n"
-                //           << res3[6] << "\n"
-                //           << res3[7] << "\n\n";
-
-
-
-                likeData.push_back(tempLikeData2);
-
-              }
-
-              int divsLat = 200000;
-              // double tmin = timeStamp[taggingCrystalTimingChannel] - 20e-9;
-              // double tmax = timeStamp[taggingCrystalTimingChannel] + 20e-9;
-              double tmin =  - 20e-9;
-              double tmax =  + 20e-9;
-              double step = (tmax-tmin)/divsLat;
-
-              std::vector<data_t> data;
-
-              for(int jTint = 0 ; jTint < divsLat ; jTint++)
-              {
-                // std::cout << "*\n";
-                data_t temp;
-                double tint   = tmin + jTint*step;
-                temp.x = tint;
-                double p = 1.0;
-                // std::cout << "size = "<<likeData.size() << "\n";
-                for(int iLike = 0 ; iLike < likeData.size() ; iLike++)
-                {
-                  // std::cout << iLike << "\t";
-                  // std::cout << likeData[iLike].timestamp << "\t";
-                  // std::cout << tint << "\t";
-                  // std::cout << likeData[iLike].timestamp - tint << "\t";
-                  // std::cout << likeData[iLike].binsize << "\t";
-                  // std::cout << likeData[iLike].pdf->Eval(likeData[iLike].timestamp - tint) << "\n";
-
-                  p = p* ((likeData[iLike].pdf->Eval( (likeData[iLike].timestamp - timeStamp[taggingCrystalTimingChannel] ) - tint))*likeData[iLike].binsize);
-                  // std::cout << "*" << "\n";
-                }
-                temp.y = p;
-                data.push_back(temp);
-              }
-              std::sort(data.begin(),data.end(),compareByY);
-              // std::cout << data[0].x << std::endl;
-              tempH->Fill((likeData[0].timestamp - data[0].x - centralcorrection) - timeStamp[taggingCrystalTimingChannel] );
-            }
+            // end of temp commented
           }
         }
       }
@@ -1887,12 +1490,11 @@ int main (int argc, char** argv)
     int perc = ((100*counter)/nevent); //should strictly have not decimal part, written like this...
     if( (perc % 10) == 0 )
     {
-      // std::cout << "\r";
-      // std::cout << perc << "% done... ";
+      std::cout << "\r";
+      std::cout << perc << "% done... ";
       //std::cout << counter << std::endl;
     }
   }
-
   std::cout << "Good events = " << goodEvents << std::endl;
   std::sort(crystal.begin(), crystal.end(), compareByNumber);
 
@@ -2401,7 +2003,6 @@ int main (int argc, char** argv)
     c_multi->Write();
 
   }
-  tempH->Write();
   noCorr->Write();
   centralCorr->Write();
   fullCorr->Write();

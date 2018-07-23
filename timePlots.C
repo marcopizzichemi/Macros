@@ -8,10 +8,10 @@ void timePlots(std::string fileName, int nmppcx = 4, int nmppcy = 4, int ncryx =
   histo2d->GetXaxis()->SetTitle("i");
   histo2d->GetYaxis()->SetTitle("j");
   histo2d->GetZaxis()->SetTitle("[ps]");
-  histo2d->GetZaxis()->SetRangeUser(100,450);
-  TH1F* histo_fwhm = new TH1F("histo_fwhm","CTR FWHM",50,100,450);
+  histo2d->GetZaxis()->SetRangeUser(150,450);
+  TH1F* histo_fwhm = new TH1F("histo_fwhm","CTR FWHM",50,150,450);
   histo_fwhm->GetXaxis()->SetTitle("[ps]");
-  TH1F* histo_fwhm_central = new TH1F("histo_fwhm_central","CTR FWHM central channels",50,100,450);
+  TH1F* histo_fwhm_central = new TH1F("histo_fwhm_central","CTR FWHM central channels",50,150,450);
   histo_fwhm_central->GetXaxis()->SetTitle("[ps]");
   int num;
   double fwhm,fwtm;
