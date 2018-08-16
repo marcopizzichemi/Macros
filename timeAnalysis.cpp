@@ -97,10 +97,14 @@ struct Crystal_t
   TH1F *poliCorrCTR_norm;
   TTreeFormula *Formula;
   std::vector<double> z;
-  TGraph* tw_correction;
-  TGraph* rms_tw_correction;
-  std::vector<TGraph*> delay;
-  std::vector<TGraph*> rms_delay;
+  TGraphErrors* tw_correction;
+  TGraphErrors* rms_tw_correction;
+  std::vector<TGraphErrors*> delay;
+  std::vector<TGraphErrors*> rms_delay;
+  TF1 *tw_correction_line;
+  TF1 *rms_tw_correction_line;
+  std::vector<TF1*> delay_line;
+  std::vector<TF1*> rms_delay_line;
   const char* path;
   bool accepted;
   bool polishedCorrection;
@@ -399,6 +403,7 @@ void usage()
             << "\t\t" << "                                                   - 0 = crystalball "  << std::endl
             << "\t\t" << "                                                   - 1 = gauss+exp "  << std::endl
             << "\t\t" << "--unbinned                                         - use also the unbinned method to calculate CTR - default = 0 (false)"  << std::endl
+            << "\t\t" << "--fitCorrection                                    - use line fit to perform correction   - default = 0 (false)"  << std::endl
             << "\t\t" << std::endl;
 }
 
@@ -433,6 +438,7 @@ int main (int argc, char** argv)
   double maxCTR = 500;
   int func = 0;
   bool unbinned = false;
+  bool fitCorrection = false;
 
   // parse arguments
   static struct option longOptions[] =
@@ -457,6 +463,7 @@ int main (int argc, char** argv)
       { "bins", required_argument, 0, 0 },
       { "func", required_argument, 0, 0 },
       { "unbinned", no_argument, 0, 0 },
+      { "fitCorrection", no_argument, 0, 0 },
 			{ NULL, 0, 0, 0 }
 	};
 
@@ -536,6 +543,9 @@ int main (int argc, char** argv)
     else if (c == 0 && optionIndex == 18){
       unbinned = true;
     }
+    else if (c == 0 && optionIndex == 19){
+      fitCorrection = true;
+    }
 		else {
       std::cout	<< "Usage: " << argv[0] << std::endl;
 			usage();
@@ -544,7 +554,11 @@ int main (int argc, char** argv)
 	}
 
   std::cout << "Chosen (length * doiFraction) = " << length * doiFraction << std::endl;
-
+  if(fitCorrection)
+  {
+    std::cout << "Using linear fits to perform time correction" << std::endl;
+  }
+  
   // read file in dir
   std::vector<std::string> v;
   read_directory(".", v);
@@ -1080,34 +1094,64 @@ int main (int argc, char** argv)
              {
                if(!keysTcorrName[i].compare(0,deltaWGraph_prefix.size(),deltaWGraph_prefix))
                {
-                 TGraph *calibGraph = NULL;
-                 calibGraph = (TGraph*) gDirectory->Get(keysTcorrName[i].c_str());
+                 TGraphErrors *calibGraph = NULL;
+                 calibGraph = (TGraphErrors*) gDirectory->Get(keysTcorrName[i].c_str());
                  if(calibGraph)
+                 {
                    temp_crystal.tw_correction = calibGraph;
+                   //fit with straight line
+                   TF1 *line = new TF1("line",  "[0]*x + [1]",0,1);
+                   calibGraph->Fit(line,"Q");
+                   temp_crystal.tw_correction_line = line;
+
+                 }
+
                }
 
                if(!keysTcorrName[i].compare(0,rms_deltaWGraph_prefix.size(),rms_deltaWGraph_prefix))
                {
-                TGraph *calibGraph = NULL;
-                calibGraph = (TGraph*) gDirectory->Get(keysTcorrName[i].c_str());
+                TGraphErrors *calibGraph = NULL;
+                calibGraph = (TGraphErrors*) gDirectory->Get(keysTcorrName[i].c_str());
                 if(calibGraph)
-                   temp_crystal.rms_tw_correction = calibGraph;
+                {
+                  temp_crystal.rms_tw_correction = calibGraph;
+                  //fit with straight line
+                  TF1 *line = new TF1("line",  "[0]*x + [1]",0,1);
+                  calibGraph->Fit(line,"Q");
+                  temp_crystal.rms_tw_correction_line = line;
+
+                }
+
                }
 
                if(!keysTcorrName[i].compare(0,graph_delay_prefix.size(),graph_delay_prefix))
                {
-                 TGraph *calibGraph = NULL;
-                 calibGraph = (TGraph*) gDirectory->Get(keysTcorrName[i].c_str());
+                 TGraphErrors *calibGraph = NULL;
+                 calibGraph = (TGraphErrors*) gDirectory->Get(keysTcorrName[i].c_str());
                  if(calibGraph)
+                 {
                    temp_crystal.delay.push_back(calibGraph);
+                   //fit with straight line
+                   TF1 *line = new TF1("line",  "[0]*x + [1]",0,1);
+                   calibGraph->Fit(line,"Q");
+                   temp_crystal.delay_line.push_back(line);
+                 }
+
                }
 
                if(!keysTcorrName[i].compare(0,rms_graph_delay_prefix.size(),rms_graph_delay_prefix))
                {
-                 TGraph *calibGraph = NULL;
-                 calibGraph = (TGraph*) gDirectory->Get(keysTcorrName[i].c_str());
+                 TGraphErrors *calibGraph = NULL;
+                 calibGraph = (TGraphErrors*) gDirectory->Get(keysTcorrName[i].c_str());
                  if(calibGraph)
+                 {
                    temp_crystal.rms_delay.push_back(calibGraph);
+                   //fit with straight line
+                   TF1 *line = new TF1("line",  "[0]*x + [1]",0,1);
+                   calibGraph->Fit(line,"Q");
+                   temp_crystal.rms_delay_line.push_back(line);
+                 }
+
                }
 
                if(!keysTcorrName[i].compare(0,delay_timing_ch_prefix.size(),delay_timing_ch_prefix))
@@ -1419,9 +1463,26 @@ int main (int argc, char** argv)
                     break;
                   }
                   // std::cout << rmsCh  << "\n";
-                  weight = pow(crystal[iCry].rms_delay[iGraph]->Eval(FloodZ),-2);
+
+                  if(fitCorrection)
+                  {
+                    weight = pow(crystal[iCry].rms_delay_line[iGraph]->Eval(FloodZ),-2);
+                  }
+                  else
+                  {
+                    weight = pow(crystal[iCry].rms_delay[iGraph]->Eval(FloodZ),-2);
+                  }
+
                   totalWeight += weight;
-                  averageTimeStamp += weight*(timeStamp[graphCh] - crystal[iCry].delay[iGraph]->Eval(FloodZ));
+                  if(fitCorrection)
+                  {
+                    averageTimeStamp += weight*(timeStamp[graphCh] - crystal[iCry].delay_line[iGraph]->Eval(FloodZ));
+                  }
+                  else
+                  {
+                    averageTimeStamp += weight*(timeStamp[graphCh] - crystal[iCry].delay[iGraph]->Eval(FloodZ));
+                  }
+
                   // std::cout << timeStamp[graphCh] - crystal[iCry].delay[iGraph]->Eval(FloodZ) << "\t";
                 }
                 averageTimeStamp = averageTimeStamp/totalWeight;
