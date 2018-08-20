@@ -404,6 +404,7 @@ void usage()
             << "\t\t" << "                                                   - 1 = gauss+exp "  << std::endl
             << "\t\t" << "--unbinned                                         - use also the unbinned method to calculate CTR - default = 0 (false)"  << std::endl
             << "\t\t" << "--fitCorrection                                    - use line fit to perform correction   - default = 0 (false)"  << std::endl
+            << "\t\t" << "--exclude-channels                                 - channels to exclude from time correction, comma separated - default = "" "  << std::endl
             << "\t\t" << std::endl;
 }
 
@@ -420,6 +421,8 @@ int main (int argc, char** argv)
   std::string calibrationFileName = "";
   // std::string coincidenceCalibrationFileName = "";
 
+  std::string exclude_channels = "";
+  bool exclude = false;
   bool simulation = false;
   Float_t length = 15.0; //mm
   Float_t doiFraction = 0.5;
@@ -464,6 +467,7 @@ int main (int argc, char** argv)
       { "func", required_argument, 0, 0 },
       { "unbinned", no_argument, 0, 0 },
       { "fitCorrection", no_argument, 0, 0 },
+      { "exclude-channels", required_argument, 0, 0 },
 			{ NULL, 0, 0, 0 }
 	};
 
@@ -546,6 +550,14 @@ int main (int argc, char** argv)
     else if (c == 0 && optionIndex == 19){
       fitCorrection = true;
     }
+    else if (c == 0 && optionIndex == 20){
+      //take string
+      // tokenize by ","
+      // store channel numbers
+      exclude = true;
+      exclude_channels = (char *)optarg;
+
+    }
 		else {
       std::cout	<< "Usage: " << argv[0] << std::endl;
 			usage();
@@ -553,12 +565,31 @@ int main (int argc, char** argv)
 		}
 	}
 
+
+  std::vector<int> forbidden_channels;
+  if(exclude)
+  {
+    // std::vector<int> vect;
+    std::stringstream ss(exclude_channels);
+    int i;
+    while (ss >> i)
+    {
+      forbidden_channels.push_back(i);
+      if (ss.peek() == ',')
+        ss.ignore();
+
+    }
+    std::cout << "Channels exclude from time analysis: " << std::endl;
+    for (i=0; i< forbidden_channels.size(); i++)
+        std::cout << forbidden_channels.at(i)<<std::endl;
+  }
+
   std::cout << "Chosen (length * doiFraction) = " << length * doiFraction << std::endl;
   if(fitCorrection)
   {
     std::cout << "Using linear fits to perform time correction" << std::endl;
   }
-  
+
   // read file in dir
   std::vector<std::string> v;
   read_directory(".", v);
@@ -1130,11 +1161,36 @@ int main (int argc, char** argv)
                  calibGraph = (TGraphErrors*) gDirectory->Get(keysTcorrName[i].c_str());
                  if(calibGraph)
                  {
-                   temp_crystal.delay.push_back(calibGraph);
-                   //fit with straight line
-                   TF1 *line = new TF1("line",  "[0]*x + [1]",0,1);
-                   calibGraph->Fit(line,"Q");
-                   temp_crystal.delay_line.push_back(line);
+                   // -- check if the channel is not excluded by the user
+                   // extract next 2 characters
+                   //
+                   std::string str2 = keysTcorrName[i].substr (graph_delay_prefix.size(),6);     // take a string with next 6 characters after the prefix
+                   std::size_t found = str2.find_first_of("_");                                  // find next "_"
+                   std::string str3 = str2.substr (0,found);                                     // extract everything before "_"
+                   // std::cout << keysTcorrName[i] << " " << str2 << " " << str3 << std::endl;     // output
+                   int current_ch = atoi(str3.c_str());                                          // transform in int
+                   std::cout << keysTcorrName[i] << "\t" << str2 << "\t" << str3 << "\t" << current_ch << std::endl;     // output
+
+                   bool acceptCh = true;
+                   for(int iForb = 0; iForb < forbidden_channels.size(); iForb++)                // check if this ch is in the forbidden_channels list
+                   {
+                     if(current_ch == forbidden_channels[iForb])
+                     {
+                       acceptCh = false;
+                     }
+                   }
+
+                   if(acceptCh)               // add graph if the ch is accepted
+                   {
+                     temp_crystal.delay.push_back(calibGraph);
+                     //fit with straight line
+                     TF1 *line = new TF1("line",  "[0]*x + [1]",0,1);
+                     calibGraph->Fit(line,"Q");
+                     temp_crystal.delay_line.push_back(line);
+                   }
+
+
+
                  }
 
                }
@@ -1143,30 +1199,78 @@ int main (int argc, char** argv)
                {
                  TGraphErrors *calibGraph = NULL;
                  calibGraph = (TGraphErrors*) gDirectory->Get(keysTcorrName[i].c_str());
+
+
                  if(calibGraph)
                  {
-                   temp_crystal.rms_delay.push_back(calibGraph);
-                   //fit with straight line
-                   TF1 *line = new TF1("line",  "[0]*x + [1]",0,1);
-                   calibGraph->Fit(line,"Q");
-                   temp_crystal.rms_delay_line.push_back(line);
+                   // -- check if the channel is not excluded by the user
+                   // extract next 2 characters
+                   //
+                   std::string str2 = keysTcorrName[i].substr (rms_graph_delay_prefix.size(),6);     // take a string with next 6 characters after the prefix
+                   std::size_t found = str2.find_first_of("_");                                  // find next "_"
+                   std::string str3 = str2.substr (0,found);                                     // extract everything before "_"
+                   int current_ch = atoi(str3.c_str());                                          // transform in int
+                   std::cout << keysTcorrName[i] << "\t" << str2 << "\t" << str3 << "\t" << current_ch << std::endl;     // output
+
+
+                   bool acceptCh = true;
+                   for(int iForb = 0; iForb < forbidden_channels.size(); iForb++)                // check if this ch is in the forbidden_channels list
+                   {
+                     if(current_ch == forbidden_channels[iForb])
+                     {
+                       acceptCh = false;
+                     }
+                   }
+
+                   if(acceptCh)               // add graph if the ch is accepted
+                   {
+                     temp_crystal.rms_delay.push_back(calibGraph);
+                     //fit with straight line
+                     TF1 *line = new TF1("line",  "[0]*x + [1]",0,1);
+                     calibGraph->Fit(line,"Q");
+                     temp_crystal.rms_delay_line.push_back(line);
+                   }
                  }
 
                }
 
                if(!keysTcorrName[i].compare(0,delay_timing_ch_prefix.size(),delay_timing_ch_prefix))
                {
-                 //  std::cout << keysCryName[i] << std::endl;
-                 std::stringstream snameCh;
-                 std::vector<int> *v;
-                 gDirectory->GetObject("delayTimingChannels",v);
-                 // snameCh << ((TNamed*) gDirectory->Get(keysCryName[i].c_str()))->GetTitle();
-                 //  TCut* cut = (TCut*) gDirectory->Get( keysCryName[i].c_str());
-                //  istringstream()
-                 temp_crystal.delayTimingChannels = v[0];
-                 //  std::cout <<temp_crystal.detectorChannel << std::endl;
-                //  std::cout << gDirectory->Get(keysCryName[i].c_str())->GetTitle() << "\t"
-                          //  << temp_crystal.detectorChannel << std::endl;
+
+                 // // -- check if the channel is not excluded by the user
+                 // // extract next 2 characters
+                 // //
+                 // std::string str2 = keysTcorrName[i].substr (delay_timing_ch_prefix.size(),6);     // take a string with next 6 characters after the prefix
+                 // std::size_t found = str2.find_first_of("_");                                  // find next "_"
+                 // std::string str3 = str2.substr (0,found);                                     // extract everything before "_"
+                 // // std::cout << keysTcorrName[i] << " " << str2 << " " << str3 << std::endl;     // output
+                 // int current_ch = atoi(str3.c_str());                                          // transform in int
+                 // std::cout << keysTcorrName[i] << "\t" << str2 << "\t" << str3 << "\t" << current_ch << std::endl;     // output
+                 //
+                 // bool acceptCh = true;
+                 // for(int iForb = 0; iForb < forbidden_channels.size(); iForb++)                // check if this ch is in the forbidden_channels list
+                 // {
+                 //   if(current_ch == forbidden_channels[iForb])
+                 //   {
+                 //     acceptCh = false;
+                 //   }
+                 // }
+                 //
+                 // if(acceptCh)               // add graph if the ch is accepted
+                 // {
+                   //  std::cout << keysCryName[i] << std::endl;
+                   std::stringstream snameCh;
+                   std::vector<int> *v;
+                   gDirectory->GetObject("delayTimingChannels",v);
+                   // snameCh << ((TNamed*) gDirectory->Get(keysCryName[i].c_str()))->GetTitle();
+                   //  TCut* cut = (TCut*) gDirectory->Get( keysCryName[i].c_str());
+                  //  istringstream()
+                   temp_crystal.delayTimingChannels = v[0];
+                   //  std::cout <<temp_crystal.detectorChannel << std::endl;
+                  //  std::cout << gDirectory->Get(keysCryName[i].c_str())->GetTitle() << "\t"
+                            //  << temp_crystal.detectorChannel << std::endl;
+                 // }
+
                }
              }
            }
