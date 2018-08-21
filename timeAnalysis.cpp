@@ -1169,7 +1169,7 @@ int main (int argc, char** argv)
                    std::string str3 = str2.substr (0,found);                                     // extract everything before "_"
                    // std::cout << keysTcorrName[i] << " " << str2 << " " << str3 << std::endl;     // output
                    int current_ch = atoi(str3.c_str());                                          // transform in int
-                   std::cout << keysTcorrName[i] << "\t" << str2 << "\t" << str3 << "\t" << current_ch << std::endl;     // output
+                   // std::cout << keysTcorrName[i] << "\t" << str2 << "\t" << str3 << "\t" << current_ch << std::endl;     // output
 
                    bool acceptCh = true;
                    for(int iForb = 0; iForb < forbidden_channels.size(); iForb++)                // check if this ch is in the forbidden_channels list
@@ -1210,7 +1210,7 @@ int main (int argc, char** argv)
                    std::size_t found = str2.find_first_of("_");                                  // find next "_"
                    std::string str3 = str2.substr (0,found);                                     // extract everything before "_"
                    int current_ch = atoi(str3.c_str());                                          // transform in int
-                   std::cout << keysTcorrName[i] << "\t" << str2 << "\t" << str3 << "\t" << current_ch << std::endl;     // output
+                   // std::cout << keysTcorrName[i] << "\t" << str2 << "\t" << str3 << "\t" << current_ch << std::endl;     // output
 
 
                    bool acceptCh = true;
