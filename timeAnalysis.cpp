@@ -579,7 +579,7 @@ int main (int argc, char** argv)
         ss.ignore();
 
     }
-    std::cout << "Channels exclude from time analysis: " << std::endl;
+    std::cout << "Channels excluded from time correction (for depolished): " << std::endl;
     for (i=0; i< forbidden_channels.size(); i++)
         std::cout << forbidden_channels.at(i)<<std::endl;
   }
