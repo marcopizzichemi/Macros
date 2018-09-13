@@ -416,6 +416,13 @@ int main (int argc, char** argv)
     usage();
     return 1;
   }
+
+  std::stringstream streamCommand;
+  for(int i=0 ; i < argc; i++)
+  {
+    streamCommand << argv[i] << " ";
+  }
+
   std::string inputFileName = "";
   std::string outputFileName = "";
   std::string calibrationFileName = "";
@@ -2182,6 +2189,9 @@ int main (int argc, char** argv)
   cSumCentral->Write();
   cSumAll->Write();
   cPoliAll->Write();
+
+  TNamed CommandNameD("Command",streamCommand.str().c_str());
+  CommandNameD.Write();
   // treeFile->Close();
 
   calibrationFile->Close();
