@@ -410,7 +410,7 @@ void usage()
             << "\t\t" << "--unbinned                                         - use also the unbinned method to calculate CTR - default = 0 (false)"  << std::endl
             << "\t\t" << "--fitCorrection                                    - use line fit to perform correction   - default = 0 (false)"  << std::endl
             << "\t\t" << "--exclude-channels                                 - channels to exclude from time correction, comma separated - default = "" "  << std::endl
-            << "\t\t" << "--start-time                                 - start time (ExtendedTimeTag) from which events are accepted - default = 0"  << std::endl
+            << "\t\t" << "--start-time                                       - acq time from which events are accepted [ns] - default = 0"  << std::endl
             << "\t\t" << std::endl;
 }
 
@@ -1442,6 +1442,8 @@ int main (int argc, char** argv)
 
   //MAIN LOOP
   long long int nevent = tree->GetEntries();
+  ULong64_t tStart = tree->GetMinimum("ExtendedTimeTag");
+
   std::cout << "Total number of events = " << nevent << std::endl;
   long int goodEvents = 0;
   long int counter = 0;
@@ -1451,7 +1453,7 @@ int main (int argc, char** argv)
     // std::cout << "Event " << i << std::endl;
     tree->GetEvent(i);              //read complete accepted event in memory
     //skip data if user say so
-    if(ChainExtendedTimeTag >= start_time)
+    if( (ChainExtendedTimeTag - tStart) >= start_time)
     {
       for(unsigned int iCry = 0 ;  iCry < crystal.size() ; iCry++)
       {
