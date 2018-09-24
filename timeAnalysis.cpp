@@ -410,7 +410,8 @@ void usage()
             << "\t\t" << "--unbinned                                         - use also the unbinned method to calculate CTR - default = 0 (false)"  << std::endl
             << "\t\t" << "--fitCorrection                                    - use line fit to perform correction   - default = 0 (false)"  << std::endl
             << "\t\t" << "--exclude-channels                                 - channels to exclude from time correction, comma separated - default = "" "  << std::endl
-            << "\t\t" << "--start-time                                       - acq time from which events are accepted [ns] - default = 0"  << std::endl
+            << "\t\t" << "--start-time                                       - acq time from which events are accepted [h]  - default = 0"  << std::endl
+            << "\t\t" << "--sliced                                           - if given, it's a slice acq                   - default = not given"  << std::endl
             << "\t\t" << std::endl;
 }
 
@@ -455,7 +456,8 @@ int main (int argc, char** argv)
   int func = 0;
   bool unbinned = false;
   bool fitCorrection = false;
-  ULong64_t start_time = 0;
+  double start_time = 0;
+  bool sliced = false;
 
   // parse arguments
   static struct option longOptions[] =
@@ -483,6 +485,7 @@ int main (int argc, char** argv)
       { "fitCorrection", no_argument, 0, 0 },
       { "exclude-channels", required_argument, 0, 0 },
       { "start-time", required_argument, 0, 0 },
+      { "sliced", no_argument, 0, 0 },
 			{ NULL, 0, 0, 0 }
 	};
 
@@ -572,6 +575,9 @@ int main (int argc, char** argv)
     }
     else if (c == 0 && optionIndex == 21){
       start_time = atof((char *)optarg);
+    }
+    else if (c == 0 && optionIndex == 22){
+      sliced = true;
     }
 		else {
       std::cout	<< "Usage: " << argv[0] << std::endl;
@@ -1442,18 +1448,43 @@ int main (int argc, char** argv)
 
   //MAIN LOOP
   long long int nevent = tree->GetEntries();
-  ULong64_t tStart = tree->GetMinimum("ExtendedTimeTag");
+  // ULong64_t tStart = tree->GetMinimum("ExtendedTimeTag");
 
   std::cout << "Total number of events = " << nevent << std::endl;
   long int goodEvents = 0;
   long int counter = 0;
+
+  double tStart  = (tree->GetMinimum("ExtendedTimeTag"))/(1e9*3600); // t start in h
+  double tEnd    = (tree->GetMaximum("ExtendedTimeTag") - tree->GetMinimum("ExtendedTimeTag"))/(1e9*3600); // t length in h
+
+  double tStart2 = (tree->GetMinimum("DeltaTimeTag"))/(1e9*3600);
+  double tEnd2   = (tree->GetMaximum("DeltaTimeTag") - tree->GetMinimum("DeltaTimeTag"))/(1e9*3600);
+
+
   // for (long long int i=0;i<1000000;i++)
   for (long long int i=0;i<nevent;i++)
   {
     // std::cout << "Event " << i << std::endl;
     tree->GetEvent(i);              //read complete accepted event in memory
     //skip data if user say so
-    if( (ChainExtendedTimeTag - tStart) >= start_time)
+    bool keepEvent = true;
+    if(sliced)
+    {
+      if( ((ChainExtendedTimeTag / (1e9*3600) ) - tStart) < start_time)
+      {
+        keepEvent = false;
+      }
+    }
+    else
+    {
+      if( ((ChainDeltaTimeTag    / (1e9*3600) ) - tStart2) < start_time)
+      {
+        keepEvent = false;
+      }
+    }
+
+
+    if(keepEvent)
     {
       for(unsigned int iCry = 0 ;  iCry < crystal.size() ; iCry++)
       {
