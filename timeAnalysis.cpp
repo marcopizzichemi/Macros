@@ -1502,8 +1502,11 @@ int main (int argc, char** argv)
               Float_t zeroCorrection    = 0.0;
               //no corr
               double simpleCTR = timeStamp[crystal[iCry].timingChannel] - timeStamp[taggingCrystalTimingChannel];
-              crystal[iCry].simpleCTR->Fill(simpleCTR);
-              crystal[iCry].vSimple.push_back(simpleCTR);
+              if((timeStamp[crystal[iCry].timingChannel] != 0) && (timeStamp[taggingCrystalTimingChannel] != 0)) // no zeroes
+              {
+                crystal[iCry].simpleCTR->Fill(simpleCTR);
+                crystal[iCry].vSimple.push_back(simpleCTR);
+              }
 
               if(crystal[iCry].tw_correction)
               {
