@@ -2235,25 +2235,25 @@ int main (int argc, char** argv)
       }
 
 
-      std::cout << "Polished corr. - cry " << crystal[iCry].number << "\t"
-                << ret[0]*1e12 << "\t"
-                << ret[1]*1e12 << std::endl;
+      // std::cout << "Polished corr. - cry " << crystal[iCry].number << "\t"
+      //           << ret[0]*1e12 << "\t"
+      //           << ret[1]*1e12 << std::endl;
+      // //
+      // std::cout << "Polished FIT   - cry " << crystal[iCry].number << "\t"
+      //           << fitRes[0] << "\t"
+      //           << fitRes[1] << "\t"
+      //           << fitRes[2] << "\t"
+      //           << std::endl;
       //
-      std::cout << "Polished FIT   - cry " << crystal[iCry].number << "\t"
-                << fitRes[0] << "\t"
-                << fitRes[1] << "\t"
-                << fitRes[2] << "\t"
-                << std::endl;
-
-      textfile  << "Polished corr. - cry " << crystal[iCry].number << "\t"
-                << ret[0]*1e12 << "\t"
-                << ret[1]*1e12 << std::endl;
-      //
-      textfile << "Polished FIT   - cry " << crystal[iCry].number << "\t"
-                << fitRes[0] << "\t"
-                << fitRes[1] << "\t"
-                << fitRes[2] << "\t"
-                << std::endl;
+      // textfile  << "Polished corr. - cry " << crystal[iCry].number << "\t"
+      //           << ret[0]*1e12 << "\t"
+      //           << ret[1]*1e12 << std::endl;
+      // //
+      // textfile << "Polished FIT   - cry " << crystal[iCry].number << "\t"
+      //           << fitRes[0] << "\t"
+      //           << fitRes[1] << "\t"
+      //           << fitRes[2] << "\t"
+      //           << std::endl;
 
 
       //
