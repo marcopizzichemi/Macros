@@ -111,6 +111,11 @@ struct Crystal_t
   std::vector<int>    tChannelsForPolishedCorrection;
   std::vector<double> meanForPolishedCorrection;
   std::vector<double> fwhmForPolishedCorrection;
+
+  TH1F* lightCentralHisto;
+  TH1F* lightAllHisto;
+  TH1F* basicCTRhisto;
+
   // TCanvas
 };
 
@@ -984,6 +989,10 @@ int main (int argc, char** argv)
          std::string t_channels_for_poli_prefix("tChannelsForPolishedCorrection");
          std::string mean_for_poli_prefix("meanForPolishedCorrection");
          std::string fwhm_for_poli_prefix("fwhmForPolishedCorrection");
+
+         std::string lightCentral_prefix("Light collected in trigger crystal");
+         std::string lightAll_prefix("Sum spectrum highlighted");
+         std::string basicCTR_prefix("Basic CTR histogram");
         //  std::string correction_prefix("Correction Graph");
         //  std::string correction_rms_prefix("RMS Correction Graphs");
          for(unsigned int i = 0 ; i < keysCryName.size() ; i++)
@@ -1054,6 +1063,28 @@ int main (int argc, char** argv)
             //  std::cout << gDirectory->Get(keysCryName[i].c_str())->GetTitle() << "\t"
                       //  << temp_crystal.detectorChannel << std::endl;
            }
+
+           if(!keysCryName[i].compare(0,lightCentral_prefix.size(),lightCentral_prefix)) // find tcutgs
+           {
+            //  std::cout << keysCryName[i] << std::endl;
+             TH1F* aHisto = (TH1F*) gDirectory->Get(keysCryName[i].c_str());
+             temp_crystal.lightCentralHisto = aHisto;
+           }
+
+           if(!keysCryName[i].compare(0,lightAll_prefix.size(),lightAll_prefix)) // find tcutgs
+           {
+            //  std::cout << keysCryName[i] << std::endl;
+             TH1F* aHisto = (TH1F*) gDirectory->Get(keysCryName[i].c_str());
+             temp_crystal.lightAllHisto = aHisto;
+           }
+
+           if(!keysCryName[i].compare(0,basicCTR_prefix.size(),basicCTR_prefix)) // find tcutgs
+           {
+            //  std::cout << keysCryName[i] << std::endl;
+             TH1F* aHisto = (TH1F*) gDirectory->Get(keysCryName[i].c_str());
+             temp_crystal.basicCTRhisto = aHisto;
+           }
+
 
 
 
@@ -1785,6 +1816,29 @@ int main (int argc, char** argv)
     double unbinnedPoliCTR;
     double ret[2];
     double fitRes[3];
+    Int_t CTRentries;
+    Float_t lightCentral;
+    Float_t lightAll;
+
+
+    // get data on entries and light collected
+    // CTR entries
+    CTRentries = crystal[iCry].basicCTRhisto->GetEntries();
+    crystal[iCry].basicCTRhisto->Write();
+
+    // light central
+    TF1 *gaussCentral = new TF1("gaussCentral","gaus");
+    crystal[iCry].lightCentralHisto->Fit(gaussCentral,"Q");
+    lightCentral = gaussCentral->GetParameter(1);
+    crystal[iCry].lightCentralHisto->Write();
+
+    // light central
+    TF1 *gaussAll = new TF1("gaussAll","gaus");
+    crystal[iCry].lightAllHisto->Fit(gaussAll,"Q");
+    lightAll = gaussAll->GetParameter(1);
+    crystal[iCry].lightAllHisto->Write();
+
+
 
     // std::cout << "BASIC CTRs --------------------" << std::endl;
     // std::cout << crystal[iCry]
@@ -1812,25 +1866,52 @@ int main (int argc, char** argv)
         }
       }
 
+      std::cout << "# Condition" << "\t"
+                << "CTRfwhm"<< "\t"
+                << "CTRfwtm"<< "\t"
+                << "CTRentries"<< "\t"
+                << "lightCentral"<< "\t"
+                << "lightAll"<< "\t"
+                << "ChiSquare"<< "\t"
+                << "NDF"<< "\t"
+                << "Prob"<< "\t"
+                << std::endl;
 
       std::cout << "No corr    - cry " << crystal[iCry].number << "\t"
                 << ret[0]*1e12 << "\t"
-                << ret[1]*1e12 << std::endl;
-      std::cout << "No corr FIT- cry " << crystal[iCry].number << "\t"
+                << ret[1]*1e12 << "\t"
+                << CTRentries << "\t"
+                << lightCentral << "\t"
+                << lightAll << "\t"
                 << fitRes[0] << "\t"
                 << fitRes[1] << "\t"
                 << fitRes[2] << "\t"
                 << std::endl;
 
 
+      //
+      textfile << "# Condition" << "\t"
+                << "CTRfwhm"<< "\t"
+                << "CTRfwtm"<< "\t"
+                << "CTRentries"<< "\t"
+                << "lightCentral"<< "\t"
+                << "lightAll"<< "\t"
+                << "ChiSquare"<< "\t"
+                << "NDF"<< "\t"
+                << "Prob"<< "\t"
+                << std::endl;
+
+
       textfile  << "No corr    - cry " << crystal[iCry].number << "\t"
                 << ret[0]*1e12 << "\t"
-                << ret[1]*1e12 << std::endl;
-      textfile << "No corr FIT- cry " << crystal[iCry].number << "\t"
-               << fitRes[0] << "\t"
-               << fitRes[1] << "\t"
-               << fitRes[2] << "\t"
-               << std::endl;
+                << ret[1]*1e12 << "\t"
+                << CTRentries << "\t"
+                << lightCentral << "\t"
+                << lightAll << "\t"
+                << fitRes[0] << "\t"
+                << fitRes[1] << "\t"
+                << fitRes[2] << "\t"
+                << std::endl;
 
       realBasicCTRfwhm = ret[0]*1e12;
       realBasicCTRfwtm = ret[1]*1e12;
@@ -1903,25 +1984,50 @@ int main (int argc, char** argv)
       }
 
 
+      std::cout << "# Condition" << "\t"
+                << "CTRfwhm"<< "\t"
+                << "CTRfwtm"<< "\t"
+                << "CTRentries"<< "\t"
+                << "lightCentral"<< "\t"
+                << "lightAll"<< "\t"
+                << "ChiSquare"<< "\t"
+                << "NDF"<< "\t"
+                << "Prob"<< "\t"
+                << std::endl;
+
+
       std::cout << "Central    - cry " << crystal[iCry].number << "\t"
-                << ret[0]*1e12 << "\t"
-                << ret[1]*1e12 << std::endl;
-      //
-      std::cout << "Central FIT- cry " << crystal[iCry].number << "\t"
-                << fitRes[0] << "\t"
-                << fitRes[1] << "\t"
-                << fitRes[2] << "\t"
+      << ret[0]*1e12 << "\t"
+      << ret[1]*1e12 << "\t"
+      << CTRentries << "\t"
+      << lightCentral << "\t"
+      << lightAll << "\t"
+      << fitRes[0] << "\t"
+      << fitRes[1] << "\t"
+      << fitRes[2] << "\t"
+      << std::endl;
+
+      textfile << "# Condition" << "\t"
+                << "CTRfwhm"<< "\t"
+                << "CTRfwtm"<< "\t"
+                << "CTRentries"<< "\t"
+                << "lightCentral"<< "\t"
+                << "lightAll"<< "\t"
+                << "ChiSquare"<< "\t"
+                << "NDF"<< "\t"
+                << "Prob"<< "\t"
                 << std::endl;
 
       textfile  << "Central    - cry " << crystal[iCry].number << "\t"
-                << ret[0]*1e12 << "\t"
-                << ret[1]*1e12 << std::endl;
-      //
-      textfile << "Central FIT- cry " << crystal[iCry].number << "\t"
-                << fitRes[0] << "\t"
-                << fitRes[1] << "\t"
-                << fitRes[2] << "\t"
-                << std::endl;
+      << ret[0]*1e12 << "\t"
+      << ret[1]*1e12 << "\t"
+      << CTRentries << "\t"
+      << lightCentral << "\t"
+      << lightAll << "\t"
+      << fitRes[0] << "\t"
+      << fitRes[1] << "\t"
+      << fitRes[2] << "\t"
+      << std::endl;
 
       realCentralCTRfwhm = ret[0]*1e12;
       realCentralCTRfwtm = ret[1]*1e12;
@@ -1993,25 +2099,71 @@ int main (int argc, char** argv)
       }
 
 
-      std::cout << "Full corr. - cry " << crystal[iCry].number << "\t"
-                << ret[0]*1e12 << "\t"
-                << ret[1]*1e12 << std::endl;
+      // std::cout << "Full corr. - cry " << crystal[iCry].number << "\t"
+      //           << ret[0]*1e12 << "\t"
+      //           << ret[1]*1e12 << std::endl;
+      // //
+      // std::cout << "Full FIT   - cry " << crystal[iCry].number << "\t"
+      //           << fitRes[0] << "\t"
+      //           << fitRes[1] << "\t"
+      //           << fitRes[2] << "\t"
+      //           << std::endl;
       //
-      std::cout << "Full FIT   - cry " << crystal[iCry].number << "\t"
-                << fitRes[0] << "\t"
-                << fitRes[1] << "\t"
-                << fitRes[2] << "\t"
+      // textfile  << "Full corr. - cry " << crystal[iCry].number << "\t"
+      //           << ret[0]*1e12 << "\t"
+      //           << ret[1]*1e12 << std::endl;
+      // //
+      // textfile << "Full FIT   - cry " << crystal[iCry].number << "\t"
+      //           << fitRes[0] << "\t"
+      //           << fitRes[1] << "\t"
+      //           << fitRes[2] << "\t"
+      //           << std::endl;
+
+      //
+      std::cout << "# Condition" << "\t"
+                << "CTRfwhm"<< "\t"
+                << "CTRfwtm"<< "\t"
+                << "CTRentries"<< "\t"
+                << "lightCentral"<< "\t"
+                << "lightAll"<< "\t"
+                << "ChiSquare"<< "\t"
+                << "NDF"<< "\t"
+                << "Prob"<< "\t"
+                << std::endl;
+
+
+      std::cout << "Full corr. - cry " << crystal[iCry].number << "\t"
+      << ret[0]*1e12 << "\t"
+      << ret[1]*1e12 << "\t"
+      << CTRentries << "\t"
+      << lightCentral << "\t"
+      << lightAll << "\t"
+      << fitRes[0] << "\t"
+      << fitRes[1] << "\t"
+      << fitRes[2] << "\t"
+      << std::endl;
+
+      textfile << "# Condition" << "\t"
+                << "CTRfwhm"<< "\t"
+                << "CTRfwtm"<< "\t"
+                << "CTRentries"<< "\t"
+                << "lightCentral"<< "\t"
+                << "lightAll"<< "\t"
+                << "ChiSquare"<< "\t"
+                << "NDF"<< "\t"
+                << "Prob"<< "\t"
                 << std::endl;
 
       textfile  << "Full corr. - cry " << crystal[iCry].number << "\t"
-                << ret[0]*1e12 << "\t"
-                << ret[1]*1e12 << std::endl;
-      //
-      textfile << "Full FIT   - cry " << crystal[iCry].number << "\t"
-                << fitRes[0] << "\t"
-                << fitRes[1] << "\t"
-                << fitRes[2] << "\t"
-                << std::endl;
+      << ret[0]*1e12 << "\t"
+      << ret[1]*1e12 << "\t"
+      << CTRentries << "\t"
+      << lightCentral << "\t"
+      << lightAll << "\t"
+      << fitRes[0] << "\t"
+      << fitRes[1] << "\t"
+      << fitRes[2] << "\t"
+      << std::endl;
 
 
       realAllCTRfwhm = ret[0]*1e12;
@@ -2102,6 +2254,53 @@ int main (int argc, char** argv)
                 << fitRes[1] << "\t"
                 << fitRes[2] << "\t"
                 << std::endl;
+
+
+      //
+      std::cout << "# Condition" << "\t"
+                << "CTRfwhm"<< "\t"
+                << "CTRfwtm"<< "\t"
+                << "CTRentries"<< "\t"
+                << "lightCentral"<< "\t"
+                << "lightAll"<< "\t"
+                << "ChiSquare"<< "\t"
+                << "NDF"<< "\t"
+                << "Prob"<< "\t"
+                << std::endl;
+
+
+      std::cout << "Polished corr. - cry " << crystal[iCry].number << "\t"
+      << ret[0]*1e12 << "\t"
+      << ret[1]*1e12 << "\t"
+      << CTRentries << "\t"
+      << lightCentral << "\t"
+      << lightAll << "\t"
+      << fitRes[0] << "\t"
+      << fitRes[1] << "\t"
+      << fitRes[2] << "\t"
+      << std::endl;
+
+      textfile << "# Condition" << "\t"
+                << "CTRfwhm"<< "\t"
+                << "CTRfwtm"<< "\t"
+                << "CTRentries"<< "\t"
+                << "lightCentral"<< "\t"
+                << "lightAll"<< "\t"
+                << "ChiSquare"<< "\t"
+                << "NDF"<< "\t"
+                << "Prob"<< "\t"
+                << std::endl;
+
+      textfile  << "Polished corr. - cry " << crystal[iCry].number << "\t"
+      << ret[0]*1e12 << "\t"
+      << ret[1]*1e12 << "\t"
+      << CTRentries << "\t"
+      << lightCentral << "\t"
+      << lightAll << "\t"
+      << fitRes[0] << "\t"
+      << fitRes[1] << "\t"
+      << fitRes[2] << "\t"
+      << std::endl;
 
       poliCorrCTRfwhm = ret[0]*1e12;
       poliCorrCTRfwtm = ret[1]*1e12;
