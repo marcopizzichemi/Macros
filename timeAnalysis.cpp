@@ -435,6 +435,9 @@ int main (int argc, char** argv)
     streamCommand << argv[i] << " ";
   }
 
+  gStyle->SetOptStat(1111);
+  gStyle->SetOptFit(1111);
+
   std::string inputFileName = "";
   std::string outputFileName = "";
   std::string calibrationFileName = "";
