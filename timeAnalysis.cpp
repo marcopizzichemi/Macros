@@ -1565,7 +1565,9 @@ int main (int argc, char** argv)
 
                 for (unsigned int iW = 0; iW < crystal[iCry].relevantForW.size(); iW++)
                 {
+                  // std::cout << crystal[iCry].relevantForW[iW] << std::endl;
                   float originalCh = charge[crystal[iCry].relevantForW[iW]];
+
                   float saturationCh;
                   float pedestalCorr;
                   for(unsigned int iSat = 0; iSat < detectorSaturation.size(); iSat++)
@@ -1576,10 +1578,21 @@ int main (int argc, char** argv)
                       pedestalCorr = detectorSaturation[iSat].pedestal;
                     }
                   }
+                  // std::cout << originalCh << " "
+                  //           << saturationCh << " "
+                  //           << pedestalCorr << " "
+                  //           << std::endl;
                   division += ( -saturationCh * TMath::Log(1.0 - ( ( (originalCh-pedestalCorr))/(saturationCh)) ) );
                 }
 
                 FloodZ = centralChargeCorr / division;
+
+                // std::cout << centralChargeOriginal << " "
+                //           << centralSaturation << " "
+                //           << centralChargeCorr << " "
+                //           << division << " "
+                //           << FloodZ << " "
+                //           << std::endl;
 
                 // central corr
                 // std::string deltaWGraph_prefix = "DeltaW Graph";
@@ -1589,8 +1602,19 @@ int main (int argc, char** argv)
                 Float_t averageTimeStamp = 0.0;
                 Float_t totalWeight = 0.0;
                 // averageTimeStamp += timeStamp[crystal[iCry].detectorChannel];
-                centralcorrection = crystal[iCry].tw_correction->Eval(crystal[iCry].wz->Eval(length*doiFraction)) - crystal[iCry].tw_correction->Eval(FloodZ);
-                double centralCTR = (timeStamp[crystal[iCry].timingChannel] + (centralcorrection)) - timeStamp[taggingCrystalTimingChannel];
+
+                double centralCTR;
+
+                if(fitCorrection)
+                {
+                  centralcorrection = crystal[iCry].tw_correction_line->Eval(crystal[iCry].wz->Eval(length*doiFraction)) - crystal[iCry].tw_correction_line->Eval(FloodZ);
+                }
+                else
+                {
+                  centralcorrection = crystal[iCry].tw_correction->Eval(crystal[iCry].wz->Eval(length*doiFraction)) - crystal[iCry].tw_correction->Eval(FloodZ);
+                }
+
+                centralCTR = (timeStamp[crystal[iCry].timingChannel] + (centralcorrection)) - timeStamp[taggingCrystalTimingChannel];
                 crystal[iCry].centralCTR->Fill(centralCTR);
                 crystal[iCry].vCentral.push_back(centralCTR);
 
@@ -1602,7 +1626,17 @@ int main (int argc, char** argv)
                   // using the delta
                   //
                   Float_t weight = 0.0;
-                  weight = pow(crystal[iCry].rms_tw_correction->Eval(FloodZ),-2);
+
+                  if(fitCorrection)
+                  {
+                    weight = pow(crystal[iCry].rms_tw_correction_line->Eval(FloodZ),-2);
+                  }
+                  else
+                  {
+                    weight = pow(crystal[iCry].rms_tw_correction->Eval(FloodZ),-2);
+                  }
+
+
                   averageTimeStamp += weight * timeStamp[crystal[iCry].timingChannel];
                   totalWeight += weight;
                   //
