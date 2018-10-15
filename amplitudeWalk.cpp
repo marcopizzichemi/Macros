@@ -1297,9 +1297,9 @@ int main (int argc, char** argv)
   std::vector<TH2F*> histoSat;
   // = new TH2F("histoSat","histoSat",1000,0,100000,1000,-9.5e-9,-7.5e-9);
 
-  TH2F *histoADCvsW = new TH2F("histoADCvsW","histoADCvsW",1000,0,100000,1000,0,1);
-  TH2F *histoADCvsDt = new TH2F("histoADCvsDt","histoADCvsDt",1000,0,100000,1000,-9.5e-9,-7.5e-9);
-  TH2F *histoADCvsDtNoSat = new TH2F("histoADCvsDtNoSat","histoADCvsDtNoSat",1000,0,65000,1000,-9.5e-9,-7.5e-9);
+  TH2F *histoADCvsW = new TH2F("histoADCvsW","histoADCvsW",1000,adcMinSat,adcMaxSat,1000,0,1);
+  TH2F *histoADCvsDt = new TH2F("histoADCvsDt","histoADCvsDt",1000,adcMinSat,adcMaxSat,1000,histoMin,histoMax);
+  TH2F *histoADCvsDtNoSat = new TH2F("histoADCvsDtNoSat","histoADCvsDtNoSat",1000,adcMinNoSat,adcMaxNoSat,1000,histoMin,histoMax);
 
   TH1F* basicCTR             = new TH1F("basicCTR","basicCTR",histoBins,histoMin,histoMax) ;
   TH1F* singleChargeSpectrum_NoSat = new TH1F("singleChargeSpectrum_NoSat","singleChargeSpectrum_NoSat",histoBins,0,adcMaxNoSat) ;
@@ -1320,12 +1320,12 @@ int main (int argc, char** argv)
   {
     std::stringstream sname;
     sname << "histoSat_" << (length/steps)*iStep << "_" << (length/steps)*(iStep+1);
-    TH2F* tempHisto = new TH2F(sname.str().c_str(),sname.str().c_str(),1000,0,100000,1000,-9.5e-9,-7.5e-9);
+    TH2F* tempHisto = new TH2F(sname.str().c_str(),sname.str().c_str(),1000,adcMinSat,adcMaxSat,1000,histoMin,histoMax);
     histoSat.push_back(tempHisto);
 
     sname.str("");
     sname << "histoNoSat_" << (length/steps)*iStep << "_" << (length/steps)*(iStep+1);
-    TH2F* tempHisto2 = new TH2F(sname.str().c_str(),sname.str().c_str(),1000,0,65000,1000,-9.5e-9,-7.5e-9);
+    TH2F* tempHisto2 = new TH2F(sname.str().c_str(),sname.str().c_str(),1000,adcMinNoSat,adcMaxNoSat,1000,histoMin,histoMax);
     histoNoSat.push_back(tempHisto2);
 
 
