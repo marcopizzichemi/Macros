@@ -72,6 +72,26 @@ void read_directory(const std::string& name, std::vector<std::string> &v)
 }
 
 
+struct likelihood_t
+{
+  int tChannel;
+  TGraphErrors* delay;
+  TF1* delay_line;
+  TH2F* deltaTscatter;
+  TGraphErrors* deltaTgraph;
+  TF1* deltaTline;
+  std::vector<TH1F*> deltaTslice;
+  std::vector<double> wmean;
+  std::vector<double> werr;
+
+
+  std::vector<double> dx;
+  std::vector<double> dy;
+  std::vector<double> dex;
+  std::vector<double> dey;
+};
+
+
 struct Crystal_t
 {
   int number;
@@ -114,6 +134,16 @@ struct Crystal_t
   std::vector<double> meanForPolishedCorrection;
   std::vector<double> fwhmForPolishedCorrection;
 
+  std::vector<likelihood_t> LikelihoodChannels;
+
+  Float_t *variance;
+  long long int *entries_variance;
+  std::vector<Float_t**> covariance;
+  std::vector<long long int**> entries_covariance;
+  std::vector<Float_t**> inverse_covariance;
+
+  TH2F** deltaTscatter;
+
   TH1F* lightCentralHisto;
   TH1F* lightAllHisto;
   TH1F* basicCTRhisto;
@@ -128,6 +158,193 @@ struct detector_t
   float pedestal;
 };
 
+
+
+
+void extractFromHisto(TH1F* histo,double fitPercMin,double fitPercMax, int divs, double* res)
+{
+  // TF1 *gexp;
+  // TF1 *cb;
+
+  // preliminary gauss fit
+  TCanvas *cTemp  = new TCanvas("temp","temp");
+  TF1 *gaussDummy = new TF1("gaussDummy","gaus");
+  // resctrict the fitting range of gauss function
+
+  gaussDummy->SetLineColor(kRed);
+  double fitGaussMin = histo->GetMean()-2.0*histo->GetRMS();
+  double fitGaussMax = histo->GetMean()+2.0*histo->GetRMS();
+  double f1min = histo->GetXaxis()->GetXmin();
+  double f1max = histo->GetXaxis()->GetXmax();
+  if(fitGaussMin < f1min)
+  {
+    fitGaussMin = f1min;
+  }
+  if(fitGaussMax > f1max)
+  {
+    fitGaussMax = f1max;
+  }
+  TFitResultPtr rGauss = histo->Fit(gaussDummy,"QNS","",fitGaussMin,fitGaussMax);
+  Int_t fitStatusGauss= rGauss;
+
+  //NB fit results converted to int gives the fit status:
+  // fitStatusGauss == 0 -> fit OK
+  // fitStatusGauss != 0 -> fit FAILED
+
+  double fitMin;
+  double fitMax;
+  if(fitStatusGauss != 0) // gauss fit didn't work
+  {
+    // use the histogram values
+    fitMin = fitGaussMin;
+    fitMax = fitGaussMax;
+  }
+  else
+  {
+    // use fit values
+    fitMin = gaussDummy->GetParameter(1) - fitPercMin*(gaussDummy->GetParameter(2));
+    fitMax = gaussDummy->GetParameter(1) + fitPercMax*(gaussDummy->GetParameter(2));
+  }
+
+  // chech that they are not outside the limits defined by user
+  if(fitMin < f1min)
+  {
+    fitMin = f1min;
+  }
+  if(fitMax > f1max)
+  {
+    fitMax = f1max;
+  }
+
+  //fit with crystalball
+  TF1 *cb  = new TF1("cb","crystalball",f1min,f1max);
+  cb->SetLineColor(kBlue);
+  if(fitStatusGauss != 0) // gauss fit didn't work
+  {
+    // use the histogram values
+    cb->SetParameters(histo->GetEntries(),histo->GetMean(),histo->GetRMS(),1,3);
+  }
+  else
+  {
+    // use fit values
+    cb->SetParameters(gaussDummy->GetParameter(0),gaussDummy->GetParameter(1),gaussDummy->GetParameter(2),1,3);
+  }
+  TFitResultPtr rCb = histo->Fit(cb,"QNS","",fitMin,fitMax);
+
+  //fit with gauss + exp
+  TF1* gexp  = new TF1("gexp","[0]/sqrt(2)*exp([2]^2/2/[3]^2-(x-[1])/[3])*(1-TMath::Erf(([1]-x+[2]^2/[3])/(sqrt(2*[2]^2))))",f1min,f1max);
+  gexp->SetLineColor(kGreen);
+  gexp->SetParName(0,"N");
+  gexp->SetParName(1,"Mean");
+  gexp->SetParName(2,"Sigma");
+  gexp->SetParName(3,"tau");
+  // f1->SetParameters(gaussDummy->GetParameter(0),gaussDummy->GetParameter(1),gaussDummy->GetParameter(2),1,3);
+  if(fitStatusGauss != 0) // gauss fit didn't work
+  {
+    // use the histogram values
+    gexp->SetParameter(0,histo->GetEntries());
+    gexp->SetParameter(1,histo->GetMean());
+    gexp->SetParameter(2,histo->GetRMS());
+    gexp->SetParameter(3,histo->GetRMS()); // ROOT really needs all parameters initialized, and a "good" guess for tau is the sigma of the previous fit...
+  }
+  else
+  {
+    // use fit values
+    gexp->SetParameter(0,gaussDummy->GetParameter(0));
+    gexp->SetParameter(1,gaussDummy->GetParameter(1));
+    gexp->SetParameter(2,gaussDummy->GetParameter(2));
+    gexp->SetParameter(3,gaussDummy->GetParameter(2)); // ROOT really needs all parameters initialized, and a "good" guess for tau is the sigma of the previous fit...
+  }
+  TFitResultPtr rGexp = histo->Fit(gexp,"QNS","",fitMin,fitMax);
+
+  Int_t fitStatusCb = rCb;
+  Int_t fitStatusGexp = rGexp;
+
+  double chi2gexp;
+  double chi2cb;
+
+  if(fitStatusGexp == 0) // if Gexp worked
+  {
+    chi2gexp = rGexp->Chi2();
+  }
+  if(fitStatusCb == 0)// if cb worked
+  {
+    chi2cb   = rCb->Chi2();
+  }
+
+
+  //set function to measure ctr etc...
+  TF1 *f1;
+  // std::cout << histo->GetName() << std::endl;
+  // std::cout << fitStatusGexp << " "
+  //           << fitStatusCb << " "
+  //           << fitStatusGauss << " "
+  //           << std::endl;
+  if((fitStatusGexp  != 0) && (fitStatusCb != 0) && (fitStatusGauss != 0)) // all fit didn't work, just set everything to 0
+  {
+    // std::cout << "None" << std::endl;
+    res[0] = 0;
+    res[1] = 0;
+    res[2] = 0;
+    res[3] = 0;
+  }
+  else
+  {
+    if((fitStatusGexp  != 0) && (fitStatusCb != 0) && (fitStatusGauss == 0)) // only gauss worked
+    {
+      // std::cout << "Gauss" << std::endl;
+      f1 = gaussDummy;
+      histo->Fit(f1,"Q","",fitGaussMin,fitGaussMax);
+      res[0] = f1->GetParameter(1);
+      res[1] = f1->GetParameter(2);
+      res[2] = f1->GetParError(1);
+      res[3] = f1->GetParError(2);
+      delete gexp;
+      delete cb;
+    }
+    else // one between gexp and cb worked
+    {
+      if((fitStatusGexp  != 0) && (fitStatusCb == 0)) // only cb worked
+      {
+        // std::cout << "cb" << std::endl;
+        f1 = cb;
+        histo->Fit(f1,"Q","",fitMin,fitMax);
+        delete gexp;
+
+      }
+      else if((fitStatusGexp  == 0) && (fitStatusCb != 0)) // only gexp worked
+      {
+        // std::cout << "gexp" << std::endl;
+        f1 = gexp;
+        histo->Fit(f1,"Q","",fitMin,fitMax);
+        delete cb;
+      }
+      else // both worked
+      {
+        if(chi2gexp > chi2cb)
+        {
+          // std::cout << "cb better than gexp" << std::endl;
+          f1 = cb;
+          histo->Fit(f1,"Q","",fitMin,fitMax);
+          delete gexp;
+        }
+        else
+        {
+          // std::cout << "gexp better than cb" << std::endl;
+          f1 = gexp;
+          histo->Fit(f1,"Q","",fitMin,fitMax);
+          delete cb;
+        }
+      }
+      // f1->SetLineColor(kRed);
+      res[0] = f1->GetParameter(1);
+      res[1] = f1->GetParameter(2);
+      res[2] = f1->GetParError(1);
+      res[3] = f1->GetParError(2);
+    }
+  }
+  delete cTemp;
+}
 
 /*** find width at half max ***/
 // float ComputeFWHM(TH1F* histo)
@@ -595,6 +812,12 @@ void usage()
             << "\t\t" << "--exclude-channels                                 - channels to exclude from time correction, comma separated - default = "" "  << std::endl
             << "\t\t" << "--start-time                                       - acq time from which events are accepted [h]  - default = 0"  << std::endl
             << "\t\t" << "--sliced                                           - if given, it's a slice acq                   - default = not given"  << std::endl
+            << "\t\t" << "--likelihood                                       - if given, perform likelihood correction                   - default = not given"  << std::endl
+            << "\t\t" << "--likeMin <value>                                  - lower limit of likelihood spectra, in sec - default = -5e-9"  << std::endl
+            << "\t\t" << "--likeMax <value>                                  - upper limit of likelihood spectra, in sec - default = 5e-9"  << std::endl
+            << "\t\t" << "--likeBins <value>                                 - n of bins for likelihood spectra - default = 500"  << std::endl
+            << "\t\t" << "--wBins <value>                                  - number of bins in w slicing for likelihood - default = 10"  << std::endl
+            << "\t\t" << "--margin <value>                                 -margin in w slicing [mm] - default = 0.1"  << std::endl
             << "\t\t" << std::endl;
 }
 
@@ -633,6 +856,9 @@ int main (int argc, char** argv)
   Float_t histoMax = 15e-9;//s
   Float_t fitPercMin = 5;
   Float_t fitPercMax = 6;
+  Float_t likeMin = -15e-9;//s
+  Float_t likeMax = 15e-9;//s
+  int likeBins = 500;
   int divs       = 10000;
   int histoBins = 500;
   int smooth = 0; //
@@ -644,6 +870,9 @@ int main (int argc, char** argv)
   bool fitCorrection = false;
   double start_time = 0;
   bool sliced = false;
+  bool likelihood = false;
+  int WrangeBinsForTiming = 10;
+  float marginWZgraph = 0.1;
 
   // parse arguments
   static struct option longOptions[] =
@@ -672,6 +901,12 @@ int main (int argc, char** argv)
       { "exclude-channels", required_argument, 0, 0 },
       { "start-time", required_argument, 0, 0 },
       { "sliced", no_argument, 0, 0 },
+      { "likelihood", no_argument, 0, 0 },
+      { "likeMin", required_argument, 0, 0 },
+      { "likeMax", required_argument, 0, 0 },
+      { "likeBins", required_argument, 0, 0 },
+      { "wBins", required_argument, 0, 0 },
+      { "margin", required_argument, 0, 0 },
 			{ NULL, 0, 0, 0 }
 	};
 
@@ -765,6 +1000,24 @@ int main (int argc, char** argv)
     else if (c == 0 && optionIndex == 22){
       sliced = true;
     }
+    else if (c == 0 && optionIndex == 23){
+      likelihood = true;
+    }
+    else if (c == 0 && optionIndex == 24){
+      likeMin = atof((char *)optarg);
+    }
+    else if (c == 0 && optionIndex == 25){
+      likeMax = atof((char *)optarg);
+    }
+    else if (c == 0 && optionIndex == 26){
+      likeBins = atoi((char *)optarg);
+    }
+    else if (c == 0 && optionIndex == 27){
+      WrangeBinsForTiming = atoi((char *)optarg);
+    }
+    else if (c == 0 && optionIndex == 28){
+      marginWZgraph = atoi((char *)optarg);
+    }
 		else {
       std::cout	<< "Usage: " << argv[0] << std::endl;
 			usage();
@@ -796,6 +1049,12 @@ int main (int argc, char** argv)
   {
     std::cout << "Using linear fits to perform time correction" << std::endl;
   }
+  if(likelihood)
+  {
+    std::cout << "Performing likelihood correction " << std::endl;
+  }
+
+
 
   // read file in dir
   std::vector<std::string> v;
@@ -1664,6 +1923,7 @@ int main (int argc, char** argv)
 
   std::cout << "Total number of events = " << nevent << std::endl;
   long int goodEvents = 0;
+  long int correlationMatrixEvents = 0;
   long int counter = 0;
 
   double tStart  = (tree->GetMinimum("ExtendedTimeTag"))/(1e9*3600); // t start in h
@@ -1671,6 +1931,661 @@ int main (int argc, char** argv)
 
   double tStart2 = (tree->GetMinimum("DeltaTimeTag"))/(1e9*3600);
   double tEnd2   = (tree->GetMaximum("DeltaTimeTag") - tree->GetMinimum("DeltaTimeTag"))/(1e9*3600);
+
+  if(likelihood)
+  {
+    std::cout << "LIKELIHOOD CORRECTION" <<  std::endl;
+    //create the correlation matrix and its inverse in each accepted crystal
+    std::cout << "Preparing arrays... " <<  std::endl;
+    for(unsigned int iCry = 0 ;  iCry < crystal.size() ; iCry++)
+    {
+      if(crystal[iCry].accepted)
+      {
+        std::cout << "Crystal " << crystal[iCry].number << std::endl;
+
+        // count the delay graphs, add 1
+        int k = crystal[iCry].delay.size() + 1;
+
+        for(int iCorr = 0; iCorr < k ; iCorr++)
+        {
+          std::cout << iCorr << std::endl;
+          likelihood_t temp_likelihood;
+          if(iCorr == 0)
+          {
+            // timing channel is crystal timing channel
+            temp_likelihood.tChannel = crystal[iCry].timingChannel;
+            //no delay graph or line
+            temp_likelihood.delay = NULL;
+            temp_likelihood.delay_line = NULL;
+
+
+          }
+          else
+          {
+            //get numbers
+            std::string graphName = crystal[iCry].delay[iCorr-1]->GetName();
+            std::size_t foundGraph = graphName.find_last_of("_");
+            std::string tChannelStringFromGraph = graphName.substr(foundGraph+1);
+            int graphCh = atoi(tChannelStringFromGraph.c_str() );
+
+            temp_likelihood.tChannel = graphCh;
+
+            temp_likelihood.delay = (TGraphErrors*) crystal[iCry].delay[iCorr-1]->Clone();
+            temp_likelihood.delay_line = (TF1*) crystal[iCry].delay_line[iCorr-1]->Clone();
+
+          }
+
+          std::stringstream sname;
+          sname << "deltaTscatter_cry_" << crystal[iCry].number << "_" << iCorr;
+          temp_likelihood.deltaTscatter = new TH2F(sname.str().c_str(),sname.str().c_str(),100,0,1,likeBins,likeMin,likeMax);
+
+          crystal[iCry].LikelihoodChannels.push_back(temp_likelihood);
+          // temp_likelihood.deltaTgraph;
+          // temp_likelihood.deltaTslice;
+        }
+
+
+
+
+
+
+
+        // LikelihoodChannels
+        // create an array of int for the channels used for timing
+        // first, always the timing channel of this crystal
+      //   crystal[i].LikelihoodTimingChannels.push_back(crystal[i].timingChannel);
+      //   //then the other channels involved
+      //   //run on the delay graphs to find the timingChannel nums, storing them in the same order
+      //   for(unsigned int iGraph = 0; iGraph < crystal[i].delay.size();iGraph++)
+      //   {
+      //     std::string graphName = crystal[i].delay[iGraph]->GetName();
+      //     std::size_t foundGraph = graphName.find_last_of("_");
+      //     std::string tChannelStringFromGraph = graphName.substr(foundGraph+1);
+      //     int graphCh = atoi(tChannelStringFromGraph.c_str() );
+      //     crystal[i].LikelihoodTimingChannels.push_back(graphCh);
+      //   }
+      //   //DEBUG
+      //   for(unsigned int iLike = 0 ; iLike < crystal[i].LikelihoodTimingChannels.size(); iLike++)
+      //   {
+      //     std::cout <<  crystal[i].LikelihoodTimingChannels[iLike] << " ";
+      //   }
+      //   std::cout << std::endl;
+      //   //END of DEBUG
+      //
+      //   //now on the basis of the array of t channels just created, with length k, prepare 3 arrays kxk
+      //   //i.e. the correlation matrix, its inverse and the number of entries
+      //   unsigned int k = crystal[i].LikelihoodTimingChannels.size();
+      //   crystal[i].covariance = new Float_t*[k];
+      //   for(unsigned int iCorr = 0; iCorr < k ; iCorr++)
+      //   {
+      //     crystal[i].covariance[iCorr] = new Float_t[k];
+      //   }
+      //   crystal[i].inverse_covariance = new Float_t*[k];
+      //   for(unsigned int iCorr = 0; iCorr < k ; iCorr++)
+      //   {
+      //     crystal[i].inverse_covariance[iCorr] = new Float_t[k];
+      //   }
+      //   crystal[i].entries_covariance = new long long int*[k];
+      //   for(unsigned int iCorr = 0; iCorr < k ; iCorr++)
+      //   {
+      //     crystal[i].entries_covariance[iCorr] = new long long int[k];
+      //   }
+      //   crystal[i].variance = new Float_t[k];
+      //   crystal[i].entries_variance = new long long int[k];
+      //
+      //   // and fill them with 0s
+      //   for(unsigned int iCorr = 0; iCorr < k ; iCorr++)
+      //   {
+      //     crystal[i].variance[iCorr] = 0;
+      //     crystal[i].entries_variance[iCorr] = 0;
+      //     for(unsigned int jCorr = 0; jCorr < k ; jCorr++)
+      //     {
+      //       crystal[i].covariance[iCorr][jCorr] = 0;
+      //       crystal[i].inverse_covariance[iCorr][jCorr] = 0;
+      //       crystal[i].entries_covariance[iCorr][jCorr] = 0;
+      //     }
+      //   }
+      //
+      //
+      //   // covariance with doi
+      //   // prepare a TH2F for each deltaT. deltaT_i = t_i - t_tag - Delay_cry_det(w)
+      //   // Delay_cry_det(w) = delay between t in the crystal channel and t in the neighboring channel
+      //   // for the doi of the event. of course this is 0 if the other channel is the crystal channel,
+      //   // so the first th2f will actually be just the centra t vs w plot
+      //   crystal[i].deltaTscatter = new TH2F*[k];
+      //   for(unsigned int iCorr = 0; iCorr < k ; iCorr++)
+      //   {
+      //
+      //   }
+      //
+      }
+    }
+
+
+    //DEBUG
+    // for(unsigned int iCry = 0 ; iCry < crystal.size() ; iCry++)
+    // {
+    //   if(crystal[iCry].accepted)
+    //   {
+    //     std::cout << "crystal " << crystal[iCry].number << std::endl;
+    //     for(unsigned int iCorr = 0 ; iCorr < crystal[iCry].LikelihoodChannels.size(); iCorr++)
+    //     {
+    //       std::cout << crystal[iCry].LikelihoodChannels[iCorr].tChannel << std::endl;
+    //       if(iCorr == 0)
+    //       {
+    //
+    //       }
+    //       else
+    //       {
+    //         std::cout << crystal[iCry].LikelihoodChannels[iCorr].delay->GetName() << std::endl;
+    //         std::cout << crystal[iCry].LikelihoodChannels[iCorr].delay_line->GetName() << std::endl;
+    //       }
+    //     }
+    //
+    //   }
+    // }
+    //END OF DEBUG
+
+
+
+
+
+    std::cout << "Calculating delay(doi) plots... ";
+    //first, likelihood part if given
+    for (long long int i=0;i<nevent;i++)
+    {
+      // std::cout << "Event " << i << std::endl;
+      tree->GetEvent(i);              //read complete accepted event in memory
+      //skip data if user say so
+      bool keepEvent = true;
+      if(sliced)
+      {
+        if( ((ChainExtendedTimeTag / (1e9*3600) ) - tStart) < start_time)
+        {
+          keepEvent = false;
+        }
+      }
+      else
+      {
+        if( ((ChainDeltaTimeTag    / (1e9*3600) ) - tStart2) < start_time)
+        {
+          keepEvent = false;
+        }
+      }
+
+
+      if(keepEvent)
+      {
+        for(unsigned int iCry = 0 ;  iCry < crystal.size() ; iCry++)
+        {
+          if(crystal[iCry].accepted)
+          {
+            if(FormulaTag->EvalInstance() || simulation) // if in photopeak of tagging crystal - or if in simulation
+            {
+              if(crystal[iCry].Formula->EvalInstance())  //if in global cut of crystal
+              {
+
+                correlationMatrixEvents++;
+
+                if(crystal[iCry].tw_correction)
+                {
+
+                  //calculate FloodZ aka w
+                  Float_t FloodZ;
+                  float centralChargeOriginal;
+                  float centralSaturation;
+                  float centralPedestal;
+                  Float_t division = 0.0;
+
+                  centralChargeOriginal = charge[crystal[iCry].detectorChannel];
+                  for(unsigned int iSat = 0; iSat < detectorSaturation.size(); iSat++)
+                  {
+                    if( detectorSaturation[iSat].digitizerChannel  == crystal[iCry].detectorChannel)
+                    {
+                      centralSaturation = detectorSaturation[iSat].saturation;
+                      centralPedestal = detectorSaturation[iSat].pedestal;
+                    }
+                  }
+                  float centralChargeCorr = ( -centralSaturation * TMath::Log(1.0 - ( ( (centralChargeOriginal-centralPedestal))/(centralSaturation)) ) );
+
+                  for (unsigned int iW = 0; iW < crystal[iCry].relevantForW.size(); iW++)
+                  {
+                    // std::cout << crystal[iCry].relevantForW[iW] << std::endl;
+                    float originalCh = charge[crystal[iCry].relevantForW[iW]];
+
+                    float saturationCh;
+                    float pedestalCorr;
+                    for(unsigned int iSat = 0; iSat < detectorSaturation.size(); iSat++)
+                    {
+                      if( detectorSaturation[iSat].digitizerChannel  == crystal[iCry].relevantForW[iW])
+                      {
+                        saturationCh = detectorSaturation[iSat].saturation;
+                        pedestalCorr = detectorSaturation[iSat].pedestal;
+                      }
+                    }
+                    // std::cout << originalCh << " "
+                    //           << saturationCh << " "
+                    //           << pedestalCorr << " "
+                    //           << std::endl;
+                    division += ( -saturationCh * TMath::Log(1.0 - ( ( (originalCh-pedestalCorr))/(saturationCh)) ) );
+                  }
+
+                  FloodZ = centralChargeCorr / division;
+
+                  // std::cout << FloodZ << std::endl;
+
+                  unsigned int k = crystal[iCry].LikelihoodChannels.size();
+                  for(unsigned int iCorr = 0 ; iCorr < k; iCorr++)
+                  {
+
+                    if( (timeStamp[crystal[iCry].LikelihoodChannels[iCorr].tChannel] != 0) &&
+                        (timeStamp[taggingCrystalTimingChannel] != 0))
+                    {
+
+                      Float_t iTimeStamp = timeStamp[crystal[iCry].LikelihoodChannels[iCorr].tChannel] - timeStamp[taggingCrystalTimingChannel];
+                      // std::cout << iTimeStamp << std::endl;
+                      Float_t iDelay = 0;
+                      if(iCorr == 0)
+                      {
+                        iDelay = 0;
+                      }
+                      else
+                      {
+                        iDelay = crystal[iCry].LikelihoodChannels[iCorr].delay_line->Eval(FloodZ);
+                      }
+                      crystal[iCry].LikelihoodChannels[iCorr].deltaTscatter->Fill(FloodZ,iTimeStamp-iDelay);
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+      counter++;
+
+      // int perc = ((100*counter)/nevent); //should strictly have not decimal part, written like this...
+      // if( (perc % 10) == 0 )
+      // {
+      //   std::cout << "\r";
+      //   std::cout << "Calculating covariance matrix... " << perc << "%";
+      //   //std::cout << counter << std::endl;
+      // }
+    }
+    // std::cout << "\r";
+    std::cout << "done!" << std::endl;
+    // std::cout << "Events for covariance matrix = " << correlationMatrixEvents << std::endl;
+
+
+
+    //slice the th2f plots
+    std::cout << "Creating slice histrograms..." << std::endl;
+    for(unsigned int iCry = 0 ;  iCry < crystal.size() ; iCry++) // for each crystal
+    {
+      unsigned int k = crystal[iCry].LikelihoodChannels.size(); // for each 2d plot
+      for(unsigned int iCorr = 0 ; iCorr < k; iCorr++)
+      {
+
+        float beginW = crystal[iCry].wz->Eval(length - marginWZgraph);
+        float endW = crystal[iCry].wz->Eval(marginWZgraph);
+        for(int iBin = 0; iBin < WrangeBinsForTiming; iBin++) //
+        {
+          Float_t wmin = beginW + ((iBin*(endW - beginW))/WrangeBinsForTiming);
+          Float_t wmax = beginW + (((iBin+1)*(endW - beginW))/WrangeBinsForTiming);
+          Float_t wmean = (wmax + wmin) / 2.0;
+          std::stringstream sname;
+          sname << "T" << crystal[iCry].LikelihoodChannels[iCorr].tChannel << "_like_slide_cry" <<  crystal[iCry].number << "_w_" << wmin << "_" << wmax;
+          TH1F* temp_histo = new TH1F(sname.str().c_str(),sname.str().c_str(),likeBins,likeMin,likeMax);
+          crystal[iCry].LikelihoodChannels[iCorr].deltaTslice.push_back(temp_histo);
+          crystal[iCry].LikelihoodChannels[iCorr].wmean.push_back(wmean);
+          crystal[iCry].LikelihoodChannels[iCorr].werr.push_back((wmax-wmin)/TMath::Sqrt(12.0));
+          // crystal[iCry].LikelihoodChannels[iCorr].dx.push_back(wmean);
+          // crystal[iCry].LikelihoodChannels[iCorr].dex.push_back((wmax-wmin)/TMath::Sqrt(12.0));
+        }
+      }
+
+
+
+    }
+
+    for(unsigned int iCry = 0 ;  iCry < crystal.size() ; iCry++) // for each crystal
+    {
+      for(int iBin = 0; iBin < WrangeBinsForTiming; iBin++) //
+      {
+        unsigned int k = crystal[iCry].LikelihoodChannels.size(); // for each 2d plot
+        Float_t **temp_covariance;
+        temp_covariance = new Float_t*[k];
+        for(unsigned int jCorr = 0; jCorr < k ; jCorr++)
+        {
+          temp_covariance[jCorr] = new Float_t[k];
+        }
+        for(unsigned int iCorr = 0; iCorr < k ; iCorr++)
+        {
+          for(unsigned int jCorr = 0; jCorr < k ; jCorr++)
+          {
+            temp_covariance[iCorr][jCorr] = 0;
+          }
+        }
+        crystal[iCry].covariance.push_back(temp_covariance);
+
+        long long int **temp_entries_covariance;
+        temp_entries_covariance = new long long int*[k];
+        for(unsigned int jCorr = 0; jCorr < k ; jCorr++)
+        {
+          temp_entries_covariance[jCorr] = new long long int[k];
+        }
+        for(unsigned int iCorr = 0; iCorr < k ; iCorr++)
+        {
+          for(unsigned int jCorr = 0; jCorr < k ; jCorr++)
+          {
+            temp_entries_covariance[iCorr][jCorr] = 0;
+          }
+        }
+        crystal[iCry].entries_covariance.push_back(temp_entries_covariance);
+
+        Float_t **inverse_covariance;
+        inverse_covariance = new Float_t*[k];
+        for(unsigned int jCorr = 0; jCorr < k ; jCorr++)
+        {
+          inverse_covariance[jCorr] = new Float_t[k];
+        }
+        for(unsigned int iCorr = 0; iCorr < k ; iCorr++)
+        {
+          for(unsigned int jCorr = 0; jCorr < k ; jCorr++)
+          {
+            inverse_covariance[iCorr][jCorr] = 0;
+          }
+        }
+        crystal[iCry].inverse_covariance.push_back(inverse_covariance);
+      }
+    }
+
+
+
+    correlationMatrixEvents = 0;
+    counter = 0;
+    std::cout << "Filling slice histrograms..." << std::endl;
+    for (long long int i=0;i<nevent;i++)
+    {
+      // std::cout << "Event " << i << std::endl;
+      tree->GetEvent(i);              //read complete accepted event in memory
+      //skip data if user say so
+      bool keepEvent = true;
+      if(sliced)
+      {
+        if( ((ChainExtendedTimeTag / (1e9*3600) ) - tStart) < start_time)
+        {
+          keepEvent = false;
+        }
+      }
+      else
+      {
+        if( ((ChainDeltaTimeTag    / (1e9*3600) ) - tStart2) < start_time)
+        {
+          keepEvent = false;
+        }
+      }
+
+
+      if(keepEvent)
+      {
+        for(unsigned int iCry = 0 ;  iCry < crystal.size() ; iCry++)
+        {
+          if(crystal[iCry].accepted)
+          {
+            if(FormulaTag->EvalInstance() || simulation) // if in photopeak of tagging crystal - or if in simulation
+            {
+              if(crystal[iCry].Formula->EvalInstance())  //if in global cut of crystal
+              {
+
+                correlationMatrixEvents++;
+
+                if(crystal[iCry].tw_correction)
+                {
+
+                  //calculate FloodZ aka w
+                  Float_t FloodZ;
+                  float centralChargeOriginal;
+                  float centralSaturation;
+                  float centralPedestal;
+                  Float_t division = 0.0;
+
+                  centralChargeOriginal = charge[crystal[iCry].detectorChannel];
+                  for(unsigned int iSat = 0; iSat < detectorSaturation.size(); iSat++)
+                  {
+                    if( detectorSaturation[iSat].digitizerChannel  == crystal[iCry].detectorChannel)
+                    {
+                      centralSaturation = detectorSaturation[iSat].saturation;
+                      centralPedestal = detectorSaturation[iSat].pedestal;
+                    }
+                  }
+                  float centralChargeCorr = ( -centralSaturation * TMath::Log(1.0 - ( ( (centralChargeOriginal-centralPedestal))/(centralSaturation)) ) );
+
+                  for (unsigned int iW = 0; iW < crystal[iCry].relevantForW.size(); iW++)
+                  {
+                    // std::cout << crystal[iCry].relevantForW[iW] << std::endl;
+                    float originalCh = charge[crystal[iCry].relevantForW[iW]];
+
+                    float saturationCh;
+                    float pedestalCorr;
+                    for(unsigned int iSat = 0; iSat < detectorSaturation.size(); iSat++)
+                    {
+                      if( detectorSaturation[iSat].digitizerChannel  == crystal[iCry].relevantForW[iW])
+                      {
+                        saturationCh = detectorSaturation[iSat].saturation;
+                        pedestalCorr = detectorSaturation[iSat].pedestal;
+                      }
+                    }
+                    // std::cout << originalCh << " "
+                    //           << saturationCh << " "
+                    //           << pedestalCorr << " "
+                    //           << std::endl;
+                    division += ( -saturationCh * TMath::Log(1.0 - ( ( (originalCh-pedestalCorr))/(saturationCh)) ) );
+                  }
+
+                  FloodZ = centralChargeCorr / division;
+
+
+                  float beginW = crystal[iCry].wz->Eval(length - marginWZgraph);
+                  float endW = crystal[iCry].wz->Eval(marginWZgraph);
+                  for(int iBin = 0; iBin < WrangeBinsForTiming; iBin++) //
+                  {
+                    Float_t wmin = beginW + ((iBin*(endW - beginW))/WrangeBinsForTiming);
+                    Float_t wmax = beginW + (((iBin+1)*(endW - beginW))/WrangeBinsForTiming);
+
+                    if((FloodZ >=wmin) && (FloodZ < wmax) )
+                    {
+                      unsigned int k = crystal[iCry].LikelihoodChannels.size(); // for each 2d plot
+                      for(unsigned int iCorr = 0 ; iCorr < k; iCorr++)
+                      {
+                        if( (timeStamp[crystal[iCry].LikelihoodChannels[iCorr].tChannel] != 0) &&
+                        (timeStamp[taggingCrystalTimingChannel] != 0))
+                        {
+                          Float_t iTimeStamp = timeStamp[crystal[iCry].LikelihoodChannels[iCorr].tChannel] - timeStamp[taggingCrystalTimingChannel];
+
+                          Float_t iDelay = 0;
+                          if(iCorr == 0)
+                          {
+                            iDelay = 0;
+                          }
+                          else
+                          {
+                            iDelay = crystal[iCry].LikelihoodChannels[iCorr].delay_line->Eval(FloodZ);
+                          }
+                          crystal[iCry].LikelihoodChannels[iCorr].deltaTslice[iBin]->Fill(iTimeStamp-iDelay);
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+      counter++;
+
+      // int perc = ((100*counter)/nevent); //should strictly have not decimal part, written like this...
+      // if( (perc % 10) == 0 )
+      // {
+      //   std::cout << "\r";
+      //   std::cout << "Calculating covariance matrix... " << perc << "%";
+      //   //std::cout << counter << std::endl;
+      // }
+    }
+    // std::cout << "\r";
+    std::cout << "done!" << std::endl;
+    // std::cout << "Events for covariance matrix = " << correlationMatrixEvents << std::endl;
+
+
+    std::cout << "fitting slice histograms..." << std::endl;
+    for(unsigned int iCry = 0 ;  iCry < crystal.size() ; iCry++) // for each crystal
+    {
+      unsigned int k = crystal[iCry].LikelihoodChannels.size(); // for each 2d plot
+      for(unsigned int iCorr = 0 ; iCorr < k; iCorr++)
+      {
+        for(unsigned int iSlice = 0 ; iSlice < crystal[iCry].LikelihoodChannels[iCorr].deltaTslice.size(); iSlice++ )
+        {
+          // crystal[iCry].LikelihoodChannels[iCorr].deltaTslice[iSlice];
+          double res[4];
+          int divisions = 100; //useless
+          extractFromHisto(crystal[iCry].LikelihoodChannels[iCorr].deltaTslice[iSlice],fitPercMin,fitPercMax,divisions,res);
+
+          if(res[0] == 0 && res[1] == 0 && res[2] == 0 && res[3] == 0) //ignore point if fit didn't work
+          {
+                                  // skip point
+          }
+          else
+          {
+
+            crystal[iCry].LikelihoodChannels[iCorr].dx.push_back(crystal[iCry].LikelihoodChannels[iCorr].wmean[iSlice]);
+            crystal[iCry].LikelihoodChannels[iCorr].dex.push_back(crystal[iCry].LikelihoodChannels[iCorr].werr[iSlice]);
+            // crystal[iCry].LikelihoodChannels[iCorr].dex.push_back(res[2]);
+            crystal[iCry].LikelihoodChannels[iCorr].dy.push_back(res[0]);
+            crystal[iCry].LikelihoodChannels[iCorr].dey.push_back(res[2]);
+          }
+        }
+      }
+    }
+
+
+
+    std::cout << "generating and fitting tgraphs..." << std::endl;
+    for(unsigned int iCry = 0 ;  iCry < crystal.size() ; iCry++) // for each crystal
+    {
+      unsigned int k = crystal[iCry].LikelihoodChannels.size(); // for each 2d plot
+      for(unsigned int iCorr = 0 ; iCorr < k; iCorr++)
+      {
+        crystal[iCry].LikelihoodChannels[iCorr].deltaTgraph = new TGraphErrors(
+          crystal[iCry].LikelihoodChannels[iCorr].dx.size(),
+          &crystal[iCry].LikelihoodChannels[iCorr].dx[0],
+          &crystal[iCry].LikelihoodChannels[iCorr].dy[0],
+          &crystal[iCry].LikelihoodChannels[iCorr].dex[0],
+          &crystal[iCry].LikelihoodChannels[iCorr].dey[0]
+        );
+        std::stringstream sname;
+        sname << "deltaT graph cry " <<  crystal[iCry].number << "_T" <<  crystal[iCry].LikelihoodChannels[iCorr].tChannel;
+        crystal[iCry].LikelihoodChannels[iCorr].deltaTgraph->SetName(sname.str().c_str());
+        crystal[iCry].LikelihoodChannels[iCorr].deltaTgraph->SetTitle(sname.str().c_str());
+        crystal[iCry].LikelihoodChannels[iCorr].deltaTgraph->GetXaxis()->SetTitle("W");
+        crystal[iCry].LikelihoodChannels[iCorr].deltaTgraph->GetYaxis()->SetTitle("DeltaT");
+
+        crystal[iCry].LikelihoodChannels[iCorr].deltaTline = new TF1("deltaTline",  "[0]*x + [1]",0,1);
+        float m = (crystal[iCry].LikelihoodChannels[iCorr].dy[0]-
+                  crystal[iCry].LikelihoodChannels[iCorr].dy[crystal[iCry].LikelihoodChannels[iCorr].dx.size()-1])/
+                  (crystal[iCry].LikelihoodChannels[iCorr].dx[0]-
+                  crystal[iCry].LikelihoodChannels[iCorr].dx[crystal[iCry].LikelihoodChannels[iCorr].dx.size()-1]);
+        float q = crystal[iCry].LikelihoodChannels[iCorr].dy[0] -
+                  m*crystal[iCry].LikelihoodChannels[iCorr].dx[0];
+        crystal[iCry].LikelihoodChannels[iCorr].deltaTline->SetParameter(0,m);
+        crystal[iCry].LikelihoodChannels[iCorr].deltaTline->SetParameter(1,q);
+
+        crystal[iCry].LikelihoodChannels[iCorr].deltaTgraph->Fit(crystal[iCry].LikelihoodChannels[iCorr].deltaTline,"");
+      }
+    }
+
+    std::cout << "generating covariance scatter plots..." << std::endl;
+
+
+
+
+
+  }
+  counter = 0;
+
+  //DEBUG
+  // for(unsigned int iCry = 0 ;  iCry < crystal.size() ; iCry++)
+  // {
+  //   if(crystal[iCry].accepted)
+  //   {
+  //     unsigned int k = crystal[iCry].LikelihoodTimingChannels.size();
+  //     for(unsigned int iCorr = 0 ; iCorr < k; iCorr++)
+  //     {
+  //       for(unsigned int jCorr = 0 ; jCorr < k; jCorr++)
+  //       {
+  //         std::cout << crystal[iCry].covariance[iCorr][jCorr] << "\t";
+  //       }
+  //       std::cout << std::endl;
+  //     }
+  //   }
+  // }
+  // for(unsigned int iCry = 0 ;  iCry < crystal.size() ; iCry++)
+  // {
+  //   if(crystal[iCry].accepted)
+  //   {
+  //     unsigned int k = crystal[iCry].LikelihoodTimingChannels.size();
+  //     for(unsigned int iCorr = 0 ; iCorr < k; iCorr++)
+  //     {
+  //       for(unsigned int jCorr = 0 ; jCorr < k; jCorr++)
+  //       {
+  //         std::cout << crystal[iCry].entries_covariance[iCorr][jCorr] << "\t";
+  //       }
+  //       std::cout << std::endl;
+  //     }
+  //   }
+  // }
+  // //END OF DEBUG
+  //
+  // // dividing covariance matrix by entries
+  // for(unsigned int iCry = 0 ;  iCry < crystal.size() ; iCry++)
+  // {
+  //   if(crystal[iCry].accepted)
+  //   {
+  //     unsigned int k = crystal[iCry].LikelihoodTimingChannels.size();
+  //     for(unsigned int iCorr = 0 ; iCorr < k; iCorr++)
+  //     {
+  //       for(unsigned int jCorr = 0 ; jCorr < k; jCorr++)
+  //       {
+  //         crystal[iCry].covariance[iCorr][jCorr] = crystal[iCry].covariance[iCorr][jCorr] / crystal[iCry].entries_covariance[iCorr][jCorr];
+  //       }
+  //     }
+  //   }
+  // }
+  //
+  // //DEBUG
+  // for(unsigned int iCry = 0 ;  iCry < crystal.size() ; iCry++)
+  // {
+  //   if(crystal[iCry].accepted)
+  //   {
+  //     unsigned int k = crystal[iCry].LikelihoodTimingChannels.size();
+  //     for(unsigned int iCorr = 0 ; iCorr < k; iCorr++)
+  //     {
+  //       for(unsigned int jCorr = 0 ; jCorr < k; jCorr++)
+  //       {
+  //         std::cout << crystal[iCry].covariance[iCorr][jCorr] << "\t";
+  //       }
+  //       std::cout << std::endl;
+  //     }
+  //   }
+  // }
+  // //END OF DEBUG
+
+
+
+
+
+
+
 
 
   // for (long long int i=0;i<1000000;i++)
@@ -1996,7 +2911,21 @@ int main (int argc, char** argv)
   for(unsigned int iCry = 0 ;  iCry < crystal.size() ; iCry++)
   {
 
+
+    unsigned int k = crystal[iCry].LikelihoodChannels.size();
+    for(unsigned int iCorr = 0 ; iCorr < k; iCorr++)
+    {
+      crystal[iCry].LikelihoodChannels[iCorr].deltaTscatter->Write();
+      crystal[iCry].LikelihoodChannels[iCorr].deltaTgraph->Write();
+      for(unsigned int iSlice = 0 ; iSlice <crystal[iCry].LikelihoodChannels[iCorr].deltaTslice.size(); iSlice++ )
+      {
+        crystal[iCry].LikelihoodChannels[iCorr].deltaTslice[iSlice]->Write();
+      }
+    }
+
     std::stringstream sname;
+
+
 
 
 
@@ -2701,6 +3630,7 @@ int main (int argc, char** argv)
   cSumCentral->Write();
   cSumAll->Write();
   cPoliAll->Write();
+
 
   TNamed CommandNameD("Command",streamCommand.str().c_str());
   CommandNameD.Write();
