@@ -864,7 +864,7 @@ void usage()
             << "\t\t" << "--likeMax <value>                                  - upper limit of likelihood spectra, in sec - default = 5e-9"  << std::endl
             << "\t\t" << "--likeBins <value>                                 - n of bins for likelihood spectra - default = 500"  << std::endl
             << "\t\t" << "--wBins <value>                                    - number of bins in w slicing for likelihood - default = 10"  << std::endl
-            // << "\t\t" << "--margin <value>                                   - margin in w slicing [mm] - default = 0.1"  << std::endl
+            << "\t\t" << "--margin <value>                                   - margin in w slicing [mm] - default = 0.1"  << std::endl
             << "\t\t" << "--basicLikelihood                                  - likelihood without line fits   - default = not given (false)"  << std::endl
             << "\t\t" << "--likelihoodLine                                   - using line fit of inverse covariance matrix, instead of tgraph eval. valid only if basicLikelihood is false - default = not given (false)"  << std::endl
             << "\t\t" << "--hybridCorrection                                 - performing hybrid correction - default = not given (false)"  << std::endl
@@ -925,7 +925,7 @@ int main (int argc, char** argv)
   bool likelihood = false;
   bool likelihoodLine = false;
   int WrangeBinsForTiming = 10;
-  // float marginWZgraph = 0.1;
+  float marginWZgraph = 0.1;
 
   // parse arguments
   static struct option longOptions[] =
@@ -959,7 +959,7 @@ int main (int argc, char** argv)
       { "likeMax", required_argument, 0, 0 },
       { "likeBins", required_argument, 0, 0 },
       { "wBins", required_argument, 0, 0 },
-      // { "margin", required_argument, 0, 0 },
+      { "margin", required_argument, 0, 0 },
       { "basicLikelihood", no_argument, 0, 0 },
       { "likelihoodLine", no_argument, 0, 0 },
       { "hybridCorrection", no_argument, 0, 0 },
@@ -1070,16 +1070,16 @@ int main (int argc, char** argv)
     else if (c == 0 && optionIndex == 27){
       WrangeBinsForTiming = atoi((char *)optarg);
     }
-    // else if (c == 0 && optionIndex == 28){
-    //   marginWZgraph = atof((char *)optarg); // we take it from modulcalibration now
-    // }
     else if (c == 0 && optionIndex == 28){
-      basicLikelihood = true;
+      marginWZgraph = atof((char *)optarg);
     }
     else if (c == 0 && optionIndex == 29){
-      likelihoodLine = true;
+      basicLikelihood = true;
     }
     else if (c == 0 && optionIndex == 30){
+      likelihoodLine = true;
+    }
+    else if (c == 0 && optionIndex == 31){
       hybridCorrection = true;
     }
 		else {
@@ -1136,7 +1136,7 @@ int main (int argc, char** argv)
     std::cout << "Performing hybrid correction" << std::endl;
   }
 
-  float marginWZgraph = 0.1; // and then we read from modulecalib file
+
 
   // read file in dir
   std::vector<std::string> v;
@@ -1348,7 +1348,6 @@ int main (int argc, char** argv)
   int taggingCrystalTimingChannel;
   std::string taggingPhotopeakCut_prefix("taggingPhotopeakCut");
   std::string taggingCrystalTimingChannel_prefix("taggingCrystalTimingChannel");
-  std::string marginWZgraph_prefix("marginWZgraph");
   // std::string det_prefix("channels");
   // std::string saturation_prefix("saturation");
 
@@ -1358,8 +1357,6 @@ int main (int argc, char** argv)
   gDirectory->GetObject("channels",pChannels);
   gDirectory->GetObject("saturation",pSaturation);
   gDirectory->GetObject("pedestal",pPedestal);
-
-
 
   std::vector<int> DetChannels = pChannels[0];
   std::vector<float> saturation = pSaturation[0];
@@ -1394,15 +1391,6 @@ int main (int argc, char** argv)
       snameCh << ((TNamed*) gDirectory->Get(keysModName[i].c_str()))->GetTitle();
       taggingCrystalTimingChannel = atoi(snameCh.str().c_str());
     }
-    if(!keysModName[i].compare(0,marginWZgraph_prefix.size(),marginWZgraph_prefix)) // find tcut
-    {
-      std::stringstream snameCh;
-      snameCh << ((TNamed*) gDirectory->Get(keysModName[i].c_str()))->GetTitle();
-      marginWZgraph = atof(snameCh.str().c_str());
-      std::cout << "margin cut set to " << marginWZgraph << std::endl;
-    }
-
-
 
     // if(!keysModName[i].compare(0,det_prefix.size(),det_prefix)) // find tcut
     // {
@@ -3366,348 +3354,338 @@ int main (int argc, char** argv)
 
                 FloodZ = centralChargeCorr / division;
 
+                // std::cout << centralChargeOriginal << " "
+                //           << centralSaturation << " "
+                //           << centralChargeCorr << " "
+                //           << division << " "
+                //           << FloodZ << " "
+                //           << std::endl;
 
-                float beginW = crystal[iCry].wz->Eval(length - marginWZgraph);
-                float endW = crystal[iCry].wz->Eval(marginWZgraph);
+                // central corr
+                // std::string deltaWGraph_prefix = "DeltaW Graph";
+                // std::string rms_deltaWGraph_prefix = "RMS DeltaW Graph";
 
-                //skip event if is cut by marginWZgraph
 
-                if(FloodZ >= beginW && FloodZ <= endW)
+                Float_t averageTimeStamp = 0.0;
+                Float_t totalWeight = 0.0;
+                // averageTimeStamp += timeStamp[crystal[iCry].detectorChannel];
+
+                double centralCTR;
+
+                if(fitCorrection)
                 {
-                  // std::cout << centralChargeOriginal << " "
-                  //           << centralSaturation << " "
-                  //           << centralChargeCorr << " "
-                  //           << division << " "
-                  //           << FloodZ << " "
-                  //           << std::endl;
+                  centralcorrection = crystal[iCry].tw_correction_line->Eval(crystal[iCry].wz->Eval(length*doiFraction)) - crystal[iCry].tw_correction_line->Eval(FloodZ);
+                }
+                else
+                {
+                  centralcorrection = crystal[iCry].tw_correction->Eval(crystal[iCry].wz->Eval(length*doiFraction)) - crystal[iCry].tw_correction->Eval(FloodZ);
+                }
 
-                  // central corr
-                  // std::string deltaWGraph_prefix = "DeltaW Graph";
-                  // std::string rms_deltaWGraph_prefix = "RMS DeltaW Graph";
+                centralCTR = (timeStamp[crystal[iCry].timingChannel] + (centralcorrection)) - timeStamp[taggingCrystalTimingChannel];
+                crystal[iCry].centralCTR->Fill(centralCTR);
+                crystal[iCry].vCentral.push_back(centralCTR);
 
 
-                  Float_t averageTimeStamp = 0.0;
-                  Float_t totalWeight = 0.0;
-                  // averageTimeStamp += timeStamp[crystal[iCry].detectorChannel];
-
-                  double centralCTR;
+                if(crystal[iCry].delay.size())
+                {
+                  // full corr v0
+                  // first evalutate all ts as if they where read by the central crystal, i.e. correct all the neighboring channels
+                  // using the delta
+                  //
+                  Float_t weight = 0.0;
 
                   if(fitCorrection)
                   {
-                    centralcorrection = crystal[iCry].tw_correction_line->Eval(crystal[iCry].wz->Eval(length*doiFraction)) - crystal[iCry].tw_correction_line->Eval(FloodZ);
+                    weight = pow(crystal[iCry].rms_tw_correction_line->Eval(FloodZ),-2);
                   }
                   else
                   {
-                    centralcorrection = crystal[iCry].tw_correction->Eval(crystal[iCry].wz->Eval(length*doiFraction)) - crystal[iCry].tw_correction->Eval(FloodZ);
+                    weight = pow(crystal[iCry].rms_tw_correction->Eval(FloodZ),-2);
                   }
 
-                  centralCTR = (timeStamp[crystal[iCry].timingChannel] + (centralcorrection)) - timeStamp[taggingCrystalTimingChannel];
-                  crystal[iCry].centralCTR->Fill(centralCTR);
-                  crystal[iCry].vCentral.push_back(centralCTR);
 
-
-                  if(crystal[iCry].delay.size())
+                  averageTimeStamp += weight * timeStamp[crystal[iCry].timingChannel];
+                  totalWeight += weight;
+                  //
+                  //full corr
+                  // zeroCorrection = crystal[iCry].tw_correction->Eval(crystal[iCry].wz->Eval(length*doiFraction)) - crystal[iCry].tw_correction->Eval(FloodZ);
+                  //
+                  // Float_t weight = 0.0;
+                  // weight = pow(sqrt(pow(crystal[iCry].rms_tw_correction->Eval(FloodZ),2)+pow(crystal[iCry].rms_tw_correction->Eval(crystal[iCry].wz->Eval(length*doiFraction)),2)),-2);
+                  //
+                  // averageTimeStamp += weight*(timeStamp[crystal[iCry].timingChannel]- zeroCorrection);
+                  // totalWeight += weight;
+                  // // std::cout << i << " " << iCry << " " <<  crystal[iCry].number << "\n";
+                  for(unsigned int iGraph = 0; iGraph < crystal[iCry].delay.size();iGraph++)
                   {
-                    // full corr v0
-                    // first evalutate all ts as if they where read by the central crystal, i.e. correct all the neighboring channels
-                    // using the delta
-                    //
-                    Float_t weight = 0.0;
+
+                    std::string graphName = crystal[iCry].delay[iGraph]->GetName();
+                    std::string rmsName = crystal[iCry].rms_delay[iGraph]->GetName();
+
+                    std::size_t foundGraph = graphName.find_last_of("_");
+                    std::size_t foundRms   = rmsName.find_last_of("_");
+
+                    std::string tChannelStringFromGraph = graphName.substr(foundGraph+1);
+                    std::string tChannelStringFromRms   = rmsName.substr(foundRms  +1);
+
+                    // std::stringstream sname;
+                    // sname << "Graph Delay ch_" << crystal[iCry].detectorChannel << "_t_" ;
+                    // std::string graph_delay_prefix = sname.str();
+                    // std::cout << tChannelStringFromGraph << std::endl;
+                    // std::cout << tChannelStringFromRms << std::endl;
+
+                    // sname.str("");
+                    // sname << "RMS Graph Delay ch_" << crystal[iCry].detectorChannel << "_t_" ;
+                    // std::string rms_graph_delay_prefix = sname.str();
+                    // std::cout << tChannelStringFromRms << std::endl;
+                    // sname.str("");
+
+
+
+
+
+
+                    int graphCh = atoi(tChannelStringFromGraph.c_str() );
+                    // std::cout << graphCh  << "\n";
+
+
+                    int rmsCh   = atoi( tChannelStringFromRms.c_str() );
+                    if(graphCh != rmsCh)
+                    {
+                      std::cout << "ERROR! TGraphs of delay and rms are from different timing channels!!!!" << std::endl;
+                      break;
+                    }
+                    // std::cout << rmsCh  << "\n";
 
                     if(fitCorrection)
                     {
-                      weight = pow(crystal[iCry].rms_tw_correction_line->Eval(FloodZ),-2);
+                      weight = pow(crystal[iCry].rms_delay_line[iGraph]->Eval(FloodZ),-2);
                     }
                     else
                     {
-                      weight = pow(crystal[iCry].rms_tw_correction->Eval(FloodZ),-2);
+                      weight = pow(crystal[iCry].rms_delay[iGraph]->Eval(FloodZ),-2);
                     }
 
-
-                    averageTimeStamp += weight * timeStamp[crystal[iCry].timingChannel];
                     totalWeight += weight;
-                    //
-                    //full corr
-                    // zeroCorrection = crystal[iCry].tw_correction->Eval(crystal[iCry].wz->Eval(length*doiFraction)) - crystal[iCry].tw_correction->Eval(FloodZ);
-                    //
-                    // Float_t weight = 0.0;
-                    // weight = pow(sqrt(pow(crystal[iCry].rms_tw_correction->Eval(FloodZ),2)+pow(crystal[iCry].rms_tw_correction->Eval(crystal[iCry].wz->Eval(length*doiFraction)),2)),-2);
-                    //
-                    // averageTimeStamp += weight*(timeStamp[crystal[iCry].timingChannel]- zeroCorrection);
-                    // totalWeight += weight;
-                    // // std::cout << i << " " << iCry << " " <<  crystal[iCry].number << "\n";
-                    for(unsigned int iGraph = 0; iGraph < crystal[iCry].delay.size();iGraph++)
+                    if(fitCorrection)
                     {
-
-                      std::string graphName = crystal[iCry].delay[iGraph]->GetName();
-                      std::string rmsName = crystal[iCry].rms_delay[iGraph]->GetName();
-
-                      std::size_t foundGraph = graphName.find_last_of("_");
-                      std::size_t foundRms   = rmsName.find_last_of("_");
-
-                      std::string tChannelStringFromGraph = graphName.substr(foundGraph+1);
-                      std::string tChannelStringFromRms   = rmsName.substr(foundRms  +1);
-
-                      // std::stringstream sname;
-                      // sname << "Graph Delay ch_" << crystal[iCry].detectorChannel << "_t_" ;
-                      // std::string graph_delay_prefix = sname.str();
-                      // std::cout << tChannelStringFromGraph << std::endl;
-                      // std::cout << tChannelStringFromRms << std::endl;
-
-                      // sname.str("");
-                      // sname << "RMS Graph Delay ch_" << crystal[iCry].detectorChannel << "_t_" ;
-                      // std::string rms_graph_delay_prefix = sname.str();
-                      // std::cout << tChannelStringFromRms << std::endl;
-                      // sname.str("");
-
-
-
-
-
-
-                      int graphCh = atoi(tChannelStringFromGraph.c_str() );
-                      // std::cout << graphCh  << "\n";
-
-
-                      int rmsCh   = atoi( tChannelStringFromRms.c_str() );
-                      if(graphCh != rmsCh)
-                      {
-                        std::cout << "ERROR! TGraphs of delay and rms are from different timing channels!!!!" << std::endl;
-                        break;
-                      }
-                      // std::cout << rmsCh  << "\n";
-
-                      if(fitCorrection)
-                      {
-                        weight = pow(crystal[iCry].rms_delay_line[iGraph]->Eval(FloodZ),-2);
-                      }
-                      else
-                      {
-                        weight = pow(crystal[iCry].rms_delay[iGraph]->Eval(FloodZ),-2);
-                      }
-
-                      totalWeight += weight;
-                      if(fitCorrection)
-                      {
-                        averageTimeStamp += weight*(timeStamp[graphCh] - crystal[iCry].delay_line[iGraph]->Eval(FloodZ));
-                      }
-                      else
-                      {
-                        averageTimeStamp += weight*(timeStamp[graphCh] - crystal[iCry].delay[iGraph]->Eval(FloodZ));
-                      }
-
-                      // std::cout << timeStamp[graphCh] - crystal[iCry].delay[iGraph]->Eval(FloodZ) << "\t";
+                      averageTimeStamp += weight*(timeStamp[graphCh] - crystal[iCry].delay_line[iGraph]->Eval(FloodZ));
                     }
-                    averageTimeStamp = averageTimeStamp/totalWeight;
-                    // then correct the average of ts for central correction
-                    double allCTR = (averageTimeStamp + (centralcorrection)) - timeStamp[taggingCrystalTimingChannel];
-                    crystal[iCry].allCTR->Fill(allCTR);
-                    crystal[iCry].vAll.push_back(allCTR);
-
-
-                    if(likelihood)
+                    else
                     {
-                      //combine the detector results using inverse covariance matrix elements
-                      // calc the sum of all elements
+                      averageTimeStamp += weight*(timeStamp[graphCh] - crystal[iCry].delay[iGraph]->Eval(FloodZ));
+                    }
 
-                      //first check the no timestamp is 0
-                      bool noZeroes = true;
-                      if(timeStamp[taggingCrystalTimingChannel] == 0)
+                    // std::cout << timeStamp[graphCh] - crystal[iCry].delay[iGraph]->Eval(FloodZ) << "\t";
+                  }
+                  averageTimeStamp = averageTimeStamp/totalWeight;
+                  // then correct the average of ts for central correction
+                  // double allCTR = (averageTimeStamp + (centralcorrection)) - timeStamp[taggingCrystalTimingChannel];
+                  double allCTR = (averageTimeStamp + (0.0)) - timeStamp[taggingCrystalTimingChannel];
+                  crystal[iCry].allCTR->Fill(allCTR);
+                  crystal[iCry].vAll.push_back(allCTR);
+
+
+                  if(likelihood)
+                  {
+                    //combine the detector results using inverse covariance matrix elements
+                    // calc the sum of all elements
+
+                    //first check the no timestamp is 0
+                    bool noZeroes = true;
+                    if(timeStamp[taggingCrystalTimingChannel] == 0)
+                    {
+                      noZeroes = false;   // and you can already stop
+                    }
+                    else // look for all the other channels involved
+                    {
+                      for(unsigned int iCorr = 0; iCorr < crystal[iCry].slice[0].tChannel.size() ; iCorr++)
                       {
-                        noZeroes = false;   // and you can already stop
-                      }
-                      else // look for all the other channels involved
-                      {
-                        for(unsigned int iCorr = 0; iCorr < crystal[iCry].slice[0].tChannel.size() ; iCorr++)
+                        if(timeStamp[crystal[iCry].slice[0].tChannel[iCorr]] == 0)
                         {
-                          if(timeStamp[crystal[iCry].slice[0].tChannel[iCorr]] == 0)
+                          noZeroes = false;
+                        }
+                      }
+                    }
+
+                    if(noZeroes)
+                    {
+                      if(basicLikelihood)
+                      {
+                        // zero approach: just find the w slice and use that inv cov matrix
+                        int nSlice = crystal[iCry].slice.size();
+                        for(int iSlice = 0 ; iSlice < nSlice ; iSlice++)
+                        {
+                          if((FloodZ >= crystal[iCry].slice[iSlice].wmin )&&( FloodZ < crystal[iCry].slice[iSlice].wmax ) ) // this is the w slice
                           {
-                            noZeroes = false;
+
+                              Float_t sum_inv_cov = 0;
+                              Float_t Dt_best = 0;
+                              int nLike = crystal[iCry].slice[iSlice].tChannel.size();
+                              for(int jCorr = 0; jCorr < nLike ; jCorr++)
+                              {
+                                int tChannel = crystal[iCry].slice[iSlice].tChannel[jCorr];
+                                // find delay as function of doi
+                                Float_t delay;
+                                if(jCorr == 0)
+                                {
+                                  delay = 0; // no delay for direct detector
+                                }
+                                else
+                                {
+                                  delay = crystal[iCry].delay_line[jCorr-1]->Eval(FloodZ);
+                                }
+                                // find Dt of this detector (t - tR) - delay;
+                                Float_t Dt_j = (timeStamp[tChannel] - timeStamp[taggingCrystalTimingChannel]) - delay;
+
+                                // now calc the weight_i
+                                // keeping j fixed, run on i and sum the inv cov elements
+                                Float_t weight_i = 0;
+                                for(int iCorr = 0; iCorr < nLike ; iCorr++)
+                                {
+                                  weight_i += crystal[iCry].slice[iSlice].inverse_covariance[iCorr][jCorr];
+                                  // weight_i +=  crystal[iCry].inverse_covariance_element[iCorr][jCorr]
+                                  // at the same time also sum all the elements of inv cov matrix to get the final division
+                                  // sum_inv_cov += crystal[iCry].inverse_covariance_element[iCorr][jCorr]->Eval(FloodZ);
+                                  sum_inv_cov += crystal[iCry].slice[iSlice].inverse_covariance[iCorr][jCorr];
+                                }
+                                Dt_best += weight_i * Dt_j;
+                              }
+
+                              Dt_best = Dt_best / sum_inv_cov;
+                              double likeCTR = Dt_best + centralcorrection ;
+                              crystal[iCry].likeCTR->Fill(likeCTR);
+                              crystal[iCry].vLike.push_back(likeCTR);
                           }
                         }
                       }
-
-                      if(noZeroes)
+                      else
                       {
-                        if(basicLikelihood)
+                        if(likelihoodLine)
                         {
-                          // zero approach: just find the w slice and use that inv cov matrix
-                          int nSlice = crystal[iCry].slice.size();
-                          for(int iSlice = 0 ; iSlice < nSlice ; iSlice++)
+                          Float_t sum_inv_cov = 0;
+                          Float_t Dt_best = 0;
+                          int nLike = crystal[iCry].slice[0].tChannel.size();
+                          for(int jCorr = 0; jCorr < nLike ; jCorr++)
                           {
-                            if((FloodZ >= crystal[iCry].slice[iSlice].wmin )&&( FloodZ < crystal[iCry].slice[iSlice].wmax ) ) // this is the w slice
+                            int tChannel = crystal[iCry].slice[0].tChannel[jCorr];
+                            // find delay as function of doi
+                            Float_t delay;
+                            if(jCorr == 0)
                             {
-
-                                Float_t sum_inv_cov = 0;
-                                Float_t Dt_best = 0;
-                                int nLike = crystal[iCry].slice[iSlice].tChannel.size();
-                                for(int jCorr = 0; jCorr < nLike ; jCorr++)
-                                {
-                                  int tChannel = crystal[iCry].slice[iSlice].tChannel[jCorr];
-                                  // find delay as function of doi
-                                  Float_t delay;
-                                  if(jCorr == 0)
-                                  {
-                                    delay = 0; // no delay for direct detector
-                                  }
-                                  else
-                                  {
-                                    delay = crystal[iCry].delay_line[jCorr-1]->Eval(FloodZ);
-                                  }
-                                  // find Dt of this detector (t - tR) - delay;
-                                  Float_t Dt_j = (timeStamp[tChannel] - timeStamp[taggingCrystalTimingChannel]) - delay;
-
-                                  // now calc the weight_i
-                                  // keeping j fixed, run on i and sum the inv cov elements
-                                  Float_t weight_i = 0;
-                                  for(int iCorr = 0; iCorr < nLike ; iCorr++)
-                                  {
-                                    weight_i += crystal[iCry].slice[iSlice].inverse_covariance[iCorr][jCorr];
-                                    // weight_i +=  crystal[iCry].inverse_covariance_element[iCorr][jCorr]
-                                    // at the same time also sum all the elements of inv cov matrix to get the final division
-                                    // sum_inv_cov += crystal[iCry].inverse_covariance_element[iCorr][jCorr]->Eval(FloodZ);
-                                    sum_inv_cov += crystal[iCry].slice[iSlice].inverse_covariance[iCorr][jCorr];
-                                  }
-                                  Dt_best += weight_i * Dt_j;
-                                }
-
-                                Dt_best = Dt_best / sum_inv_cov;
-                                double likeCTR = Dt_best + centralcorrection ;
-                                crystal[iCry].likeCTR->Fill(likeCTR);
-                                crystal[iCry].vLike.push_back(likeCTR);
+                              delay = 0; // no delay for direct detector
                             }
+                            else
+                            {
+                              delay = crystal[iCry].delay_line[jCorr-1]->Eval(FloodZ);
+                            }
+                            // find Dt of this detector (t - tR) - delay;
+                            Float_t Dt_j = (timeStamp[tChannel] - timeStamp[taggingCrystalTimingChannel]) - delay;
+
+                            // now calc the weight_i
+                            // keeping j fixed, run on i and sum the inv cov elements
+                            Float_t weight_i = 0;
+                            for(int iCorr = 0; iCorr < nLike ; iCorr++)
+                            {
+                              weight_i += crystal[iCry].inverse_covariance_element_line[iCorr][jCorr]->Eval(FloodZ);
+                              sum_inv_cov += crystal[iCry].inverse_covariance_element_line[iCorr][jCorr]->Eval(FloodZ);
+                            }
+                            Dt_best += weight_i * Dt_j;
                           }
+                          Dt_best = Dt_best / sum_inv_cov;
+                          double likeCTR = Dt_best + centralcorrection ;
+                          crystal[iCry].likeCTR->Fill(likeCTR);
+                          crystal[iCry].vLike.push_back(likeCTR);
                         }
                         else
                         {
-                          if(likelihoodLine)
+                          Float_t sum_inv_cov = 0;
+                          Float_t Dt_best = 0;
+                          int nLike = crystal[iCry].slice[0].tChannel.size();
+                          for(int jCorr = 0; jCorr < nLike ; jCorr++)
                           {
-                            Float_t sum_inv_cov = 0;
-                            Float_t Dt_best = 0;
-                            int nLike = crystal[iCry].slice[0].tChannel.size();
-                            for(int jCorr = 0; jCorr < nLike ; jCorr++)
+                            int tChannel = crystal[iCry].slice[0].tChannel[jCorr];
+                            // find delay as function of doi
+                            Float_t delay;
+                            if(jCorr == 0)
                             {
-                              int tChannel = crystal[iCry].slice[0].tChannel[jCorr];
-                              // find delay as function of doi
-                              Float_t delay;
-                              if(jCorr == 0)
-                              {
-                                delay = 0; // no delay for direct detector
-                              }
-                              else
-                              {
-                                delay = crystal[iCry].delay_line[jCorr-1]->Eval(FloodZ);
-                              }
-                              // find Dt of this detector (t - tR) - delay;
-                              Float_t Dt_j = (timeStamp[tChannel] - timeStamp[taggingCrystalTimingChannel]) - delay;
-
-                              // now calc the weight_i
-                              // keeping j fixed, run on i and sum the inv cov elements
-                              Float_t weight_i = 0;
-                              for(int iCorr = 0; iCorr < nLike ; iCorr++)
-                              {
-                                weight_i += crystal[iCry].inverse_covariance_element_line[iCorr][jCorr]->Eval(FloodZ);
-                                sum_inv_cov += crystal[iCry].inverse_covariance_element_line[iCorr][jCorr]->Eval(FloodZ);
-                              }
-                              Dt_best += weight_i * Dt_j;
+                              delay = 0; // no delay for direct detector
                             }
-                            Dt_best = Dt_best / sum_inv_cov;
-                            double likeCTR = Dt_best + centralcorrection ;
-                            crystal[iCry].likeCTR->Fill(likeCTR);
-                            crystal[iCry].vLike.push_back(likeCTR);
-                          }
-                          else
-                          {
-                            Float_t sum_inv_cov = 0;
-                            Float_t Dt_best = 0;
-                            int nLike = crystal[iCry].slice[0].tChannel.size();
-                            for(int jCorr = 0; jCorr < nLike ; jCorr++)
+                            else
                             {
-                              int tChannel = crystal[iCry].slice[0].tChannel[jCorr];
-                              // find delay as function of doi
-                              Float_t delay;
-                              if(jCorr == 0)
-                              {
-                                delay = 0; // no delay for direct detector
-                              }
-                              else
-                              {
-                                delay = crystal[iCry].delay_line[jCorr-1]->Eval(FloodZ);
-                              }
-                              // find Dt of this detector (t - tR) - delay;
-                              Float_t Dt_j = (timeStamp[tChannel] - timeStamp[taggingCrystalTimingChannel]) - delay;
-
-                              // now calc the weight_i
-                              // keeping j fixed, run on i and sum the inv cov elements
-                              Float_t weight_i = 0;
-                              for(int iCorr = 0; iCorr < nLike ; iCorr++)
-                              {
-                                weight_i += crystal[iCry].inverse_covariance_element[iCorr][jCorr]->Eval(FloodZ);
-                                sum_inv_cov += crystal[iCry].inverse_covariance_element[iCorr][jCorr]->Eval(FloodZ);
-                              }
-                              Dt_best += weight_i * Dt_j;
+                              delay = crystal[iCry].delay_line[jCorr-1]->Eval(FloodZ);
                             }
-                            Dt_best = Dt_best / sum_inv_cov;
-                            double likeCTR = Dt_best + centralcorrection ;
-                            crystal[iCry].likeCTR->Fill(likeCTR);
-                            crystal[iCry].vLike.push_back(likeCTR);
+                            // find Dt of this detector (t - tR) - delay;
+                            Float_t Dt_j = (timeStamp[tChannel] - timeStamp[taggingCrystalTimingChannel]) - delay;
+
+                            // now calc the weight_i
+                            // keeping j fixed, run on i and sum the inv cov elements
+                            Float_t weight_i = 0;
+                            for(int iCorr = 0; iCorr < nLike ; iCorr++)
+                            {
+                              weight_i += crystal[iCry].inverse_covariance_element[iCorr][jCorr]->Eval(FloodZ);
+                              sum_inv_cov += crystal[iCry].inverse_covariance_element[iCorr][jCorr]->Eval(FloodZ);
+                            }
+                            Dt_best += weight_i * Dt_j;
                           }
+                          Dt_best = Dt_best / sum_inv_cov;
+                          double likeCTR = Dt_best + centralcorrection ;
+                          crystal[iCry].likeCTR->Fill(likeCTR);
+                          crystal[iCry].vLike.push_back(likeCTR);
                         }
                       }
                     }
-                    // crystal[iCry].allCTR->Fill(averageTimeStamp + zeroCorrection  - timeStamp[taggingCrystalTimingChannel]);
                   }
-                  // hybrid correction
-                  //
-                  if(hybridCorrection)
-                  {
-                    //central time stamp
-                    // std::cout << "----------------" << std::endl;
-                    float weight = 0.0;
-                    float meanTimeStamp = 0.0;
-                    float sumWeight = 0.0;
-                    // std::cout << "crystal[iCry].fwhmForPolishedCorrection[0] = " << crystal[iCry].fwhmForPolishedCorrection[0]<< std::endl;
-
-                    weight = pow(crystal[iCry].fwhmForPolishedCorrection[0],-2);
-                    float t_0 = timeStamp[crystal[iCry].tChannelsForPolishedCorrection[0]];
-
-                    meanTimeStamp += weight * t_0;
-                    sumWeight += weight;
-                    // std::cout << weight << " " << t_0 << " " << meanTimeStamp << " " << sumWeight << std::endl;
-
-                    // std::cout << t_0 << "\t";
-
-                    for(unsigned int iPoli = 1; iPoli < crystal[iCry].tChannelsForPolishedCorrection.size(); iPoli++)
-                    {
-                      // std::cout << iPoli << std::endl;
-                      // std::cout << "timeStamp[crystal[iCry].tChannelsForPolishedCorrection[iPoli]] = " << timeStamp[crystal[iCry].tChannelsForPolishedCorrection[iPoli]] << std::endl;
-                      // std::cout << "crystal[iCry].meanForPolishedCorrection[iPoli] = " << crystal[iCry].meanForPolishedCorrection[iPoli] << std::endl;
-
-                      float t_i = timeStamp[crystal[iCry].tChannelsForPolishedCorrection[iPoli]] - crystal[iCry].meanForPolishedCorrection[iPoli];
-                      float weight_i = pow(crystal[iCry].fwhmForPolishedCorrection[iPoli],-2);
-                      meanTimeStamp += weight_i * t_i;
-                      sumWeight += weight_i;
-                      // std::cout << weight_i << " " << t_i << " " << meanTimeStamp << " " << sumWeight << std::endl;
-                      // std::cout << t_i << "\t";
-                    }
-                    // std::cout << std::endl;
-                    meanTimeStamp = meanTimeStamp / sumWeight;
-                    // std::cout << std::endl
-                    //           << meanTimeStamp << "\t"
-                    //           << std::endl;
-                    double hybridCorrCTR = meanTimeStamp - timeStamp[taggingCrystalTimingChannel];
-                    //correct by doi
-
-                    hybridCorrCTR = hybridCorrCTR + centralcorrection; //FIXME temp
-
-                    crystal[iCry].hybridCTR->Fill(hybridCorrCTR);
-                    crystal[iCry].vhybrid.push_back(hybridCorrCTR);
-
-
-                  }
+                  // crystal[iCry].allCTR->Fill(averageTimeStamp + zeroCorrection  - timeStamp[taggingCrystalTimingChannel]);
                 }
+                // hybrid correction
+                //
+                if(hybridCorrection)
+                {
+                  //central time stamp
+                  // std::cout << "----------------" << std::endl;
+                  float weight = 0.0;
+                  float meanTimeStamp = 0.0;
+                  float sumWeight = 0.0;
+                  // std::cout << "crystal[iCry].fwhmForPolishedCorrection[0] = " << crystal[iCry].fwhmForPolishedCorrection[0]<< std::endl;
+
+                  weight = pow(crystal[iCry].fwhmForPolishedCorrection[0],-2);
+                  float t_0 = timeStamp[crystal[iCry].tChannelsForPolishedCorrection[0]];
+
+                  meanTimeStamp += weight * t_0;
+                  sumWeight += weight;
+                  // std::cout << weight << " " << t_0 << " " << meanTimeStamp << " " << sumWeight << std::endl;
+
+                  // std::cout << t_0 << "\t";
+
+                  for(unsigned int iPoli = 1; iPoli < crystal[iCry].tChannelsForPolishedCorrection.size(); iPoli++)
+                  {
+                    // std::cout << iPoli << std::endl;
+                    // std::cout << "timeStamp[crystal[iCry].tChannelsForPolishedCorrection[iPoli]] = " << timeStamp[crystal[iCry].tChannelsForPolishedCorrection[iPoli]] << std::endl;
+                    // std::cout << "crystal[iCry].meanForPolishedCorrection[iPoli] = " << crystal[iCry].meanForPolishedCorrection[iPoli] << std::endl;
+
+                    float t_i = timeStamp[crystal[iCry].tChannelsForPolishedCorrection[iPoli]] - crystal[iCry].meanForPolishedCorrection[iPoli];
+                    float weight_i = pow(crystal[iCry].fwhmForPolishedCorrection[iPoli],-2);
+                    meanTimeStamp += weight_i * t_i;
+                    sumWeight += weight_i;
+                    // std::cout << weight_i << " " << t_i << " " << meanTimeStamp << " " << sumWeight << std::endl;
+                    // std::cout << t_i << "\t";
+                  }
+                  // std::cout << std::endl;
+                  meanTimeStamp = meanTimeStamp / sumWeight;
+                  // std::cout << std::endl
+                  //           << meanTimeStamp << "\t"
+                  //           << std::endl;
+                  double hybridCorrCTR = meanTimeStamp - timeStamp[taggingCrystalTimingChannel];
+                  //correct by doi
+
+                  hybridCorrCTR = hybridCorrCTR + centralcorrection; //FIXME temp
+
+                  crystal[iCry].hybridCTR->Fill(hybridCorrCTR);
+                  crystal[iCry].vhybrid.push_back(hybridCorrCTR);
 
 
+                }
 
 
 
